@@ -1,0 +1,2 @@
+# Kacosa-app
+App internas
