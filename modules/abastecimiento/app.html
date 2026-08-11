@@ -10,6 +10,16 @@
   <link rel="stylesheet" href="css/app.css" />
   <link rel="stylesheet" href="css/loader.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+  <style>
+    /* Kacosa App — este módulo vive embebido en el shell principal, que ya
+       tiene su propio header/footer/menú hamburguesa. Se oculta el header,
+       el sidebar (Dashboard/Nuevo Análisis/Alertas Kacosa ya se navegan
+       desde el menú del shell) y el footer de esta app. */
+    header.app-header,
+    aside.sidebar,
+    #overlay-sidebar,
+    footer.app-footer { display: none !important; }
+  </style>
 
   <!-- Favicon / manifest -->
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
