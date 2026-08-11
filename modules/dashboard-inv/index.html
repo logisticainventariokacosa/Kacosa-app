@@ -14,6 +14,15 @@
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <link rel="stylesheet" href="styles.css">
+<style>
+  /* Kacosa App — este módulo vive embebido en el shell principal, que ya
+     tiene su propio header/footer. Se oculta el título/marca duplicados
+     y el pie de página; se conserva el botón de refrescar y el estado
+     de última actualización, que sí son funcionales. */
+  .topbar .brand { display: none !important; }
+  .footer { display: none !important; }
+  .topbar { justify-content: flex-end !important; }
+</style>
 </head>
 <body>
 
