@@ -1,411 +1,194 @@
-import { auth, db, googleProvider } from "./firebase-config.js";
-import {
-  signInWithPopup, signOut, onAuthStateChanged,
-  signInWithEmailAndPassword, updatePassword, EmailAuthProvider, reauthenticateWithCredential
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+html, body { font-family: 'Inter', sans-serif; height: 100%; }
+.font-mono-brand { font-family: 'JetBrains Mono', monospace; }
+body { padding-bottom: 44px; margin: 0; } /* deja espacio para el footer fijo */
+::selection { background: #f6c1c1; }
 
-/* =====================================================================
-   ÁRBOL DE MÓDULOS TIPO SAP
-   -----------------------------------------------------------------
-   Cada submódulo carga, dentro de un <iframe>, la app original SIN
-   modificar su lógica interna (solo se le añadió, en sus propios
-   archivos, un pequeño parche aditivo para poder abrir directamente
-   una sección/vista concreta vía hash — ver comentarios en cada JS).
+/* ---------- Botón hamburguesa ---------- */
+.ham-bar {
+  width: 20px;
+  height: 2px;
+  background: #1a1d23;
+  border-radius: 2px;
+  transition: transform .2s ease, opacity .2s ease;
+}
+#btn-hamburguesa.activo .ham-bar:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+#btn-hamburguesa.activo .ham-bar:nth-child(2) { opacity: 0; }
+#btn-hamburguesa.activo .ham-bar:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
 
-   "roles": lista de roles (campo "rol" en la colección "usuarios")
-   que pueden ver ese submódulo. Ajusta esta lista según las reglas
-   de negocio reales de KACOSA; se tomó como base los roles que ya
-   usaba cada app por separado.
-   ===================================================================== */
-const ROLES_INVENTARIO = ["admin", "supervisor", "directiva", "gerente"];
-const ROLES_ABASTECIMIENTO = ["gerente", "supervisor", "abastecimiento", "compras", "admin", "directiva"];
-const ROLES_DASHBOARD_INV = ["coordinador", "directiva", "admin"];
+/* ---------- Sidebar tipo SAP ---------- */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 300px;
+  max-width: 86vw;
+  background: #1a1d23;
+  color: #fff;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(-100%);
+  transition: transform .25s ease;
+  box-shadow: 8px 0 24px rgba(0,0,0,.25);
+}
+.sidebar.abierto { transform: translateX(0); }
 
-const MODULES = [
-  {
-    id: "dashboard",
-    label: "Dashboard",
-    icon: "fa-gauge-high",
-    submodules: [
-      {
-        id: "dashboard-inv",
-        label: "Dashboard Inventario",
-        icon: "fa-warehouse",
-        src: "modules/dashboard-inv/index.html",
-        roles: ROLES_DASHBOARD_INV
-      },
-      {
-        id: "dashboard-aba",
-        label: "Dashboard Abastecimiento",
-        icon: "fa-truck-fast",
-        src: "modules/abastecimiento/app.html#vista=vista-dashboard",
-        roles: ROLES_ABASTECIMIENTO
-      }
-    ]
-  },
-  {
-    id: "inventario",
-    label: "Inventario",
-    icon: "fa-boxes-stacked",
-    submodules: [
-      {
-        id: "trazabilidad",
-        label: "Trazabilidad",
-        icon: "fa-route",
-        src: "modules/inventario/index.html#section=reports",
-        roles: ROLES_INVENTARIO
-      },
-      {
-        id: "consultas",
-        label: "Consultas",
-        icon: "fa-magnifying-glass",
-        src: "modules/inventario/index.html#section=home",
-        roles: ROLES_INVENTARIO
-      }
-    ]
-  },
-  {
-    id: "abastecimiento",
-    label: "Abastecimiento",
-    icon: "fa-truck-ramp-box",
-    submodules: [
-      {
-        id: "nuevo-analisis",
-        label: "Nuevo Análisis",
-        icon: "fa-file-import",
-        src: "modules/abastecimiento/app.html#vista=vista-nuevo-analisis",
-        roles: ROLES_ABASTECIMIENTO
-      },
-      {
-        id: "alertas-kacosa",
-        label: "Alertas Kacosa",
-        icon: "fa-triangle-exclamation",
-        src: "modules/abastecimiento/app.html#vista=vista-alertas-kacosa",
-        // "gerente" no ve Alertas Kacosa en la app original (solo roles con
-        // visibilidad de TODAS las tiendas), se respeta la misma regla aquí.
-        roles: ROLES_ABASTECIMIENTO.filter(r => r !== "gerente")
-      }
-    ]
-  },
-  {
-    id: "reportes",
-    label: "Reportes",
-    icon: "fa-folder-open",
-    // Al entrar a Reportes, lo primero que se ve es la noticia (submódulo Noticias)
-    submodules: [
-      {
-        id: "noticias",
-        label: "Noticias",
-        icon: "fa-newspaper",
-        src: "modules/inventario/index.html#section=news",
-        roles: ROLES_INVENTARIO
-      },
-      {
-        id: "imagenes",
-        label: "Imágenes",
-        icon: "fa-image",
-        src: "modules/inventario/index.html#section=images",
-        roles: ROLES_INVENTARIO
-      },
-      {
-        id: "documentos",
-        label: "Documentos",
-        icon: "fa-file-lines",
-        src: "modules/inventario/index.html#section=documents",
-        roles: ROLES_INVENTARIO
-      }
-    ]
-  }
-];
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15,17,21,.55);
+  z-index: 55;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease;
+}
+.sidebar-overlay.visible { opacity: 1; pointer-events: auto; }
 
-// Módulo/submódulo con el que arranca cada rol al iniciar sesión.
-// Ajusta libremente este mapa según cómo KACOSA quiera enrutar cada rol.
-const HOME_POR_ROL = {
-  gerente: "dashboard-aba",
-  abastecimiento: "dashboard-aba",
-  compras: "dashboard-aba",
-  coordinador: "dashboard-inv",
-  supervisor: "dashboard-inv",
-  directiva: "dashboard-inv",
-  admin: "dashboard-inv"
-};
-const HOME_POR_DEFECTO = "dashboard-inv";
-
-/* ===================== Referencias DOM ===================== */
-const loginScreen = document.getElementById("login-screen");
-const changePasswordScreen = document.getElementById("change-password-screen");
-const appScreen = document.getElementById("app-screen");
-const loginStatus = document.getElementById("login-status");
-const sidebarModules = document.getElementById("sidebar-modules");
-const moduleFrame = document.getElementById("module-frame");
-const moduleLoader = document.getElementById("module-loader");
-const headerModuleLabel = document.getElementById("header-module-label");
-
-let rolActual = null;
-let submoduloActivoId = null;
-
-/* ===================== LOGIN ===================== */
-document.getElementById("btn-login").addEventListener("click", () => {
-  loginStatus.classList.remove("text-kacosa-600");
-  loginStatus.textContent = "Conectando…";
-  signInWithPopup(auth, googleProvider).catch(err => {
-    loginStatus.classList.add("text-kacosa-600");
-    loginStatus.textContent = "No se pudo iniciar sesión (" + err.code + ")";
-  });
-});
-
-document.getElementById("btn-logout").addEventListener("click", () => signOut(auth));
-document.getElementById("btn-sidebar-cerrar-sesion").addEventListener("click", () => signOut(auth));
-
-document.querySelectorAll(".toggle-eye").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const target = document.getElementById(btn.dataset.target);
-    const icon = btn.querySelector("i");
-    const oculto = target.type === "password";
-    target.type = oculto ? "text" : "password";
-    icon.classList.toggle("fa-eye", !oculto);
-    icon.classList.toggle("fa-eye-slash", oculto);
-  });
-});
-
-const emailForm = document.getElementById("email-form");
-emailForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const email = document.getElementById("email-input").value.trim();
-  const pass = document.getElementById("password-input").value;
-  loginStatus.classList.remove("text-kacosa-600");
-  loginStatus.textContent = "Conectando…";
-  try {
-    await signInWithEmailAndPassword(auth, email, pass);
-  } catch (err) {
-    loginStatus.classList.add("text-kacosa-600");
-    loginStatus.textContent = mensajeError(err.code);
-  }
-});
-
-function mensajeError(code) {
-  const map = {
-    "auth/wrong-password": "Contraseña incorrecta.",
-    "auth/user-not-found": "No existe una cuenta con ese correo.",
-    "auth/invalid-email": "El correo no es válido.",
-    "auth/invalid-credential": "Correo o contraseña incorrectos.",
-    "auth/missing-password": "Escribe tu contraseña.",
-    "auth/too-many-requests": "Demasiados intentos. Espera unos minutos e inténtalo de nuevo."
-  };
-  return map[code] || ("No se pudo completar (" + code + ")");
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  flex-shrink: 0;
 }
 
-/* ===================== Cambio de contraseña obligatorio ===================== */
-const changePasswordForm = document.getElementById("change-password-form");
-const changePasswordStatus = document.getElementById("change-password-status");
-const ALFANUMERICO = /^[A-Za-z0-9]+$/;
-
-changePasswordForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const p1 = document.getElementById("new-password-input").value;
-  const p2 = document.getElementById("confirm-password-input").value;
-  changePasswordStatus.classList.remove("text-kacosa-600");
-
-  if (!ALFANUMERICO.test(p1) || p1.length > 20) {
-    changePasswordStatus.classList.add("text-kacosa-600");
-    changePasswordStatus.textContent = "Debe ser alfanumérica (sin símbolos ni espacios) y de máximo 20 caracteres.";
-    return;
-  }
-  if (p1 !== p2) {
-    changePasswordStatus.classList.add("text-kacosa-600");
-    changePasswordStatus.textContent = "Las contraseñas no coinciden.";
-    return;
-  }
-
-  changePasswordStatus.textContent = "Verificando…";
-  try {
-    const cred = EmailAuthProvider.credential(auth.currentUser.email, p1);
-    await reauthenticateWithCredential(auth.currentUser, cred);
-    changePasswordStatus.classList.add("text-kacosa-600");
-    changePasswordStatus.textContent = "La nueva contraseña no puede ser igual a la temporal. Elige una diferente.";
-    return;
-  } catch (err) {
-    const codigosEsperados = ["auth/wrong-password", "auth/invalid-credential", "auth/user-mismatch"];
-    if (!codigosEsperados.includes(err.code)) {
-      changePasswordStatus.classList.add("text-kacosa-600");
-      changePasswordStatus.textContent = "No se pudo validar la contraseña (" + err.code + "). Intenta de nuevo.";
-      return;
-    }
-  }
-
-  changePasswordStatus.textContent = "Guardando…";
-  try {
-    await updatePassword(auth.currentUser, p1);
-    await updateDoc(doc(db, "usuarios", auth.currentUser.email), { passwordTemporal: false });
-    location.reload();
-  } catch (err) {
-    changePasswordStatus.classList.add("text-kacosa-600");
-    changePasswordStatus.textContent = "No se pudo actualizar (" + err.code + "). Vuelve a iniciar sesión e inténtalo de nuevo.";
-  }
-});
-
-/* ===================== Sesión / control de acceso ===================== */
-onAuthStateChanged(auth, async (user) => {
-  if (!user) {
-    mostrarPantalla("login");
-    return;
-  }
-
-  loginStatus.textContent = "Verificando permisos…";
-
-  let perfil = null;
-  try {
-    const snap = await getDoc(doc(db, "usuarios", user.email.toLowerCase()));
-    if (snap.exists()) perfil = snap.data();
-  } catch (e) {
-    console.error(e);
-  }
-
-  if (!perfil) {
-    loginStatus.classList.add("text-kacosa-600");
-    loginStatus.textContent = "Tu cuenta (" + user.email + ") no tiene acceso configurado. Contacta al administrador.";
-    return;
-  }
-
-  if (perfil.passwordTemporal === true) {
-    mostrarPantalla("cambio-password");
-    return;
-  }
-
-  rolActual = perfil.rol || "sin-rol";
-  document.getElementById("user-name-label").textContent = perfil.nombre || user.email;
-  document.getElementById("role-badge").textContent = rolActual;
-  document.getElementById("sidebar-user-nombre").textContent = perfil.nombre || user.email;
-  document.getElementById("sidebar-user-email").textContent = user.email;
-
-  construirSidebar(rolActual);
-  mostrarPantalla("app");
-
-  const inicial = HOME_POR_ROL[rolActual] || HOME_POR_DEFECTO;
-  abrirSubmodulo(inicial, { actualizarUrl: true });
-});
-
-function mostrarPantalla(cual) {
-  loginScreen.classList.toggle("hidden", cual !== "login");
-  loginScreen.classList.toggle("flex", cual === "login");
-  changePasswordScreen.classList.toggle("hidden", cual !== "cambio-password");
-  changePasswordScreen.classList.toggle("flex", cual === "cambio-password");
-  appScreen.classList.toggle("hidden", cual !== "app");
+.sidebar-modules {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0 16px;
 }
 
-/* ===================== Construcción del sidebar SAP ===================== */
-function construirSidebar(rol) {
-  sidebarModules.innerHTML = "";
-
-  MODULES.forEach(mod => {
-    const submodsVisibles = mod.submodules.filter(sm => !sm.roles || sm.roles.includes(rol) || rol === "admin");
-    if (submodsVisibles.length === 0) return;
-
-    const wrap = document.createElement("div");
-    wrap.className = "sap-module";
-    wrap.dataset.moduleId = mod.id;
-
-    const btn = document.createElement("button");
-    btn.className = "sap-module-btn";
-    btn.innerHTML = `<i class="fa-solid ${mod.icon} mod-icon"></i><span>${mod.label}</span><i class="fa-solid fa-chevron-right chev"></i>`;
-    btn.addEventListener("click", () => wrap.classList.toggle("abierto"));
-
-    const subwrap = document.createElement("div");
-    subwrap.className = "sap-submodules";
-
-    submodsVisibles.forEach(sm => {
-      const subBtn = document.createElement("button");
-      subBtn.className = "sap-submodule-btn";
-      subBtn.dataset.submoduleId = sm.id;
-      subBtn.innerHTML = `<i class="fa-solid ${sm.icon}"></i><span>${sm.label}</span>`;
-      subBtn.addEventListener("click", () => abrirSubmodulo(sm.id, { actualizarUrl: true }));
-      subwrap.appendChild(subBtn);
-    });
-
-    wrap.appendChild(btn);
-    wrap.appendChild(subwrap);
-    sidebarModules.appendChild(wrap);
-  });
+/* Módulo (nivel 1, como una carpeta SAP) */
+.sap-module { border-bottom: 1px solid rgba(255,255,255,.06); }
+.sap-module-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background .15s ease;
 }
-
-/* ===================== Apertura de submódulos (iframe) ===================== */
-function buscarSubmodulo(id) {
-  for (const mod of MODULES) {
-    const sm = mod.submodules.find(s => s.id === id);
-    if (sm) return { mod, sm };
-  }
-  return null;
+.sap-module-btn:hover { background: rgba(255,255,255,.06); }
+.sap-module-btn i.mod-icon { width: 18px; text-align: center; color: #f6c1c1; }
+.sap-module-btn i.chev {
+  margin-left: auto;
+  font-size: 11px;
+  color: rgba(255,255,255,.4);
+  transition: transform .2s ease;
 }
+.sap-module.abierto .sap-module-btn i.chev { transform: rotate(90deg); }
 
-function abrirSubmodulo(id, { actualizarUrl = false } = {}) {
-  const encontrado = buscarSubmodulo(id);
-  if (!encontrado) return;
-  const { mod, sm } = encontrado;
-
-  submoduloActivoId = id;
-  headerModuleLabel.textContent = mod.label + " · " + sm.label;
-
-  document.querySelectorAll(".sap-submodule-btn").forEach(b => {
-    b.classList.toggle("activo", b.dataset.submoduleId === id);
-  });
-  document.querySelectorAll(".sap-module").forEach(w => {
-    w.classList.toggle("abierto", w.dataset.moduleId === mod.id);
-  });
-
-  moduleLoader.classList.remove("oculto");
-  moduleFrame.src = sm.src;
-
-  if (actualizarUrl) {
-    history.replaceState(null, "", "#" + id);
-  }
-  cerrarMenu();
+/* Submódulos (nivel 2) */
+.sap-submodules {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height .25s ease;
+  background: rgba(0,0,0,.18);
 }
+.sap-module.abierto .sap-submodules { max-height: 600px; }
 
-moduleFrame.addEventListener("load", () => moduleLoader.classList.add("oculto"));
-
-// Permite volver a un submódulo concreto al recargar la página (ej. #trazabilidad)
-window.addEventListener("hashchange", () => {
-  const id = location.hash.replace("#", "");
-  if (id && buscarSubmodulo(id) && id !== submoduloActivoId) {
-    abrirSubmodulo(id);
-  }
-});
-
-/* ===================== Menú hamburguesa ===================== */
-const btnHamburguesa = document.getElementById("btn-hamburguesa");
-const sidebar = document.getElementById("sidebar");
-const overlay = document.getElementById("overlay-sidebar");
-
-function abrirMenu() {
-  sidebar.classList.add("abierto");
-  overlay.classList.add("visible");
-  btnHamburguesa.classList.add("activo");
+.sap-submodule-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px 11px 46px;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,.75);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+  border-left: 3px solid transparent;
 }
-function cerrarMenu() {
-  sidebar.classList.remove("abierto");
-  overlay.classList.remove("visible");
-  btnHamburguesa.classList.remove("activo");
+.sap-submodule-btn:hover { background: rgba(255,255,255,.05); color: #fff; }
+.sap-submodule-btn.activo {
+  background: rgba(197,25,25,.18);
+  color: #fff;
+  border-left-color: #c51919;
+  font-weight: 600;
 }
-btnHamburguesa.addEventListener("click", () => {
-  sidebar.classList.contains("abierto") ? cerrarMenu() : abrirMenu();
-});
-overlay.addEventListener("click", cerrarMenu);
+.sap-submodule-btn i { width: 14px; text-align: center; font-size: 11px; opacity: .8; }
 
-/* ===================== Ajuste dinámico de la altura del header ===================== */
-function ajustarAlturaHeader() {
-  const header = document.querySelector("#app-screen > div.sticky");
-  if (header) document.documentElement.style.setProperty("--header-h", header.offsetHeight + "px");
+.sidebar-footer {
+  border-top: 1px solid rgba(255,255,255,.08);
+  padding: 14px 16px;
+  flex-shrink: 0;
 }
-window.addEventListener("resize", ajustarAlturaHeader);
-new MutationObserver(ajustarAlturaHeader).observe(appScreen, { attributes: true, attributeFilter: ["class"] });
-ajustarAlturaHeader();
+.sidebar-user { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.sidebar-user-avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: rgba(255,255,255,.1);
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(255,255,255,.7); font-size: 13px; flex-shrink: 0;
+}
+.sidebar-logout {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.15);
+  background: transparent;
+  color: rgba(255,255,255,.75);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.sidebar-logout:hover { background: rgba(197,25,25,.25); color: #fff; border-color: rgba(197,25,25,.4); }
 
-/* ===================== Reloj / año del footer ===================== */
-document.getElementById("footer-year").textContent = new Date().getFullYear();
-function tick() {
-  const el = document.getElementById("footer-clock");
-  if (el) el.textContent = new Date().toLocaleTimeString("es-VE", { hour: "2-digit", minute: "2-digit" });
+/* ---------- Área de contenido (iframe por submódulo) ---------- */
+.module-content {
+  position: fixed;
+  top: var(--header-h, 60px);
+  left: 0;
+  right: 0;
+  bottom: 44px;
+  background: #f1f5f9;
 }
-tick();
-setInterval(tick, 1000 * 30);
+.module-frame-wrap { position: relative; width: 100%; height: 100%; }
+.module-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+  background: #fff;
+}
+.module-loader {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #64748b;
+  font-size: 13px;
+  font-family: 'JetBrains Mono', monospace;
+  background: #f1f5f9;
+  z-index: 2;
+}
+.module-loader.oculto { display: none; }
+
+/* Panel de bienvenida cuando no hay módulo activo aún */
+.module-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #94a3b8;
+  gap: 10px;
+  font-size: 14px;
+}
