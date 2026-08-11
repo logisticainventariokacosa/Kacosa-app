@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KACOSA · Abastecimiento</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/app.css" />
+  <link rel="stylesheet" href="css/loader.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+
+  <!-- Favicon / manifest -->
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
+<link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32x32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="img/favicon-16x16.png" />
+<link rel="manifest" href="site.webmanifest" />
+<link rel="shortcut icon" href="img/favicon.ico" />
+
+<!-- Para Android Chrome -->
+<meta name="theme-color" content="#0F1A2E" />
+
+<!-- Para iOS Safari -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+  <script src="https://unpkg.com/xlsx-js-style@1.2.0/dist/xlsx.bundle.js">
+  </script>
+</head>
+
+<body>
+
+  <div class="overlay-sidebar" id="overlay-sidebar"></div>
+
+  <!-- HEADER -->
+  <header class="app-header" id="app-header">
+    <button id="btn-hamburguesa" type="button" aria-label="Abrir menú"><i class="fa-solid fa-bars"></i></button>
+    <div class="brand-icon">
+      <div class="barra"></div>
+      <h2>KACOSA <span>·</span> Abastecimiento</h2>
+    </div>
+    <button id="btn-user-avatar" type="button" class="user-avatar" aria-label="Cuenta de usuario"><i class="fa-solid fa-user"></i></button>
+  </header>
+
+  <!-- SIDEBAR: menú desplegable con usuario y cerrar sesión al final -->
+  <aside class="sidebar" id="sidebar">
+    <!-- Navegación principal (ocupa el espacio disponible) -->
+    <nav aria-label="Navegación principal">
+      <button type="button" class="nav-item activo" data-vista="vista-dashboard">
+        <span class="icono"><i class="fa-solid fa-gauge-high"></i></span> Dashboard
+      </button>
+      <button type="button" class="nav-item" data-vista="vista-nuevo-analisis">
+        <span class="icono"><i class="fa-solid fa-file-arrow-up"></i></span> Nuevo Análisis
+      </button>
+      <button type="button" class="nav-item" data-vista="vista-alertas-kacosa">
+        <span class="icono"><i class="fa-solid fa-triangle-exclamation"></i></span> Alertas Kacosa
+      </button>
+    </nav>
+
+    <!-- SECCIÓN DE USUARIO AL FINAL DEL SIDEBAR (sin espacio extra) -->
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="sidebar-user-avatar"><i class="fa-solid fa-user"></i></div>
+        <div class="sidebar-user-info">
+          <div id="sidebar-user-nombre" class="sidebar-user-nombre">Usuario</div>
+          <div id="sidebar-user-email" class="sidebar-user-email">correo@ejemplo.com</div>
+        </div>
+      </div>
+      <button id="btn-sidebar-cerrar-sesion" class="sidebar-btn-cerrar">
+        <i class="fa-solid fa-right-from-bracket"></i> Cerrar sesión
+      </button>
+    </div>
+  </aside>
+
+  <!-- MODAL DE USUARIO -->
+  <div class="overlay-modal" id="overlay-user-modal">
+    <div class="user-modal">
+      <div class="user-modal-avatar"><i class="fa-solid fa-user"></i></div>
+      <div class="user-modal-nombre" id="user-modal-nombre">Usuario</div>
+      <div class="user-modal-correo" id="user-modal-correo">correo@ejemplo.com</div>
+      <div class="user-modal-botones">
+        <button type="button" class="btn-google" id="btn-user-cancelar" style="margin-top:0">Cancelar</button>
+        <button type="button" class="btn-salir" id="btn-user-cerrar-sesion">Cerrar sesión</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <div class="contenido" id="contenido-principal">
+    <div class="vistas-wrap">
+      <!-- VISTA: DASHBOARD -->
+      <section class="vista activa" id="vista-dashboard">
+        <h2>Dashboard</h2>
+        <p class="vista-sub">Resumen del último análisis de tu tienda</p>
+        <div id="dashboard-contenido">
+          <p class="vista-sub">Cargando información...</p>
+        </div>
+      </section>
+
+      <!-- VISTA: NUEVO ANÁLISIS -->
+      <section class="vista" id="vista-nuevo-analisis">
+        <h2>Nuevo Análisis</h2>
+        <p class="vista-sub">Sube los 3 archivos para generar el requerimiento de abastecimiento</p>
+        <div id="nuevo-analisis-contenido">
+          <p class="vista-sub">Cargando módulo...</p>
+        </div>
+      </section>
+
+      <!-- VISTA: ALERTAS KACOSA -->
+      <section class="vista" id="vista-alertas-kacosa">
+        <h2>Alertas Kacosa</h2>
+        <p class="vista-sub">Materiales de alta rotación con stock bajo o inexistente en casa matriz</p>
+        <div id="alertas-kacosa-contenido">
+          <p class="vista-sub">Cargando módulo...</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="app-footer" id="app-footer">
+      <span class="app-footer-marca">KACOSA · Abastecimiento</span>
+      <span class="app-footer-punto">·</span>
+      <span>© <span id="footer-anio">2026</span> Logística &amp; Abastecimiento</span>
+      <span class="app-footer-punto">·</span>
+      <span>Por <strong>Derwin Rojas</strong></span>
+      <span class="app-footer-punto">·</span>
+      <span class="app-footer-reloj"><span id="footer-fecha">--/--/----</span> <span id="footer-hora">--:--</span><span id="footer-segundos" class="app-footer-segundos">:--</span></span>
+    </footer>
+  </div>
+
+  <!-- Módulos JS -->
+  <script type="module" src="js/nav.js"></script>
+  <script type="module" src="js/dashboard.js"></script>
+  <script type="module" src="js/alertas-kacosa.js"></script>
+  <script type="module" src="js/nuevo-analisis.js"></script>
+  <script type="module" src="js/chat.js"></script>
+  <script type="module" src="js/footer-reloj.js"></script>
+</body>
+</html>

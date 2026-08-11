@@ -1,0 +1,22 @@
+{
+  "name": "KACOSA ABASTECIMIENTO",
+  "short_name": "KACOSA ABASTECIMIENTO",
+  "start_url": "/analisis-de-abastecimiento/index.html",
+  "display": "standalone",
+  "background_color": "#0F1A2E",
+  "theme_color": "#0F1A2E",
+  "icons": [
+    {
+      "src": "/analisis-de-abastecimiento/img/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/analisis-de-abastecimiento/img/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
