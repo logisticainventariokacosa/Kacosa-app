@@ -154,3 +154,9 @@ function vistaInicialDesdeHash() {
   return (match && document.getElementById(match[1])) ? match[1] : "vista-dashboard";
 }
 mostrarVista(vistaInicialDesdeHash());
+
+// Si el shell cambia el hash de esta misma página (ej. de "Dashboard
+// Abastecimiento" a "Nuevo Análisis", ambos son este mismo app.html), el
+// navegador no siempre recarga el iframe — solo dispara "hashchange".
+// Este listener asegura que la vista cambie igual en ese caso.
+window.addEventListener("hashchange", () => mostrarVista(vistaInicialDesdeHash()));
