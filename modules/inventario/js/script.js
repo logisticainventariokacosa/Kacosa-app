@@ -846,7 +846,12 @@ function initializeReportsSystem() {
             console.log('Nueva instancia de reportes creada');
         }
         
-        window.reportsSystem.showReportsMenu();
+        // Kacosa App: se entra directo a Trazabilidad (TrazabilidadSystem.init(),
+        // que dibuja render()+bindEvents()+initializeTrazabilidadLogic() de una),
+        // en vez de showReportsMenu() que mostraba el selector de módulos —
+        // ya no hace falta, el shell solo trae al usuario aquí cuando ya
+        // eligió "Trazabilidad" en su menú.
+        window.reportsSystem.init();
         console.log('Menú de reportes mostrado correctamente');
         
     } catch (error) {
