@@ -35,6 +35,13 @@
   footer.main-footer { display: none !important; }
   #mainNews { display: none !important; }
   #globalLoader { display: none !important; }
+  /* La pantalla de login propia de esta app nunca debe mostrarse (la sesión
+     ya está validada por el shell) — el loader unificado la reemplaza. */
+  #authScreen { display: none !important; }
+  /* Dentro de Trazabilidad ya no hace falta el título "Reportes" ni el botón
+     para volver al selector de módulos (el shell entra directo aquí). */
+  #reports > h2 { display: none !important; }
+  #backToReports { display: none !important; }
   /* Dos fondos oscuros sueltos (no usaban variables) para placeholders de imagen */
   .card-item img { background: #f1f5f9 !important; }
   .placeholder { background: #f1f5f9 !important; border-color: rgba(15,23,42,0.1) !important; }

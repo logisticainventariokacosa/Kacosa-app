@@ -278,3 +278,15 @@ body { padding-bottom: 44px; margin: 0; } /* deja espacio para el footer fijo */
   transition: background .15s ease, transform .15s ease;
 }
 .module-welcome-btn:hover { background: #a91515; transform: translateY(-1px); }
+
+/* Spinner del loader inicial de arranque (boot-loader) */
+.boot-loader-spinner {
+  width: 34px;
+  height: 34px;
+  border: 3px solid rgba(255,255,255,.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: boot-spin 0.8s linear infinite;
+  margin: 4px 0;
+}
+@keyframes boot-spin { to { transform: rotate(360deg); } }

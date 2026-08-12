@@ -153,7 +153,13 @@ function vistaInicialDesdeHash() {
   const match = location.hash.match(/vista=([a-z0-9-]+)/i);
   return (match && document.getElementById(match[1])) ? match[1] : "vista-dashboard";
 }
-mostrarVista(vistaInicialDesdeHash());
+// Importante: se espera al evento "load" de la ventana (todos los scripts
+// de módulo ya cargados y con sus listeners de "kacosa:vista-cambiada"
+// registrados) antes de disparar la vista inicial. Si se hace antes, vistas
+// como Nuevo Análisis o Alertas Kacosa se quedan en "Cargando módulo..."
+// para siempre, porque el evento que les avisa que deben dibujarse ya pasó
+// cuando ellos recién estaban registrando su escucha.
+window.addEventListener("load", () => mostrarVista(vistaInicialDesdeHash()));
 
 // Si el shell cambia el hash de esta misma página (ej. de "Dashboard
 // Abastecimiento" a "Nuevo Análisis", ambos son este mismo app.html), el

@@ -248,6 +248,8 @@ changePasswordForm.addEventListener("submit", async (e) => {
 /* ===================== Sesión / control de acceso ===================== */
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
+    loginStatus.classList.remove("text-kacosa-600");
+    loginStatus.textContent = "";
     mostrarPantalla("login");
     return;
   }
@@ -265,6 +267,7 @@ onAuthStateChanged(auth, async (user) => {
   if (!perfil) {
     loginStatus.classList.add("text-kacosa-600");
     loginStatus.textContent = "Tu cuenta (" + user.email + ") no tiene acceso configurado. Contacta al administrador.";
+    mostrarPantalla("login");
     return;
   }
 
@@ -284,7 +287,16 @@ onAuthStateChanged(auth, async (user) => {
   mostrarBienvenida();
 });
 
+const bootLoader = document.getElementById("boot-loader");
+
+// Salvaguarda: si por algo Firebase nunca resuelve el estado de sesión, no
+// dejamos al usuario viendo el loader para siempre.
+setTimeout(() => {
+  if (document.body.contains(bootLoader)) mostrarPantalla("login");
+}, 15000);
+
 function mostrarPantalla(cual) {
+  bootLoader.remove(); // ya sabemos qué pantalla mostrar, no hace falta seguir tapando
   loginScreen.classList.toggle("hidden", cual !== "login");
   loginScreen.classList.toggle("flex", cual === "login");
   changePasswordScreen.classList.toggle("hidden", cual !== "cambio-password");
