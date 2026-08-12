@@ -43,7 +43,6 @@ class TrazabilidadSystem {
 
     render() {
         this.container.innerHTML = `
-            <button class="back-button" id="backToReports">← Volver a Reportes</button>
             <div class="trazabilidad-container">
                 <div class="trazabilidad-header">
                     <h3>Analizador de Trazabilidad de Mercancía</h3>
