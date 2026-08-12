@@ -15,15 +15,34 @@
     <!-- CSS externo -->
     <link rel="stylesheet" href="css/styles.css">
 <style>
-  /* Kacosa App — este módulo vive embebido en el shell principal, que ya
-     tiene su propio header/footer/menú. Se oculta el header y el footer
-     de esta app; la navegación interna sigue funcionando por JS (el shell
-     la controla por hash), solo deja de mostrarse el menú visualmente. */
+  /* Kacosa App — retema a fondo blanco uniforme (antes era tema oscuro con
+     imagen de fondo). Al redefinir estas variables, TODA la hoja de estilos
+     original las hereda automáticamente sin tener que tocar cada regla. */
+  :root {
+    --bg: #ffffff;
+    --text: #1a1d23;
+    --card-bg: #ffffff;
+    --card-news: #ffffff;
+    --muted: #64748b;
+  }
+  body {
+    background: #ffffff !important;
+  }
+  /* Módulo embebido en el shell principal: se oculta su propio header/footer
+     (ya redundantes), la vista previa de noticias del buscador (ya no hace
+     falta ahí) y el loader propio (se usa el loader unificado de Abastecimiento). */
   header.topbar { display: none !important; }
   footer.main-footer { display: none !important; }
+  #mainNews { display: none !important; }
+  #globalLoader { display: none !important; }
+  /* Dos fondos oscuros sueltos (no usaban variables) para placeholders de imagen */
+  .card-item img { background: #f1f5f9 !important; }
+  .placeholder { background: #f1f5f9 !important; border-color: rgba(15,23,42,0.1) !important; }
 </style>
+<link rel="stylesheet" href="css/loader.css">
 </head>
 <body>
+<script src="js/loader-classic.js"></script>
       <!-- Loader -->
     <div id="globalLoader" class="global-loader">
         <div class="loader-spinner"></div>

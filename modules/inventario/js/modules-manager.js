@@ -10,7 +10,11 @@ class ModulesManager {
     init(container) {
         this.container = container;
         this.registerCoreModules();
-        this.showMainMenu();
+        // Kacosa App: este módulo solo se abre desde "Inventario > Trazabilidad"
+        // en el menú del shell, así que la intención ya está clara — se entra
+        // directo a Trazabilidad en vez de mostrar una pantalla para elegir
+        // entre módulos (Análisis de Pedidos sigue sin implementarse).
+        this.loadModule('trazabilidad');
     }
 
     registerCoreModules() {

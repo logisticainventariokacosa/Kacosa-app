@@ -181,10 +181,26 @@
   <!-- CONTENIDO: cada submódulo carga su app original, sin modificarla, dentro de un iframe -->
   <main class="module-content">
     <div id="module-frame-wrap" class="module-frame-wrap">
-      <div id="module-loader" class="module-loader">
+      <div id="module-loader" class="module-loader oculto">
         <i class="fa-solid fa-circle-notch fa-spin"></i> Cargando módulo…
       </div>
-      <iframe id="module-frame" class="module-frame" title="Contenido del módulo"></iframe>
+      <iframe id="module-frame" class="module-frame hidden" title="Contenido del módulo"></iframe>
+
+      <!-- Pantalla de bienvenida: se ve al iniciar sesión, antes de elegir un
+           módulo. El fondo hoy es la imagen del logo; está armado para poder
+           cambiarse por un <video> más adelante sin tocar el resto. -->
+      <div id="module-welcome" class="module-welcome">
+        <div class="module-welcome-bg" style="background-image:url('img/logo-kacosa.jpg')"></div>
+        <div class="module-welcome-overlay"></div>
+        <div class="module-welcome-content">
+          <img src="img/logo-kacosa.jpg" alt="KACOSA" class="module-welcome-logo">
+          <h1>Bienvenido a Kacosa App</h1>
+          <p id="module-welcome-subtitle">Selecciona un módulo desde el menú <i class="fa-solid fa-bars"></i> para comenzar.</p>
+          <button id="btn-ir-dashboard" class="module-welcome-btn">
+            Ir a mi Dashboard <i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </div>
+      </div>
     </div>
   </main>
 </div>

@@ -22,9 +22,17 @@
   .topbar .brand { display: none !important; }
   .footer { display: none !important; }
   .topbar { justify-content: flex-end !important; }
+
+  /* La pantalla de login propia de esta app nunca debe mostrarse (la sesión
+     ya está validada por el shell) — se reemplaza por el loader unificado.
+     También se lleva el fondo a blanco puro para verse igual al resto. */
+  #authScreen { display: none !important; }
+  body { background: #ffffff !important; }
 </style>
+<link rel="stylesheet" href="loader.css">
 </head>
 <body>
+<script src="loader-classic.js"></script>
 
 <div class="auth-screen" id="authScreen">
   <div class="auth-card">

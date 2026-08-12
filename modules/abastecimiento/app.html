@@ -14,11 +14,14 @@
     /* Kacosa App — este módulo vive embebido en el shell principal, que ya
        tiene su propio header/footer/menú hamburguesa. Se oculta el header,
        el sidebar (Dashboard/Nuevo Análisis/Alertas Kacosa ya se navegan
-       desde el menú del shell) y el footer de esta app. */
+       desde el menú del shell) y el footer de esta app. También se lleva
+       el fondo a blanco puro para verse igual al resto de los módulos. */
     header.app-header,
     aside.sidebar,
     #overlay-sidebar,
     footer.app-footer { display: none !important; }
+    :root { --fondo: #ffffff !important; }
+    body { background: #ffffff !important; }
   </style>
 
   <!-- Favicon / manifest -->

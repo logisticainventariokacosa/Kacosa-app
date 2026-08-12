@@ -1,4 +1,4 @@
- import { auth, db, googleProvider } from "./firebase-config.js";
+import { auth, db, googleProvider } from "./firebase-config.js";
 import {
   signInWithPopup, signOut, onAuthStateChanged,
   signInWithEmailAndPassword, updatePassword, EmailAuthProvider, reauthenticateWithCredential
@@ -281,9 +281,7 @@ onAuthStateChanged(auth, async (user) => {
 
   construirSidebar(rolActual);
   mostrarPantalla("app");
-
-  const inicial = HOME_POR_ROL[rolActual] || HOME_POR_DEFECTO;
-  abrirSubmodulo(inicial, { actualizarUrl: true });
+  mostrarBienvenida();
 });
 
 function mostrarPantalla(cual) {
@@ -330,6 +328,24 @@ function construirSidebar(rol) {
 }
 
 /* ===================== Apertura de submódulos (iframe) ===================== */
+const moduleWelcome = document.getElementById("module-welcome");
+const btnIrDashboard = document.getElementById("btn-ir-dashboard");
+
+function mostrarBienvenida() {
+  submoduloActivoId = null;
+  headerModuleLabel.textContent = "Kacosa App";
+  document.querySelectorAll(".sap-submodule-btn").forEach(b => b.classList.remove("activo"));
+  moduleFrame.classList.add("hidden");
+  moduleLoader.classList.add("oculto");
+  moduleWelcome.classList.remove("oculto");
+  history.replaceState(null, "", location.pathname);
+}
+
+btnIrDashboard.addEventListener("click", () => {
+  const destino = HOME_POR_ROL[rolActual] || HOME_POR_DEFECTO;
+  abrirSubmodulo(destino, { actualizarUrl: true });
+});
+
 function buscarSubmodulo(id) {
   for (const mod of MODULES) {
     const sm = mod.submodules.find(s => s.id === id);
@@ -345,6 +361,9 @@ function abrirSubmodulo(id, { actualizarUrl = false } = {}) {
 
   submoduloActivoId = id;
   headerModuleLabel.textContent = mod.label + " · " + sm.label;
+
+  moduleWelcome.classList.add("oculto");
+  moduleFrame.classList.remove("hidden");
 
   document.querySelectorAll(".sap-submodule-btn").forEach(b => {
     b.classList.toggle("activo", b.dataset.submoduleId === id);
@@ -418,4 +437,3 @@ function tick() {
 }
 tick();
 setInterval(tick, 1000 * 30);
-  
