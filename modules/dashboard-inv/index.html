@@ -46,6 +46,38 @@
     background: #1a1d23 !important;
     color: #f1f5f9 !important;
   }
+
+  /* Los valores de las tarjetas KPI usan colores fijos (pensados para fondo
+     claro) por categoría; en modo oscuro casi no se distinguen del fondo.
+     Al igual que en el Dashboard de Abastecimiento, en modo oscuro se
+     unifican todos a un tono claro y legible. */
+  html.kacosa-dark .kpi .value,
+  html.kacosa-dark .kpi.amber .value,
+  html.kacosa-dark .kpi.green .value,
+  html.kacosa-dark .kpi.steel .value,
+  html.kacosa-dark .kpi.indigo .value,
+  html.kacosa-dark .kpi.teal .value,
+  html.kacosa-dark .kpi.slate .value {
+    color: #f8fafc !important;
+  }
+
+  /* Nombres de analistas (tag-list): el texto usa var(--navy-2), un azul
+     oscuro pensado para fondo claro, que en modo oscuro queda casi
+     invisible. Se aclara para que se lea bien sobre el fondo oscuro. */
+  html.kacosa-dark .tag {
+    color: #cbd5e1 !important;
+    background: rgba(255,255,255,.06) !important;
+    border-color: #2a2f3a !important;
+  }
+  html.kacosa-dark .tag .actual { color: #4ade80 !important; }
+  html.kacosa-dark .tag:hover,
+  html.kacosa-dark .tag.filtrado {
+    background: var(--steel) !important;
+    color: #fff !important;
+    border-color: var(--steel) !important;
+  }
+  html.kacosa-dark .tag.filtrado .actual,
+  html.kacosa-dark .tag:hover .actual { color: #fff !important; }
 </style>
 <link rel="stylesheet" href="loader.css?v=2">
 </head>

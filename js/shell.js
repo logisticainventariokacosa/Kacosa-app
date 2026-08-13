@@ -319,7 +319,10 @@ function construirSidebar(rol) {
     const btn = document.createElement("button");
     btn.className = "sap-module-btn";
     btn.innerHTML = `<i class="fa-solid ${mod.icon} mod-icon"></i><span>${mod.label}</span><i class="fa-solid fa-chevron-right chev"></i>`;
-    btn.addEventListener("click", () => wrap.classList.toggle("abierto"));
+    btn.addEventListener("click", () => {
+      wrap.classList.toggle("abierto");
+      actualizarVistaSegunAcordeon();
+    });
 
     const subwrap = document.createElement("div");
     subwrap.className = "sap-submodules";
@@ -342,6 +345,17 @@ function construirSidebar(rol) {
 /* ===================== Apertura de submódulos (iframe) ===================== */
 const moduleWelcome = document.getElementById("module-welcome");
 const btnIrDashboard = document.getElementById("btn-ir-dashboard");
+
+// Si el usuario cierra manualmente TODAS las "carpetas" de módulos del menú
+// (ninguna con la clase "abierto"), se vuelve a mostrar la vista principal
+// de bienvenida, incluso si había un submódulo cargado. Si vuelve a abrir
+// cualquier carpeta sin elegir un submódulo, no se toca la vista actual.
+function actualizarVistaSegunAcordeon() {
+  const hayAlgunoAbierto = document.querySelector(".sap-module.abierto");
+  if (!hayAlgunoAbierto && submoduloActivoId) {
+    mostrarBienvenida();
+  }
+}
 
 function mostrarBienvenida() {
   submoduloActivoId = null;
