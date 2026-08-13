@@ -9,8 +9,9 @@ body { padding-bottom: 44px; margin: 0; } /* deja espacio para el footer fijo */
   height: 2px;
   background: #1a1d23;
   border-radius: 2px;
-  transition: transform .2s ease, opacity .2s ease;
+  transition: transform .2s ease, opacity .2s ease, background .2s ease;
 }
+html.dark .ham-bar { background: #f1f5f9; }
 #btn-hamburguesa.activo .ham-bar:nth-child(1) { transform: translateY(7px) rotate(45deg); }
 #btn-hamburguesa.activo .ham-bar:nth-child(2) { opacity: 0; }
 #btn-hamburguesa.activo .ham-bar:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }

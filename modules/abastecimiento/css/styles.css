@@ -4,6 +4,7 @@
   --azul-base: #0F1A2E;
   --azul-claro: #1E2F47;
   --azul-medio: #2A4060;
+  --texto-titulo: var(--azul-base); /* títulos/valores destacados sobre superficie clara/oscura del tema */
   --fondo: #F0F2F6;
   --blanco: #FFFFFF;
   --ambar: #E8A03D;

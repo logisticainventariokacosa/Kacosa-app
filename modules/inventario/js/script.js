@@ -295,13 +295,51 @@ function getAlertTitle(type) {
 
 
 /* ====== INVENTARIO ====== */
+// Kacosa App: estado de orden de la tabla de resultados — se controla desde
+// los encabezados (clic para ordenar asc/desc por esa columna).
+let ordenActual = { columna: null, asc: true };
+
+const COLUMNAS_RESULTADOS = [
+    { key: 'codigo', label: 'Código' },
+    { key: 'descripcion', label: 'Descripción' },
+    { key: 'um', label: 'UM' },
+    { key: 'ubicacionGeneral', label: 'Ubicación General' },
+    { key: 'conteoGeneral', label: 'Conteo General', numerica: true },
+    { key: 'ubicacionExhibicion', label: 'Ubicación Exhibición' },
+    { key: 'conteoExhibicion', label: 'Conteo Exhibición', numerica: true },
+    { key: 'fechaUltimoConteo', label: 'Fecha Último Conteo' },
+    { key: 'ultimoAuditor', label: 'Auditor' },
+    { key: 'difGeneral', label: 'DIF General', numerica: true },
+    { key: 'difExhibicion', label: 'DIF Exhibición', numerica: true },
+    { key: 'centro', label: 'Centro' },
+    { key: 'documento', label: 'Documento' },
+];
+
+function valorColumna(r, key) {
+    switch (key) {
+        case 'codigo': return safeString(getField(r, 'codigo', 'Código', 'code'));
+        case 'descripcion': return safeString(getField(r, 'descripcion', 'Descripción', 'description'));
+        case 'um': return safeString(getField(r, 'um', 'UM'));
+        case 'ubicacionGeneral': return safeString(getField(r, 'ubicacionGeneral', 'ubicacionFisicaGeneral', 'ubicacion'));
+        case 'conteoGeneral': return safeString(getField(r, 'conteoGeneral', 'cantidad', 'Cant'));
+        case 'ubicacionExhibicion': return safeString(getField(r, 'ubicacionExhibicion', 'ubicacionExhib', 'ubicacion exhib'));
+        case 'conteoExhibicion': return safeString(getField(r, 'conteoExhibicion', 'conteoExhb', 'conteo exhb'));
+        case 'fechaUltimoConteo': return safeString(getField(r, 'fechaUltimoConteo', 'fecha'));
+        case 'ultimoAuditor': return safeString(getField(r, 'ultimoAuditor', 'auditor'));
+        case 'difGeneral': return safeString(getField(r, 'difGeneral', 'dif_general'));
+        case 'difExhibicion': return safeString(getField(r, 'difExhibicion', 'difExhib', 'dif_exhib'));
+        case 'centro': return safeString(getField(r, 'Centro_Inventario', 'centro', 'centroinventario'));
+        case 'documento': return safeString(getField(r, 'Nombre_Documento', 'documento', 'nombredocumento'));
+        default: return '';
+    }
+}
+
 function renderInventoryResults() {
     const out = document.getElementById('searchResults');
-    const centroFilter = (document.getElementById('filterCenter')?.value || '').trim().toLowerCase(); 
-    
-    const filtered = centroFilter 
-        ? currentInventoryResults.filter(r =>
-            safeString(getField(r, 'Centro_Inventario', 'centroinventario')).toLowerCase().includes(centroFilter))
+    const centroFilter = (document.getElementById('filterCenter')?.value || '').trim().toLowerCase();
+
+    let filtered = centroFilter
+        ? currentInventoryResults.filter(r => valorColumna(r, 'centro').toLowerCase().includes(centroFilter))
         : currentInventoryResults;
 
     if (!filtered.length) {
@@ -309,34 +347,52 @@ function renderInventoryResults() {
         return;
     }
 
-    const rows = filtered.map(r => {
-        const codigo = safeString(getField(r, 'codigo', 'Código', 'code')) || '';
-        const nombre = safeString(getField(r, 'nombre', 'Nombre', 'name')) || '';
-        const descripcion = safeString(getField(r, 'descripcion', 'Descripción', 'description')) || '';
-        const um = safeString(getField(r, 'um', 'UM')) || '';
-        const ubic = safeString(getField(r, 'ubicacionFisicaGeneral', 'ubicacion')) || '';
-        const cantidad = safeString(getField(r, 'cantidad', 'Cant')) || '';
-        const ubicExhib = safeString(getField(r, 'ubicacionExhib', 'ubicacion exhib')) || '';
-        const conteo = safeString(getField(r, 'conteoExhb', 'conteo exhb')) || '';
-        const fechaUlt = safeString(getField(r, 'fechaUltimoConteo', 'fecha')) || '';
-        const auditor = safeString(getField(r, 'ultimoAuditor', 'auditor')) || '';
-        const difG = safeString(getField(r, 'difGeneral', 'dif_general')) || '';
-        const difE = safeString(getField(r, 'difExhib', 'dif_exhib')) || '';
-        const centro = safeString(getField(r, 'Centro_Inventario', 'centroinventario')) || '';
-        const nombreDoc = safeString(getField(r, 'Nombre_Documento', 'nombredocumento')) || '';
+    if (ordenActual.columna) {
+        const col = COLUMNAS_RESULTADOS.find(c => c.key === ordenActual.columna);
+        filtered = [...filtered].sort((a, b) => {
+            let va = valorColumna(a, ordenActual.columna);
+            let vb = valorColumna(b, ordenActual.columna);
+            if (col && col.numerica) {
+                va = parseFloat(va.replace(',', '.')) || 0;
+                vb = parseFloat(vb.replace(',', '.')) || 0;
+                return ordenActual.asc ? va - vb : vb - va;
+            }
+            return ordenActual.asc ? va.localeCompare(vb, 'es') : vb.localeCompare(va, 'es');
+        });
+    }
 
-        const claseDifG = difG.startsWith('-') ? 'class="negative-diff"' : '';
-        const claseDifE = difE.startsWith('-') ? 'class="negative-diff"' : '';
+    const encabezados = COLUMNAS_RESULTADOS.map(c => {
+        const activa = ordenActual.columna === c.key;
+        const flecha = activa ? (ordenActual.asc ? ' ▲' : ' ▼') : '';
+        return `<th data-col="${c.key}" class="th-ordenable${activa ? ' th-activa' : ''}">${c.label}${flecha}</th>`;
+    }).join('');
+
+    const rows = filtered.map(r => {
+        const codigo = valorColumna(r, 'codigo');
+        const descripcion = valorColumna(r, 'descripcion');
+        const um = valorColumna(r, 'um');
+        const ubicG = valorColumna(r, 'ubicacionGeneral');
+        const conteoG = valorColumna(r, 'conteoGeneral');
+        const ubicE = valorColumna(r, 'ubicacionExhibicion');
+        const conteoE = valorColumna(r, 'conteoExhibicion');
+        const fechaUlt = valorColumna(r, 'fechaUltimoConteo');
+        const auditor = valorColumna(r, 'ultimoAuditor');
+        const difG = valorColumna(r, 'difGeneral');
+        const difE = valorColumna(r, 'difExhibicion');
+        const centro = valorColumna(r, 'centro');
+        const nombreDoc = valorColumna(r, 'documento');
+
+        const claseDifG = difG.startsWith('-') ? 'class="negative-diff"' : (difG && difG !== '0' ? 'class="positive-diff"' : '');
+        const claseDifE = difE.startsWith('-') ? 'class="negative-diff"' : (difE && difE !== '0' ? 'class="positive-diff"' : '');
 
         return `<tr>
             <td>${codigo}</td>
-            <td>${nombre}</td>
             <td>${descripcion}</td>
             <td>${um}</td>
-            <td>${ubic}</td>
-            <td>${cantidad}</td>
-            <td>${ubicExhib}</td>
-            <td>${conteo}</td>
+            <td>${ubicG}</td>
+            <td>${conteoG}</td>
+            <td>${ubicE}</td>
+            <td>${conteoE}</td>
             <td>${fechaUlt}</td>
             <td>${auditor}</td>
             <td ${claseDifG}>${difG}</td>
@@ -350,25 +406,41 @@ function renderInventoryResults() {
     <div class="results-table-container">
         <table class="inventory-table">
             <thead>
-                <tr>
-                    <th>Código</th><th>Nombre</th><th>Descripción</th><th>UM</th>
-                    <th>Ubicación Física</th><th>Conteo General</th><th>Ubicación Exhib</th><th>Conteo Exhib</th>
-                    <th>Fecha Último Conteo</th><th>Auditor</th><th>DIF General</th><th>DIF Exhib</th>
-                    <th>Centro Inventario</th><th>Nombre Documento</th>
-                </tr>
+                <tr>${encabezados}</tr>
             </thead>
             <tbody>${rows}</tbody>
         </table>
     </div>
 </div>`;
+
+    out.querySelectorAll('.th-ordenable').forEach(th => {
+        th.addEventListener('click', () => {
+            const col = th.dataset.col;
+            if (ordenActual.columna === col) {
+                ordenActual.asc = !ordenActual.asc;
+            } else {
+                ordenActual = { columna: col, asc: true };
+            }
+            renderInventoryResults();
+        });
+    });
 }
 
-document.getElementById('btnSearch').addEventListener('click', async () => {
-    const code = document.getElementById('searchCode').value.trim();
+const btnSearch = document.getElementById('btnSearch');
+const searchCodeInput2 = document.getElementById('searchCode');
+const btnLimpiarBusqueda = document.getElementById('btnLimpiarBusqueda');
+
+btnSearch.addEventListener('click', async () => {
+    const code = searchCodeInput2.value.trim();
     if (!code) {
         showAlert('Ingrese un código.', 'warning');
         return;
     }
+
+    // Bloquea el botón para evitar búsquedas repetidas mientras carga; se
+    // vuelve a habilitar solo cuando el usuario cambia el código (ver más abajo).
+    btnSearch.disabled = true;
+    btnSearch.textContent = 'Buscando…';
 
     document.getElementById('searchResults').innerHTML = '<div class="loading-results">🔍 Buscando en el inventario...</div>';
 
@@ -382,8 +454,12 @@ document.getElementById('btnSearch').addEventListener('click', async () => {
     } catch (err) {
         console.error('Error buscando material:', err);
         document.getElementById('searchResults').innerHTML = '<div class="no-results">⚠️ No se pudo completar la búsqueda. Intenta de nuevo.</div>';
+        btnSearch.disabled = false;
+        btnSearch.textContent = 'Buscar';
         return;
     }
+
+    ordenActual = { columna: null, asc: true }; // cada búsqueda nueva arranca sin orden aplicado
 
     if (data && data.resultados && data.resultados.length) {
         currentInventoryResults = data.resultados;
@@ -392,6 +468,24 @@ document.getElementById('btnSearch').addEventListener('click', async () => {
         currentInventoryResults = [];
         document.getElementById('searchResults').innerHTML = '<div class="no-results">🔍 Sin resultados</div>';
     }
+});
+
+// El botón "Buscar" se queda bloqueado (para no repetir la misma búsqueda
+// mientras carga) hasta que el usuario vuelva a tocar el campo de código.
+searchCodeInput2.addEventListener('input', () => {
+    btnSearch.disabled = false;
+    btnSearch.textContent = 'Buscar';
+});
+
+btnLimpiarBusqueda.addEventListener('click', () => {
+    searchCodeInput2.value = '';
+    document.getElementById('filterCenter').value = '';
+    currentInventoryResults = [];
+    ordenActual = { columna: null, asc: true };
+    document.getElementById('searchResults').innerHTML = '';
+    btnSearch.disabled = false;
+    btnSearch.textContent = 'Buscar';
+    searchCodeInput2.focus();
 });
 
 document.getElementById('searchCode').addEventListener('keypress', function(e) {
