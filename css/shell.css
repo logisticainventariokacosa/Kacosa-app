@@ -253,15 +253,17 @@ html.dark .ham-bar { background: #f1f5f9; }
 }
 .module-welcome-logo {
   width: auto;
-  height: 84px;
-  max-width: 260px;
+  height: 130px;
+  max-width: 320px;
   object-fit: contain;
-  border-radius: 0;
-  box-shadow: none;
-  margin-bottom: 6px;
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px 16px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.4);
+  margin-bottom: 10px;
 }
 @media (max-width: 480px) {
-  .module-welcome-logo { height: 64px; max-width: 210px; }
+  .module-welcome-logo { height: 96px; max-width: 250px; padding: 10px 12px; }
 }
 .module-welcome-content h1 {
   color: #fff;
