@@ -432,6 +432,38 @@ btnHamburguesa.addEventListener("click", () => {
 });
 overlay.addEventListener("click", cerrarMenu);
 
+/* ===================== Tema claro/oscuro ===================== */
+// Guardado en localStorage (mismo dominio, así que los módulos dentro de los
+// iframes pueden leer la misma preferencia) y sincronizado en vivo entre el
+// shell y cualquier módulo abierto mediante el evento "storage".
+const CLAVE_TEMA = "kacosa-theme";
+const btnTema = document.getElementById("btn-tema");
+const iconoTema = document.getElementById("icono-tema");
+
+function aplicarTema(tema) {
+  document.documentElement.classList.toggle("dark", tema === "dark");
+  iconoTema.classList.toggle("fa-moon", tema !== "dark");
+  iconoTema.classList.toggle("fa-sun", tema === "dark");
+}
+
+function temaGuardado() {
+  return localStorage.getItem(CLAVE_TEMA) === "dark" ? "dark" : "light";
+}
+
+aplicarTema(temaGuardado());
+
+btnTema.addEventListener("click", () => {
+  const nuevo = temaGuardado() === "dark" ? "light" : "dark";
+  localStorage.setItem(CLAVE_TEMA, nuevo);
+  aplicarTema(nuevo);
+  // El evento "storage" no se dispara en la misma pestaña que hizo el cambio
+  // (solo en otras) — el iframe activo SÍ lo recibe automáticamente por ser
+  // otro "documento", pero por si acaso, además le pedimos que revise ahora.
+  try {
+    moduleFrame.contentWindow.postMessage({ tipo: "kacosa-tema", tema: nuevo }, "*");
+  } catch (e) { /* el módulo puede no tener el listener todavía, no pasa nada */ }
+});
+
 /* ===================== Ajuste dinámico de la altura del header ===================== */
 function ajustarAlturaHeader() {
   const header = document.querySelector("#app-screen > div.sticky");

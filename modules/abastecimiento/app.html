@@ -7,8 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="css/styles.css?v=1" />
-  <link rel="stylesheet" href="css/app.css?v=1" />
-  <link rel="stylesheet" href="css/loader.css?v=1" />
+  <link rel="stylesheet" href="css/app.css?v=2" />
+  <link rel="stylesheet" href="css/loader.css?v=2" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
   <style>
     /* Kacosa App — este módulo vive embebido en el shell principal, que ya
@@ -22,6 +22,25 @@
     footer.app-footer { display: none !important; }
     :root { --fondo: #ffffff !important; }
     body { background: #ffffff !important; }
+
+    /* ---------- Modo oscuro (activado por el shell vía localStorage) ---------- */
+    html.kacosa-dark {
+      --fondo: #0f1115;
+      --blanco: #1a1d23;
+      --texto-principal: #f1f5f9;
+      --texto-secundario: #cbd5e1;
+      --texto-claro: #94a3b8;
+      --borde: #2a2f3a;
+      --borde-focus: #3a4150;
+    }
+    html.kacosa-dark body { background: #0f1115 !important; }
+    html.kacosa-dark input,
+    html.kacosa-dark select,
+    html.kacosa-dark textarea {
+      background: #1a1d23 !important;
+      color: #f1f5f9 !important;
+      border-color: #2a2f3a !important;
+    }
   </style>
 
   <!-- Favicon / manifest -->
@@ -143,7 +162,8 @@
   </div>
 
   <!-- Módulos JS -->
-  <script type="module" src="js/nav.js?v=1"></script>
+  <script src="js/tema-classic.js?v=2"></script>
+  <script type="module" src="js/nav.js?v=2"></script>
   <script type="module" src="js/dashboard.js?v=1"></script>
   <script type="module" src="js/alertas-kacosa.js?v=1"></script>
   <script type="module" src="js/nuevo-analisis.js?v=1"></script>

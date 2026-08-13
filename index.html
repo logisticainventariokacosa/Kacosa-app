@@ -16,6 +16,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
   tailwind.config = {
+    darkMode: 'class',
     theme: {
       extend: {
         fontFamily: {
@@ -43,7 +44,7 @@
 </script>
 <link rel="stylesheet" href="css/shell.css?v=1">
 </head>
-<body class="bg-slate-50 text-ink antialiased">
+<body class="bg-slate-50 text-ink dark:text-white antialiased dark:bg-slate-900 dark:text-slate-100">
 
 <!-- ===================== LOADER INICIAL ===================== -->
 <!-- Se ve mientras se confirma si hay sesión activa, para no mostrar nunca
@@ -60,32 +61,32 @@
 
 <!-- ===================== LOGIN ===================== -->
 <div id="login-screen" class="hidden min-h-[calc(100vh-44px)] items-center justify-center px-4 py-10 bg-gradient-to-b from-white to-slate-50">
-  <div class="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-card p-8 sm:p-10">
+  <div class="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-card p-8 sm:p-10 dark:bg-slate-800 dark:border-slate-700">
     <div class="flex flex-col items-center text-center mb-7">
       <img src="img/logo-kacosa.jpg" alt="KACOSA" class="h-20 w-20 object-contain mb-4 rounded-xl">
-      <h1 class="text-2xl font-extrabold text-ink tracking-tight">Kacosa App</h1>
-      <p class="text-sm text-slate-500 mt-2 leading-relaxed">Inicia sesión con tu cuenta corporativa para acceder a las herramientas asignadas a tu rol.</p>
+      <h1 class="text-2xl font-extrabold text-ink dark:text-white tracking-tight">Kacosa App</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">Inicia sesión con tu cuenta corporativa para acceder a las herramientas asignadas a tu rol.</p>
     </div>
 
-    <button id="btn-login" class="w-full flex items-center justify-center gap-3 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-sm rounded-lg py-3 transition-colors">
+    <button id="btn-login" class="w-full flex items-center justify-center gap-3 border border-slate-300 dark:border-slate-600 bg-white hover:bg-slate-50 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 font-semibold text-sm rounded-lg py-3 transition-colors">
       <i class="fa-brands fa-google text-[#4285F4] text-base"></i>
       Continuar con Google
     </button>
 
-    <div class="flex items-center gap-3 my-6 text-[11px] font-mono-brand tracking-widest text-slate-400">
-      <span class="flex-1 h-px bg-slate-200"></span>
+    <div class="flex items-center gap-3 my-6 text-[11px] font-mono-brand tracking-widest text-slate-400 dark:text-slate-500">
+      <span class="flex-1 h-px bg-slate-200 dark:bg-slate-600"></span>
       O
-      <span class="flex-1 h-px bg-slate-200"></span>
+      <span class="flex-1 h-px bg-slate-200 dark:bg-slate-600"></span>
     </div>
 
     <form id="email-form" class="flex flex-col gap-3">
       <input type="email" id="email-input" placeholder="Correo" autocomplete="email" maxlength="50" required
-        class="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm text-ink placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-kacosa-500/25 focus:border-kacosa-500 transition">
+        class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-sm text-ink dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-kacosa-500/25 focus:border-kacosa-500 transition">
 
       <div class="relative">
         <input type="password" id="password-input" placeholder="Contraseña" autocomplete="current-password" maxlength="20" required
-          class="w-full rounded-lg border border-slate-300 pl-4 pr-11 py-3 text-sm text-ink placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-kacosa-500/25 focus:border-kacosa-500 transition">
-        <button type="button" class="toggle-eye absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center text-slate-400 hover:text-kacosa-500 rounded-md" data-target="password-input">
+          class="w-full rounded-lg border border-slate-300 dark:border-slate-600 pl-4 pr-11 py-3 text-sm text-ink dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-kacosa-500/25 focus:border-kacosa-500 transition">
+        <button type="button" class="toggle-eye absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-kacosa-500 rounded-md" data-target="password-input">
           <i class="fa-solid fa-eye"></i>
         </button>
       </div>
@@ -95,33 +96,33 @@
       </button>
     </form>
 
-    <div class="login-status mt-4 text-xs font-mono-brand min-h-[16px] text-slate-500" id="login-status"></div>
+    <div class="login-status mt-4 text-xs font-mono-brand min-h-[16px] text-slate-500 dark:text-slate-400" id="login-status"></div>
   </div>
 </div>
 
 <!-- ===================== CAMBIO DE CONTRASEÑA OBLIGATORIO ===================== -->
 <div id="change-password-screen" class="hidden min-h-[calc(100vh-44px)] items-center justify-center px-4 py-10 bg-gradient-to-b from-white to-slate-50">
-  <div class="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-card p-8 sm:p-10">
+  <div class="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-card p-8 sm:p-10 dark:bg-slate-800 dark:border-slate-700">
     <div class="flex flex-col items-center text-center mb-7">
       <div class="w-14 h-14 rounded-full bg-kacosa-50 border border-kacosa-100 flex items-center justify-center mb-4">
         <i class="fa-solid fa-key text-kacosa-500 text-xl"></i>
       </div>
-      <h1 class="text-2xl font-extrabold text-ink tracking-tight">Crea tu contraseña</h1>
-      <p class="text-sm text-slate-500 mt-2 leading-relaxed">Por seguridad, define una contraseña nueva antes de continuar. Debe ser alfanumérica (sin símbolos) y de máximo 20 caracteres.</p>
+      <h1 class="text-2xl font-extrabold text-ink dark:text-white tracking-tight">Crea tu contraseña</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">Por seguridad, define una contraseña nueva antes de continuar. Debe ser alfanumérica (sin símbolos) y de máximo 20 caracteres.</p>
     </div>
 
     <form id="change-password-form" class="flex flex-col gap-3">
       <div class="relative">
         <input type="password" id="new-password-input" placeholder="Nueva contraseña" maxlength="20" pattern="[A-Za-z0-9]{1,20}" required
-          class="w-full rounded-lg border border-slate-300 pl-4 pr-11 py-3 text-sm text-ink placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-kacosa-500/25 focus:border-kacosa-500 transition">
-        <button type="button" class="toggle-eye absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center text-slate-400 hover:text-kacosa-500 rounded-md" data-target="new-password-input">
+          class="w-full rounded-lg border border-slate-300 dark:border-slate-600 pl-4 pr-11 py-3 text-sm text-ink dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-kacosa-500/25 focus:border-kacosa-500 transition">
+        <button type="button" class="toggle-eye absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-kacosa-500 rounded-md" data-target="new-password-input">
           <i class="fa-solid fa-eye"></i>
         </button>
       </div>
       <div class="relative">
         <input type="password" id="confirm-password-input" placeholder="Confirmar contraseña" maxlength="20" pattern="[A-Za-z0-9]{1,20}" required
-          class="w-full rounded-lg border border-slate-300 pl-4 pr-11 py-3 text-sm text-ink placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-kacosa-500/25 focus:border-kacosa-500 transition">
-        <button type="button" class="toggle-eye absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center text-slate-400 hover:text-kacosa-500 rounded-md" data-target="confirm-password-input">
+          class="w-full rounded-lg border border-slate-300 dark:border-slate-600 pl-4 pr-11 py-3 text-sm text-ink dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-kacosa-500/25 focus:border-kacosa-500 transition">
+        <button type="button" class="toggle-eye absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-kacosa-500 rounded-md" data-target="confirm-password-input">
           <i class="fa-solid fa-eye"></i>
         </button>
       </div>
@@ -130,7 +131,7 @@
       </button>
     </form>
 
-    <div class="login-status mt-4 text-xs font-mono-brand min-h-[16px] text-slate-500" id="change-password-status"></div>
+    <div class="login-status mt-4 text-xs font-mono-brand min-h-[16px] text-slate-500 dark:text-slate-400" id="change-password-status"></div>
   </div>
 </div>
 
@@ -138,24 +139,28 @@
 <div id="app-screen" class="hidden">
 
   <!-- HEADER -->
-  <div class="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200">
-    <div class="flex items-center justify-between px-4 sm:px-6 py-3">
-      <div class="flex items-center gap-3">
-        <button id="btn-hamburguesa" class="w-10 h-10 flex flex-col items-center justify-center gap-[5px] rounded-lg hover:bg-slate-100 transition-colors" aria-label="Menú">
+  <div class="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200 dark:bg-slate-900/95 dark:border-slate-700">
+    <div class="flex items-center justify-between px-4 sm:px-6 py-3 gap-3">
+      <div class="flex items-center gap-3 flex-shrink-0">
+        <button id="btn-hamburguesa" class="w-10 h-10 flex flex-col items-center justify-center gap-[5px] rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" aria-label="Menú">
           <span class="ham-bar"></span>
           <span class="ham-bar"></span>
           <span class="ham-bar"></span>
         </button>
         <img src="img/logo-kacosa.jpg" alt="KACOSA" class="h-9 w-9 object-contain rounded-md">
-        <div class="leading-tight hidden xs:block">
-          <b class="block text-[15px] font-extrabold tracking-tight text-ink">KACOSA</b>
-          <span class="block text-[10px] font-mono-brand tracking-widest text-slate-400 uppercase" id="header-module-label">Kacosa App</span>
-        </div>
       </div>
-      <div class="flex items-center gap-3">
-        <span class="hidden sm:inline text-[13px] text-slate-500" id="user-name-label"></span>
-        <span class="text-[10px] font-mono-brand tracking-widest uppercase text-kacosa-600 bg-kacosa-50 border border-kacosa-100 rounded-full px-2.5 py-1" id="role-badge">ROL</span>
-        <button id="btn-logout" title="Cerrar sesión" class="w-9 h-9 flex items-center justify-center rounded-full border border-slate-200 text-slate-400 hover:text-kacosa-600 hover:border-kacosa-200 transition-colors">
+
+      <div class="flex-1 min-w-0 text-center">
+        <span class="block text-[14px] sm:text-[15px] font-bold tracking-tight text-ink dark:text-white truncate" id="header-module-label">Kacosa App</span>
+      </div>
+
+      <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+        <span class="hidden sm:inline text-[13px] text-slate-500 dark:text-slate-400" id="user-name-label"></span>
+        <span class="text-[10px] font-mono-brand tracking-widest uppercase text-kacosa-600 bg-kacosa-50 border border-kacosa-100 dark:bg-kacosa-600/10 dark:border-kacosa-600/30 rounded-full px-2.5 py-1" id="role-badge">ROL</span>
+        <button id="btn-tema" title="Cambiar tema" class="w-9 h-9 flex items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-300 hover:text-kacosa-600 hover:border-kacosa-200 transition-colors">
+          <i class="fa-solid fa-moon text-sm" id="icono-tema"></i>
+        </button>
+        <button id="btn-logout" title="Cerrar sesión" class="w-9 h-9 flex items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-300 hover:text-kacosa-600 hover:border-kacosa-200 transition-colors">
           <i class="fa-solid fa-arrow-right-from-bracket text-sm"></i>
         </button>
       </div>
@@ -200,10 +205,13 @@
       <iframe id="module-frame" class="module-frame hidden" title="Contenido del módulo"></iframe>
 
       <!-- Pantalla de bienvenida: se ve al iniciar sesión, antes de elegir un
-           módulo. El fondo hoy es la imagen del logo; está armado para poder
-           cambiarse por un <video> más adelante sin tocar el resto. -->
+           módulo. Video de fondo en loop (silencioso, autoplay). Para
+           alternar con el segundo video que también me pasaste, solo hay
+           que cambiar el "src" de abajo a "media/bienvenida-alt.mp4". -->
       <div id="module-welcome" class="module-welcome">
-        <div class="module-welcome-bg" style="background-image:url('img/logo-kacosa.jpg')"></div>
+        <video class="module-welcome-bg" autoplay muted loop playsinline poster="img/logo-kacosa.jpg">
+          <source src="media/bienvenida.mp4" type="video/mp4">
+        </video>
         <div class="module-welcome-overlay"></div>
         <div class="module-welcome-content">
           <img src="img/logo-kacosa.jpg" alt="KACOSA" class="module-welcome-logo">
@@ -219,9 +227,9 @@
 </div>
 
 <!-- ===================== FOOTER FIJO ===================== -->
-<footer class="fixed bottom-0 inset-x-0 z-40 h-11 bg-white border-t border-slate-200">
+<footer class="fixed bottom-0 inset-x-0 z-40 h-11 bg-white border-t border-slate-200 dark:bg-slate-900 dark:border-slate-700">
   <div class="h-[2px] w-full bg-gradient-to-r from-kacosa-500 via-kacosa-600 to-kacosa-500"></div>
-  <div class="max-w-full mx-auto h-[calc(2.75rem-2px)] px-5 sm:px-8 flex items-center justify-between text-[11px] text-slate-400">
+  <div class="max-w-full mx-auto h-[calc(2.75rem-2px)] px-5 sm:px-8 flex items-center justify-between text-[11px] text-slate-400 dark:text-slate-500">
     <span>© <span id="footer-year">2026</span> KACOSA · Gente amiga al servicio de la refrigeración</span>
     <span class="hidden sm:inline font-mono-brand" id="footer-clock">--:--</span>
   </div>

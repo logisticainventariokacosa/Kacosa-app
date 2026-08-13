@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<link rel="stylesheet" href="styles.css?v=1">
+<link rel="stylesheet" href="styles.css?v=2">
 <style>
   /* Kacosa App — este módulo vive embebido en el shell principal, que ya
      tiene su propio header/footer. Se oculta el título/marca duplicados
@@ -28,11 +28,29 @@
      También se lleva el fondo a blanco puro para verse igual al resto. */
   #authScreen { display: none !important; }
   body { background: #ffffff !important; }
+
+  /* ---------- Modo oscuro (activado por el shell vía localStorage) ---------- */
+  html.kacosa-dark {
+    --bg: #0f1115;
+    --card: #1a1d23;
+    --line: #2a2f3a;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+  }
+  html.kacosa-dark body { background: #0f1115 !important; }
+  html.kacosa-dark select,
+  html.kacosa-dark input[type=text],
+  html.kacosa-dark .btn-google,
+  html.kacosa-dark .btn-auth-google {
+    background: #1a1d23 !important;
+    color: #f1f5f9 !important;
+  }
 </style>
-<link rel="stylesheet" href="loader.css?v=1">
+<link rel="stylesheet" href="loader.css?v=2">
 </head>
 <body>
-<script src="loader-classic.js?v=1"></script>
+<script src="loader-classic.js?v=2"></script>
+<script src="tema-classic.js?v=2"></script>
 
 <div class="auth-screen" id="authScreen">
   <div class="auth-card">

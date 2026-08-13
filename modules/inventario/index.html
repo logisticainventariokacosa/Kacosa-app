@@ -45,11 +45,29 @@
   /* Dos fondos oscuros sueltos (no usaban variables) para placeholders de imagen */
   .card-item img { background: #f1f5f9 !important; }
   .placeholder { background: #f1f5f9 !important; border-color: rgba(15,23,42,0.1) !important; }
+
+  /* ---------- Modo oscuro (activado por el shell vía localStorage) ---------- */
+  html.kacosa-dark {
+    --bg: #0f1115;
+    --text: #f1f5f9;
+    --card-bg: #1a1d23;
+    --card-news: #1a1d23;
+    --muted: #94a3b8;
+  }
+  html.kacosa-dark body { background: #0f1115 !important; }
+  html.kacosa-dark .card-item img,
+  html.kacosa-dark .placeholder { background: #262a33 !important; border-color: rgba(255,255,255,0.1) !important; }
+  html.kacosa-dark input, html.kacosa-dark select, html.kacosa-dark .custom-select {
+    background: #1a1d23 !important;
+    border-color: rgba(255,255,255,0.12) !important;
+    color: #f1f5f9 !important;
+  }
 </style>
 <link rel="stylesheet" href="css/loader.css?v=2">
 </head>
 <body>
 <script src="js/loader-classic.js?v=2"></script>
+<script src="js/tema-classic.js?v=2"></script>
       <!-- Loader -->
     <div id="globalLoader" class="global-loader">
         <div class="loader-spinner"></div>
@@ -332,7 +350,7 @@
 <script src="js/trazabilidad-ui.js?v=2"></script>
 
 <!-- Script principal -->
-<script src="js/script.js?v=2"></script>
+<script src="js/script.js?v=3"></script>
 
 <!-- Futuros módulos -->
 <!-- <script src="js/analisis-pedidos-core.js?v=2"></script> -->

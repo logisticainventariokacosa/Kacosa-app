@@ -1,6 +1,13 @@
 /* ====== CONFIG ====== */
 const API_URL = 'https://script.google.com/macros/s/AKfycbzGoWmn4doU1_vDqQvWYbqg4WzW8WD6y64lI96xKYn_bGd-L1THgt3HVJJl_BprqpysTA/exec';
 
+// Kacosa App: Consultas ahora busca en la MISMA fuente que usa el Dashboard
+// de Resumen de Inventarios (Maestro_Conteo_Completo + Tiendas_Upi +
+// Grupo_Pepetodo), en vez de la hoja "Inventario" aparte que usaba antes.
+// Todo lo demás de este archivo (subir imágenes, noticias, documentos) sigue
+// usando API_URL normal, sin cambios.
+const DASHBOARD_API_URL = 'https://script.google.com/macros/s/AKfycby3sVIcPfIY1xJUO_qHYXH_XcL0QhPSbNrqLiSaBrKCcH7l54uDPVCK4hlR1kTztlg76Q/exec';
+
 // Este proyecto ahora es el mismo que usa el Portal KACOSA (sesión compartida:
 // si el usuario ya inició sesión en el portal, entra aquí directo sin volver a loguearse)
 const firebaseConfig = {
@@ -364,11 +371,22 @@ document.getElementById('btnSearch').addEventListener('click', async () => {
     }
 
     document.getElementById('searchResults').innerHTML = '<div class="loading-results">🔍 Buscando en el inventario...</div>';
-    
-    const data = await getApi('search', { code });
 
-    if (data && data.results && data.results.length) {
-        currentInventoryResults = data.results;
+    // Kacosa App: búsqueda contra la fuente del Dashboard (acción "buscar_material"),
+    // no contra el API_URL antiguo de este módulo.
+    let data;
+    try {
+        const q = new URLSearchParams({ action: 'buscar_material', codigo: code }).toString();
+        const res = await fetch(DASHBOARD_API_URL + '?' + q);
+        data = await res.json();
+    } catch (err) {
+        console.error('Error buscando material:', err);
+        document.getElementById('searchResults').innerHTML = '<div class="no-results">⚠️ No se pudo completar la búsqueda. Intenta de nuevo.</div>';
+        return;
+    }
+
+    if (data && data.resultados && data.resultados.length) {
+        currentInventoryResults = data.resultados;
         renderInventoryResults();
     } else {
         currentInventoryResults = [];
