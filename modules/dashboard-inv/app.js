@@ -1,5 +1,5 @@
 const queryParams = new URLSearchParams(window.location.search);
-const API_URL = queryParams.get('apiUrl') || 'https://script.google.com/macros/s/AKfycby3sVIcPfIY1xJUO_qHYXH_XcL0QhPSbNrqLiSaBrKCcH7l54uDPVCK4hlR1kTztlg76Q/exec';
+const API_URL = queryParams.get('apiUrl') || 'https://script.google.com/macros/s/AKfycbz44oS6IUyYcoHamu-b8UizNWElrOTFeOZQ3IcnnVHdr79FlGnYU4xBB5Z7zRNjfgca/exec';
 
 // Mismo proyecto de Firebase que el Portal KACOSA: si el usuario ya inició
 // sesión en el portal, entra aquí directo sin volver a loguearse.
