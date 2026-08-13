@@ -432,6 +432,22 @@ btnHamburguesa.addEventListener("click", () => {
 });
 overlay.addEventListener("click", cerrarMenu);
 
+/* ===================== Respaldo del video de bienvenida ===================== */
+// Si el video no logra cargar (sin conexión decente, archivo no encontrado,
+// formato no soportado por el navegador, etc.), se cae a la imagen del logo
+// que se usaba antes, en vez de dejar un espacio roto o en negro.
+const videoBienvenida = document.getElementById("video-bienvenida");
+if (videoBienvenida) {
+  videoBienvenida.addEventListener("error", () => {
+    moduleWelcome.classList.add("video-fallo");
+  });
+  // Salvaguarda extra: si a los 6s no ha empezado a reproducir nada, también
+  // se cae a la imagen (cubre casos raros donde no dispara "error").
+  setTimeout(() => {
+    if (videoBienvenida.readyState === 0) moduleWelcome.classList.add("video-fallo");
+  }, 6000);
+}
+
 /* ===================== Tema claro/oscuro ===================== */
 // Guardado en localStorage (mismo dominio, así que los módulos dentro de los
 // iframes pueden leer la misma preferencia) y sincronizado en vivo entre el

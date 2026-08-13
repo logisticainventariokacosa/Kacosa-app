@@ -205,13 +205,18 @@
       <iframe id="module-frame" class="module-frame hidden" title="Contenido del módulo"></iframe>
 
       <!-- Pantalla de bienvenida: se ve al iniciar sesión, antes de elegir un
-           módulo. Video de fondo en loop (silencioso, autoplay). Para
-           alternar con el segundo video que también me pasaste, solo hay
-           que cambiar el "src" de abajo a "media/bienvenida-alt.mp4". -->
+           módulo. Dos videos según orientación de pantalla: uno vertical
+           (9:16) para celular y uno horizontal (16:9) para PC/tablet — el
+           navegador elige solo cuál usar, ninguno se recorta ni se estira. -->
       <div id="module-welcome" class="module-welcome">
-        <video class="module-welcome-bg" autoplay muted loop playsinline poster="img/logo-kacosa.jpg">
+        <video class="module-welcome-bg" id="video-bienvenida" autoplay muted loop playsinline poster="img/logo-kacosa.jpg">
+          <source src="media/bienvenida-vertical.mp4" type="video/mp4" media="(orientation: portrait)">
           <source src="media/bienvenida.mp4" type="video/mp4">
         </video>
+        <!-- Respaldo: si el video no carga (conexión mala, archivo no
+             encontrado, etc.), se muestra esta imagen del logo en su lugar
+             — el mismo fondo que había antes de tener video. -->
+        <div class="module-welcome-bg module-welcome-bg-imagen" style="background-image:url('img/logo-kacosa.jpg')"></div>
         <div class="module-welcome-overlay"></div>
         <div class="module-welcome-content">
           <img src="img/logo-kacosa.jpg" alt="KACOSA" class="module-welcome-logo">

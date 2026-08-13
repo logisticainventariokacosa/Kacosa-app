@@ -225,6 +225,12 @@ body { padding-bottom: 44px; margin: 0; } /* deja espacio para el footer fijo */
   filter: brightness(0.55);
 }
 
+/* Respaldo si el video falla: se oculta el video y se muestra esta imagen
+   (mismo tratamiento visual: blur + oscurecido) en su lugar. */
+.module-welcome-bg-imagen { display: none; }
+.module-welcome.video-fallo video.module-welcome-bg { display: none; }
+.module-welcome.video-fallo .module-welcome-bg-imagen { display: block; }
+
 .module-welcome-overlay {
   position: absolute;
   inset: 0;
