@@ -6,7 +6,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbzGoWmn4doU1_vDqQvWYbqg
 // Grupo_Pepetodo), en vez de la hoja "Inventario" aparte que usaba antes.
 // Todo lo demás de este archivo (subir imágenes, noticias, documentos) sigue
 // usando API_URL normal, sin cambios.
-const DASHBOARD_API_URL = 'https://script.google.com/macros/s/AKfycby3sVIcPfIY1xJUO_qHYXH_XcL0QhPSbNrqLiSaBrKCcH7l54uDPVCK4hlR1kTztlg76Q/exec';
+const DASHBOARD_API_URL = 'https://script.google.com/macros/s/AKfycbz44oS6IUyYcoHamu-b8UizNWElrOTFeOZQ3IcnnVHdr79FlGnYU4xBB5Z7zRNjfgca/exec';
 
 // Este proyecto ahora es el mismo que usa el Portal KACOSA (sesión compartida:
 // si el usuario ya inició sesión en el portal, entra aquí directo sin volver a loguearse)
