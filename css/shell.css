@@ -225,6 +225,40 @@ body.modo-bienvenida footer.fixed {
   backdrop-filter: none !important;
   border-top-color: transparent !important;
 }
+/* La franja roja decorativa del footer (arriba del copyright) se apaga en
+   modo bienvenida: sobre el video se veía como una raya suelta. */
+body.modo-bienvenida footer.fixed .footer-accent-bar {
+  display: none !important;
+}
+
+/* Mientras se ve la pantalla de bienvenida, el header queda con fondo
+   transparente sobre el video oscuro — pero su texto e iconos seguían con
+   los colores del tema claro (oscuros), casi invisibles ahí. Se fuerzan a
+   claro solo en este modo, sin tocar el tema claro/oscuro normal del resto
+   de la app. */
+body.modo-bienvenida .sticky.top-0 #header-module-label,
+body.modo-bienvenida .sticky.top-0 #user-name-label,
+body.modo-bienvenida .sticky.top-0 #footer-clock,
+body.modo-bienvenida footer.fixed span {
+  color: #fff !important;
+}
+body.modo-bienvenida .sticky.top-0 .ham-bar {
+  background: #fff !important;
+}
+body.modo-bienvenida .sticky.top-0 #btn-tema,
+body.modo-bienvenida .sticky.top-0 #btn-logout {
+  border-color: rgba(255,255,255,.35) !important;
+  color: #fff !important;
+}
+body.modo-bienvenida .sticky.top-0 #btn-tema i,
+body.modo-bienvenida .sticky.top-0 #btn-logout i {
+  color: #fff !important;
+}
+body.modo-bienvenida .sticky.top-0 #role-badge {
+  background: rgba(255,255,255,.15) !important;
+  border-color: rgba(255,255,255,.3) !important;
+  color: #fff !important;
+}
 
 /* Capa de fondo: hoy es una imagen (el logo); el día que se quiera un video,
    basta con reemplazar este div por un <video autoplay muted loop> con la
