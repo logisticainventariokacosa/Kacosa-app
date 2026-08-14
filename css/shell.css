@@ -210,6 +210,22 @@ html.dark .ham-bar { background: #f1f5f9; }
 }
 .module-welcome.oculto { display: none; }
 
+/* Mientras se ve la pantalla de bienvenida (con el video de fondo), el
+   header y el footer se vuelven casi invisibles y SIN desenfoque — el
+   backdrop-blur normal "mancha" justo la franja del video donde están.
+   En cuanto se abre un módulo, vuelven a su transparencia/blur normal
+   (necesarios ahí para que se lean bien sobre el contenido de cada app). */
+body.modo-bienvenida .sticky.top-0 {
+  background: transparent !important;
+  backdrop-filter: none !important;
+  border-bottom-color: transparent !important;
+}
+body.modo-bienvenida footer.fixed {
+  background: rgba(15,17,21,.25) !important;
+  backdrop-filter: none !important;
+  border-top-color: transparent !important;
+}
+
 /* Capa de fondo: hoy es una imagen (el logo); el día que se quiera un video,
    basta con reemplazar este div por un <video autoplay muted loop> con la
    misma clase — el overlay y el contenido de encima no cambian. */
