@@ -42,6 +42,20 @@
       color: #f1f5f9 !important;
       border-color: #2a2f3a !important;
     }
+    /* Varios títulos y subtítulos (encabezados de tarjeta "Archivos y
+       parámetros", "Resultado", "Materiales a pedir", títulos de modales,
+       etc.) usan color:var(--azul-base) en línea — esa variable es la marca
+       (navy oscuro) y se usa también como FONDO de botones/insignias, así
+       que no se puede invertir globalmente sin romper esos fondos. En su
+       lugar, se fuerza el color de estos encabezados puntuales a
+       var(--texto-titulo), que sí está definida en claro para este modo
+       oscuro un poco más arriba. */
+    html.kacosa-dark .card h3,
+    html.kacosa-dark .modal-titulo,
+    html.kacosa-dark .modal-mensaje strong,
+    html.kacosa-dark .login-card .brand h1 {
+      color: var(--texto-titulo) !important;
+    }
   </style>
 
   <!-- Favicon / manifest -->
