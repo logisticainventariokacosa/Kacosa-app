@@ -28,6 +28,21 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Al tocar y arrastrar sobre una fila de tabla en el celular, el navegador
+   selecciona el texto con su resaltado nativo — en algunos dispositivos
+   (sobre todo con el tema oscuro forzado del sistema) ese resaltado sale
+   blanco sólido y tapa completamente el texto de la fila. Se reemplaza por
+   un resaltado translúcido de la marca que no oculta lo que hay debajo, y
+   se fija el color de letra para que nunca desaparezca sobre el resaltado. */
+::selection {
+  background: rgba(232, 160, 61, 0.35);
+  color: var(--texto-principal);
+}
+html.kacosa-dark ::selection {
+  background: rgba(232, 160, 61, 0.35);
+  color: var(--texto-principal);
+}
+
 body {
   margin: 0;
   min-height: 100vh;
