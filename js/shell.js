@@ -364,6 +364,7 @@ function mostrarBienvenida() {
   moduleFrame.classList.add("hidden");
   moduleLoader.classList.add("oculto");
   moduleWelcome.classList.remove("oculto");
+  document.body.classList.add("modo-bienvenida");
   history.replaceState(null, "", location.pathname);
 }
 
@@ -390,6 +391,7 @@ function abrirSubmodulo(id, { actualizarUrl = false } = {}) {
 
   moduleWelcome.classList.add("oculto");
   moduleFrame.classList.remove("hidden");
+  document.body.classList.remove("modo-bienvenida");
 
   document.querySelectorAll(".sap-submodule-btn").forEach(b => {
     b.classList.toggle("activo", b.dataset.submoduleId === id);
