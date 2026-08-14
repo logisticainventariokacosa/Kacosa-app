@@ -1297,3 +1297,18 @@ function descargarExcelUnificado() {
 document.addEventListener("kacosa:vista-cambiada", (e) => {
   if (e.detail.vista === "vista-nuevo-analisis") render();
 });
+
+// Si esta vista fue la que se mostró al cargar la página (por ejemplo, al
+// entrar directo a "Nuevo Análisis" desde el menú del shell, vía hash), el
+// evento "kacosa:vista-cambiada" puede dispararse ANTES de que nav.js termine
+// de resolver la sesión y llenar window.KACOSA.tiendas (es una llamada async
+// a Firebase/el portal). En ese caso render() se ejecuta con tiendas = [] y
+// el selector de tienda sale vacío — sin opciones y sin valor por defecto,
+// incluso para un admin. Este listener vuelve a dibujar el formulario en
+// cuanto el usuario/tiendas ya están listos, siempre que el usuario siga en
+// esta vista y no haya un análisis ya completado en pantalla (para no borrar
+// resultados que ya se estén viendo).
+document.addEventListener("kacosa:usuario-listo", () => {
+  const vista = document.getElementById("vista-nuevo-analisis");
+  if (vista && vista.classList.contains("activa") && !estado.analisisCompleto) render();
+});
