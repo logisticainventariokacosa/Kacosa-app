@@ -3,243 +3,362 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>KACOSA · Kacosa App</title>
-
-<link rel="icon" href="img/favicon.ico">
-<link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="img/favicon-16x16.png">
-<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
-
+<title>KACOSA · Centro de Control de Inventarios</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-<script src="https://cdn.tailwindcss.com"></script>
-<script>
-  tailwind.config = {
-    darkMode: 'class',
-    theme: {
-      extend: {
-        fontFamily: {
-          sans: ['Inter', 'ui-sans-serif', 'system-ui'],
-          mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
-        },
-        colors: {
-          kacosa: {
-            50:  '#fdf2f2',
-            100: '#fbe1e1',
-            200: '#f6c1c1',
-            500: '#c51919',
-            600: '#a91515',
-            700: '#8c1111',
-          },
-          ink: '#1a1d23',
-        },
-        boxShadow: {
-          card: '0 1px 2px rgba(16,24,40,.04), 0 1px 3px rgba(16,24,40,.06)',
-          cardHover: '0 8px 24px rgba(16,24,40,.08), 0 2px 6px rgba(16,24,40,.05)',
-        }
-      }
-    }
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --navy:#12213B;
+    --navy-2:#1B3358;
+    --steel:#2D6E8E;
+    --steel-light:#4C93B5;
+    --amber:#E8963C;
+    --green:#3E9C6E;
+    --red:#D5573B;
+    --bg:#F3F5F8;
+    --card:#FFFFFF;
+    --line:#E3E7EE;
+    --text:#16202E;
+    --muted:#6B7686;
+    --radius:14px;
+    --mono:'JetBrains Mono',monospace;
+    --sans:'Manrope',sans-serif;
   }
-</script>
-<link rel="stylesheet" href="css/shell.css?v=1">
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:var(--sans);background:var(--bg);color:var(--text);}
+  a{color:inherit;}
+
+  /* ===== Topbar ===== */
+  .topbar{
+    background:linear-gradient(135deg,var(--navy) 0%,var(--navy-2) 100%);
+    color:#fff;
+    padding:18px 24px;
+    display:flex;align-items:center;justify-content:space-between;
+    flex-wrap:wrap;gap:12px;
+    position:sticky;top:0;z-index:20;
+    box-shadow:0 4px 18px rgba(18,33,59,.25);
+  }
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand .mark{
+    width:38px;height:38px;border-radius:9px;
+    background:repeating-linear-gradient(90deg,#fff 0 3px, transparent 3px 6px);
+    background-color:var(--amber);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .brand h1{font-size:17px;margin:0;font-weight:800;letter-spacing:.2px;}
+  .brand span{display:block;font-size:11px;color:#B9C6DA;font-weight:500;letter-spacing:.4px;text-transform:uppercase;}
+  .status-pill{
+    font-family:var(--mono);font-size:11px;color:#B9C6DA;
+    background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);
+    padding:6px 12px;border-radius:20px;display:flex;align-items:center;gap:6px;
+  }
+  .status-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(62,156,110,.25);}
+
+  /* ===== Layout ===== */
+  .wrap{max-width:1180px;margin:0 auto;padding:22px 20px 60px;}
+
+  /* ===== KPI grid ===== */
+  .kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:26px;}
+  @media(max-width:980px){.kpi-grid{grid-template-columns:repeat(3,1fr);}}
+  @media(max-width:600px){.kpi-grid{grid-template-columns:repeat(2,1fr);}}
+  .kpi{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px 14px;position:relative;overflow:hidden;
+  }
+  .kpi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--steel);}
+  .kpi.amber::before{background:var(--amber);}
+  .kpi.green::before{background:var(--green);}
+  .kpi .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600;}
+  .kpi .value{font-family:var(--mono);font-size:26px;font-weight:700;margin-top:6px;color:var(--navy);}
+
+  /* ===== Filter bar ===== */
+  .filters{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;margin-bottom:22px;display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;
+  }
+  .field{display:flex;flex-direction:column;gap:6px;min-width:220px;flex:1;}
+  .field label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+  select,input[type=text]{
+    font-family:var(--sans);font-size:14px;padding:10px 12px;border-radius:9px;
+    border:1.5px solid var(--line);background:#fff;color:var(--text);
+  }
+  select:focus,input:focus{outline:none;border-color:var(--steel);}
+  .btn-clear{
+    background:var(--bg);border:1.5px solid var(--line);color:var(--muted);
+    padding:10px 16px;border-radius:9px;font-weight:600;font-size:13px;cursor:pointer;
+  }
+  .btn-clear:hover{border-color:var(--red);color:var(--red);}
+
+  /* ===== Section ===== */
+  .section-title{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--navy-2);margin:28px 0 12px;display:flex;align-items:center;gap:8px;}
+  .section-title::after{content:'';flex:1;height:1px;background:var(--line);}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px;}
+  .grid-2{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;}
+  @media(max-width:800px){.grid-2{grid-template-columns:1fr;}}
+
+  .detail-header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:16px;}
+  .detail-header h2{margin:0;font-size:20px;font-weight:800;color:var(--navy);}
+  .badge{font-family:var(--mono);font-size:11px;padding:4px 10px;border-radius:20px;font-weight:700;}
+  .badge.on{background:rgba(62,156,110,.12);color:var(--green);}
+  .badge.off{background:rgba(213,87,59,.12);color:var(--red);}
+
+  .stat-list{display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;margin-top:8px;}
+  .stat-list .item{border-bottom:1px dashed var(--line);padding-bottom:8px;}
+  .stat-list .k{font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:600;}
+  .stat-list .v{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--navy);margin-top:2px;}
+
+  .progress-track{height:10px;border-radius:6px;background:var(--line);overflow:hidden;margin:10px 0 4px;}
+  .progress-fill{height:100%;background:linear-gradient(90deg,var(--steel),var(--steel-light));}
+
+  .tag-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+  .tag{font-size:12px;background:var(--bg);border:1px solid var(--line);padding:4px 10px;border-radius:20px;color:var(--navy-2);font-weight:600;}
+
+  .empty-state{text-align:center;padding:30px 10px;color:var(--muted);font-size:14px;}
+  .loading{text-align:center;padding:40px;color:var(--muted);font-family:var(--mono);font-size:13px;}
+
+  canvas{max-height:260px;}
+</style>
 </head>
-<body class="bg-slate-50 text-ink dark:text-white antialiased dark:bg-slate-900 dark:text-slate-100">
+<body>
 
-<!-- ===================== LOADER INICIAL ===================== -->
-<!-- Se ve mientras se confirma si hay sesión activa, para no mostrar nunca
-     el login de golpe si el usuario ya estaba logueado (ej. al refrescar). -->
-<div id="boot-loader" class="module-welcome" style="position:fixed; z-index:100;">
-  <div class="module-welcome-bg" style="background-image:url('img/logo-kacosa.jpg')"></div>
-  <div class="module-welcome-overlay"></div>
-  <div class="module-welcome-content">
-    <img src="img/logo-kacosa-app.png" alt="KACOSA" class="module-welcome-logo">
-    <div class="boot-loader-spinner"></div>
-    <p>Verificando sesión…</p>
+<div class="topbar">
+  <div class="brand">
+    <div class="mark"></div>
+    <div>
+      <h1>KACOSA</h1>
+      <span>Centro de Control de Inventarios</span>
+    </div>
   </div>
+  <div class="status-pill"><span class="status-dot"></span><span id="lastUpdate">Cargando...</span></div>
 </div>
 
-<!-- ===================== LOGIN ===================== -->
-<div id="login-screen" class="hidden min-h-[calc(100vh-44px)] items-center justify-center px-4 py-10 bg-gradient-to-b from-white to-slate-50">
-  <div class="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-card p-8 sm:p-10 dark:bg-slate-800 dark:border-slate-700">
-    <div class="flex flex-col items-center text-center mb-7">
-      <img src="img/logo-kacosa.jpg" alt="KACOSA" class="h-20 w-20 object-contain mb-4 rounded-xl">
-      <h1 class="text-2xl font-extrabold text-ink dark:text-white tracking-tight">Kacosa App</h1>
-      <p class="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">Inicia sesión con tu cuenta corporativa para acceder a las herramientas asignadas a tu rol.</p>
-    </div>
+<div class="wrap">
 
-    <button id="btn-login" class="w-full flex items-center justify-center gap-3 border border-slate-300 dark:border-slate-600 bg-white hover:bg-slate-50 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 font-semibold text-sm rounded-lg py-3 transition-colors">
-      <i class="fa-brands fa-google text-[#4285F4] text-base"></i>
-      Continuar con Google
-    </button>
-
-    <div class="flex items-center gap-3 my-6 text-[11px] font-mono-brand tracking-widest text-slate-400 dark:text-slate-500">
-      <span class="flex-1 h-px bg-slate-200 dark:bg-slate-600"></span>
-      O
-      <span class="flex-1 h-px bg-slate-200 dark:bg-slate-600"></span>
-    </div>
-
-    <form id="email-form" class="flex flex-col gap-3">
-      <input type="email" id="email-input" placeholder="Correo" autocomplete="email" maxlength="50" required
-        class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-sm text-ink dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-kacosa-500/25 focus:border-kacosa-500 transition">
-
-      <div class="relative">
-        <input type="password" id="password-input" placeholder="Contraseña" autocomplete="current-password" maxlength="20" required
-          class="w-full rounded-lg border border-slate-300 dark:border-slate-600 pl-4 pr-11 py-3 text-sm text-ink dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-kacosa-500/25 focus:border-kacosa-500 transition">
-        <button type="button" class="toggle-eye absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-kacosa-500 rounded-md" data-target="password-input">
-          <i class="fa-solid fa-eye"></i>
-        </button>
-      </div>
-
-      <button type="submit" id="btn-email-submit" class="w-full bg-kacosa-500 hover:bg-kacosa-600 text-white font-semibold text-sm rounded-lg py-3 transition-colors shadow-card">
-        Iniciar sesión
-      </button>
-    </form>
-
-    <div class="login-status mt-4 text-xs font-mono-brand min-h-[16px] text-slate-500 dark:text-slate-400" id="login-status"></div>
+  <div class="kpi-grid" id="kpiGrid">
+    <div class="kpi"><div class="label">Tiendas activas</div><div class="value" id="kTiendas">–</div></div>
+    <div class="kpi"><div class="label">Analistas activos</div><div class="value" id="kAnalistas">–</div></div>
+    <div class="kpi"><div class="label">Códigos contados</div><div class="value" id="kCodigos">–</div></div>
+    <div class="kpi"><div class="label">Piezas contadas</div><div class="value" id="kPiezas">–</div></div>
+    <div class="kpi amber"><div class="label">Con diferencia</div><div class="value" id="kDif">–</div></div>
+    <div class="kpi green"><div class="label">Sin diferencia</div><div class="value" id="kOk">–</div></div>
   </div>
+
+  <div class="filters">
+    <div class="field">
+      <label for="selTienda">Filtrar por tienda</label>
+      <select id="selTienda"><option value="">Todas / vista general</option></select>
+    </div>
+    <div class="field">
+      <label for="selAnalista">Filtrar por analista</label>
+      <select id="selAnalista"><option value="">Todos / vista general</option></select>
+    </div>
+    <button class="btn-clear" id="btnClear">Limpiar filtros</button>
+  </div>
+
+  <div id="content">
+    <div class="loading">Cargando datos desde Google Sheets…</div>
+  </div>
+
 </div>
 
-<!-- ===================== CAMBIO DE CONTRASEÑA OBLIGATORIO ===================== -->
-<div id="change-password-screen" class="hidden min-h-[calc(100vh-44px)] items-center justify-center px-4 py-10 bg-gradient-to-b from-white to-slate-50">
-  <div class="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-card p-8 sm:p-10 dark:bg-slate-800 dark:border-slate-700">
-    <div class="flex flex-col items-center text-center mb-7">
-      <div class="w-14 h-14 rounded-full bg-kacosa-50 border border-kacosa-100 flex items-center justify-center mb-4">
-        <i class="fa-solid fa-key text-kacosa-500 text-xl"></i>
-      </div>
-      <h1 class="text-2xl font-extrabold text-ink dark:text-white tracking-tight">Crea tu contraseña</h1>
-      <p class="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">Por seguridad, define una contraseña nueva antes de continuar. Debe ser alfanumérica (sin símbolos) y de máximo 20 caracteres.</p>
-    </div>
+<script>
+/* ⚠️ Reemplaza con la URL /exec de tu implementación de Apps Script */
+const API_URL = 'PEGA_AQUI_TU_URL_DE_APPS_SCRIPT';
 
-    <form id="change-password-form" class="flex flex-col gap-3">
-      <div class="relative">
-        <input type="password" id="new-password-input" placeholder="Nueva contraseña" maxlength="20" pattern="[A-Za-z0-9]{1,20}" required
-          class="w-full rounded-lg border border-slate-300 dark:border-slate-600 pl-4 pr-11 py-3 text-sm text-ink dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-kacosa-500/25 focus:border-kacosa-500 transition">
-        <button type="button" class="toggle-eye absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-kacosa-500 rounded-md" data-target="new-password-input">
-          <i class="fa-solid fa-eye"></i>
-        </button>
-      </div>
-      <div class="relative">
-        <input type="password" id="confirm-password-input" placeholder="Confirmar contraseña" maxlength="20" pattern="[A-Za-z0-9]{1,20}" required
-          class="w-full rounded-lg border border-slate-300 dark:border-slate-600 pl-4 pr-11 py-3 text-sm text-ink dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-kacosa-500/25 focus:border-kacosa-500 transition">
-        <button type="button" class="toggle-eye absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-kacosa-500 rounded-md" data-target="confirm-password-input">
-          <i class="fa-solid fa-eye"></i>
-        </button>
-      </div>
-      <button type="submit" id="btn-change-password" class="w-full bg-kacosa-500 hover:bg-kacosa-600 text-white font-semibold text-sm rounded-lg py-3 transition-colors shadow-card">
-        Guardar y continuar
-      </button>
-    </form>
+const $ = id => document.getElementById(id);
+let chartRef = null;
 
-    <div class="login-status mt-4 text-xs font-mono-brand min-h-[16px] text-slate-500 dark:text-slate-400" id="change-password-status"></div>
-  </div>
-</div>
+async function api(action, params) {
+  const url = new URL(API_URL);
+  url.searchParams.set('action', action);
+  if (params) Object.keys(params).forEach(k => url.searchParams.set(k, params[k]));
+  const res = await fetch(url);
+  return res.json();
+}
 
-<!-- ===================== APP SHELL (estilo SAP: header + hamburguesa + módulos) ===================== -->
-<div id="app-screen" class="hidden">
+function fmt(n) {
+  return new Intl.NumberFormat('es-VE').format(Math.round(n || 0));
+}
 
-  <!-- HEADER -->
-  <div class="sticky top-0 z-40 bg-white/70 backdrop-blur-md border-b border-slate-200/70 dark:bg-slate-900/70 dark:border-slate-700/70">
-    <div class="flex items-center justify-between px-4 sm:px-6 py-3 gap-3">
-      <div class="flex items-center gap-3 flex-shrink-0">
-        <button id="btn-hamburguesa" class="w-10 h-10 flex flex-col items-center justify-center gap-[5px] rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" aria-label="Menú">
-          <span class="ham-bar"></span>
-          <span class="ham-bar"></span>
-          <span class="ham-bar"></span>
-        </button>
-        <img src="img/logo-kacosa.jpg" alt="KACOSA" class="h-9 w-9 object-contain rounded-md">
-      </div>
+function destroyChart(){ if (chartRef) { chartRef.destroy(); chartRef = null; } }
 
-      <div class="flex-1 min-w-0 text-center">
-        <span class="block text-[14px] sm:text-[15px] font-bold tracking-tight text-ink dark:text-white truncate" id="header-module-label">Kacosa App</span>
-      </div>
+async function loadResumen() {
+  const r = await api('resumen');
+  if (r.error) return;
+  $('kTiendas').textContent = fmt(r.tiendasActivas);
+  $('kAnalistas').textContent = fmt(r.analistasActivos);
+  $('kCodigos').textContent = fmt(r.codigosContados);
+  $('kPiezas').textContent = fmt(r.piezasContadas);
+  $('kDif').textContent = fmt(r.itemsConDiferencia);
+  $('kOk').textContent = fmt(r.itemsSinDiferencia);
+  $('lastUpdate').textContent = 'Actualizado ' + new Date(r.generadoEn).toLocaleTimeString('es-VE');
+}
 
-      <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-        <span class="hidden sm:inline text-[13px] text-slate-500 dark:text-slate-400" id="user-name-label"></span>
-        <span class="text-[10px] font-mono-brand tracking-widest uppercase text-kacosa-600 bg-kacosa-50 border border-kacosa-100 dark:bg-kacosa-600/10 dark:border-kacosa-600/30 rounded-full px-2.5 py-1" id="role-badge">ROL</span>
-        <button id="btn-tema" title="Cambiar tema" class="w-9 h-9 flex items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-300 hover:text-kacosa-600 hover:border-kacosa-200 transition-colors">
-          <i class="fa-solid fa-moon text-sm" id="icono-tema"></i>
-        </button>
-        <button id="btn-logout" title="Cerrar sesión" class="w-9 h-9 flex items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-300 hover:text-kacosa-600 hover:border-kacosa-200 transition-colors">
-          <i class="fa-solid fa-arrow-right-from-bracket text-sm"></i>
-        </button>
-      </div>
-    </div>
-  </div>
+async function loadFiltros() {
+  const [tiendas, analistas] = await Promise.all([api('tiendas'), api('analistas')]);
+  const selT = $('selTienda'), selA = $('selAnalista');
+  tiendas.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.nombre;
+    opt.textContent = t.nombre + (t.activa ? '' : ' (inactiva)');
+    selT.appendChild(opt);
+  });
+  analistas.forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a.nombre;
+    opt.textContent = a.nombre + (a.activo ? '' : ' (sin inventario activo)');
+    selA.appendChild(opt);
+  });
+}
 
-  <!-- SIDEBAR TIPO SAP (módulos > submódulos) -->
-  <div id="overlay-sidebar" class="sidebar-overlay"></div>
-  <nav id="sidebar" class="sidebar">
-    <div class="sidebar-header">
-      <img src="img/logo-kacosa.jpg" alt="KACOSA" class="h-8 w-8 object-contain rounded-md">
-      <div>
-        <b class="block text-sm font-extrabold text-white">KACOSA</b>
-        <span class="block text-[10px] font-mono-brand tracking-widest text-white/50 uppercase">Menú de módulos</span>
-      </div>
-    </div>
+function renderVistaGeneral() {
+  destroyChart();
+  $('content').innerHTML = `
+    <div class="section-title">Vista general</div>
+    <div class="card">
+      <p class="empty-state">Selecciona una tienda o un analista arriba para ver el detalle de su avance.</p>
+    </div>`;
+}
 
-    <div id="sidebar-modules" class="sidebar-modules">
-      <!-- Los módulos SAP se inyectan dinámicamente desde js/shell.js según el rol -->
-    </div>
+async function renderTienda(nombre) {
+  destroyChart();
+  const t = await api('tienda', { nombre });
+  if (t.error) { $('content').innerHTML = '<div class="empty-state">No se encontró la tienda.</div>'; return; }
 
-    <div class="sidebar-footer">
-      <div class="sidebar-user">
-        <div class="sidebar-user-avatar"><i class="fa-solid fa-user"></i></div>
-        <div class="leading-tight overflow-hidden">
-          <span class="block text-[13px] font-semibold text-white truncate" id="sidebar-user-nombre">Usuario</span>
-          <span class="block text-[11px] text-white/50 truncate" id="sidebar-user-email"></span>
+  if (!t.activa) {
+    $('content').innerHTML = `
+      <div class="section-title">Tienda · ${t.nombre}</div>
+      <div class="card">
+        <div class="detail-header">
+          <h2>${t.nombre}</h2>
+          <span class="badge off">Sin inventario activo</span>
         </div>
-      </div>
-      <button id="btn-sidebar-cerrar-sesion" class="sidebar-logout">
-        <i class="fa-solid fa-arrow-right-from-bracket"></i> Cerrar sesión
-      </button>
-    </div>
-  </nav>
-
-  <!-- CONTENIDO: cada submódulo carga su app original, sin modificarla, dentro de un iframe -->
-  <main class="module-content">
-    <div id="module-frame-wrap" class="module-frame-wrap">
-      <div id="module-loader" class="module-loader oculto">
-        <i class="fa-solid fa-circle-notch fa-spin"></i> Cargando módulo…
-      </div>
-      <iframe id="module-frame" class="module-frame hidden" title="Contenido del módulo"></iframe>
-
-      <!-- Pantalla de bienvenida: se ve al iniciar sesión, antes de elegir un
-           módulo. Dos videos según orientación de pantalla: uno vertical
-           (9:16) para celular y uno horizontal (16:9) para PC/tablet — el
-           navegador elige solo cuál usar, ninguno se recorta ni se estira. -->
-      <div id="module-welcome" class="module-welcome">
-        <video class="module-welcome-bg" id="video-bienvenida" autoplay muted loop playsinline poster="img/logo-kacosa.jpg">
-          <source src="media/bienvenida-vertical.mp4" type="video/mp4" media="(orientation: portrait)">
-          <source src="media/bienvenida.mp4" type="video/mp4">
-        </video>
-        <!-- Respaldo: si el video no carga (conexión mala, archivo no
-             encontrado, etc.), se muestra esta imagen del logo en su lugar
-             — el mismo fondo que había antes de tener video. -->
-        <div class="module-welcome-bg module-welcome-bg-imagen" style="background-image:url('img/logo-kacosa.jpg')"></div>
-        <div class="module-welcome-overlay"></div>
-        <div class="module-welcome-content">
-          <img src="img/logo-kacosa-app.png" alt="KACOSA" class="module-welcome-logo">
-          <h1>Bienvenido a Kacosa App</h1>
-          <p id="module-welcome-subtitle">Selecciona un módulo desde el menú <i class="fa-solid fa-bars"></i> para comenzar.</p>
-          <button id="btn-ir-dashboard" class="module-welcome-btn">
-            Ir a mi Dashboard <i class="fa-solid fa-arrow-right"></i>
-          </button>
+        <div class="stat-list">
+          <div class="item"><div class="k">Supervisor</div><div class="v">${t.supervisor}</div></div>
+          <div class="item"><div class="k">Fecha último inventario (inicio)</div><div class="v">${fmtDate(t.fechaApertura)}</div></div>
+          <div class="item"><div class="k">Fecha de cierre</div><div class="v">${fmtDate(t.fechaCierre)}</div></div>
+          <div class="item"><div class="k">Duración del último inventario</div><div class="v">${fmt(t.diasTranscurridos)} días</div></div>
         </div>
+      </div>`;
+    return;
+  }
+
+  const avance = t.stockTotal > 0 ? (t.codigosContados / t.stockTotal) * 100 : 0;
+  $('content').innerHTML = `
+    <div class="section-title">Tienda · ${t.nombre}</div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="detail-header">
+          <h2>${t.nombre}</h2>
+          <span class="badge on">Inventario activo</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" style="width:${Math.min(avance,100)}%"></div></div>
+        <div style="font-family:var(--mono);font-size:12px;color:var(--muted)">${fmt(t.codigosContados)} de ${fmt(t.stockTotal)} códigos (${avance.toFixed(1)}%)</div>
+        <div class="stat-list">
+          <div class="item"><div class="k">Supervisor</div><div class="v">${t.supervisor}</div></div>
+          <div class="item"><div class="k">Días transcurridos</div><div class="v">${fmt(t.diasTranscurridos)} días</div></div>
+          <div class="item"><div class="k">Fecha de inicio</div><div class="v">${fmtDate(t.fechaApertura)}</div></div>
+          <div class="item"><div class="k">Piezas contadas</div><div class="v">${fmt(t.piezasContadas)}</div></div>
+          <div class="item"><div class="k">Ítems con diferencia</div><div class="v">${fmt(t.itemsConDiferencia)}</div></div>
+          <div class="item"><div class="k">Ítems sin diferencia</div><div class="v">${fmt(t.itemsSinDiferencia)}</div></div>
+        </div>
+        <div class="tag-list">${t.analistas.map(a=>`<span class="tag">${a}</span>`).join('')}</div>
       </div>
-    </div>
-  </main>
-</div>
+      <div class="card">
+        <canvas id="chartTienda"></canvas>
+      </div>
+    </div>`;
 
-<!-- ===================== FOOTER FIJO ===================== -->
-<footer class="fixed bottom-0 inset-x-0 z-40 h-11 bg-white/85 backdrop-blur-md border-t border-slate-200/70 dark:bg-slate-900/85 dark:border-slate-700/70">
-  <div class="h-[2px] w-full bg-gradient-to-r from-kacosa-500 via-kacosa-600 to-kacosa-500"></div>
-  <div class="max-w-full mx-auto h-[calc(2.75rem-2px)] px-5 sm:px-8 flex items-center justify-between text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-    <span>© <span id="footer-year">2026</span> KACOSA · Portal de aplicaciones</span>
-    <span class="hidden sm:inline font-mono-brand" id="footer-clock">--:--</span>
-  </div>
-</footer>
+  const ctx = document.getElementById('chartTienda');
+  chartRef = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Sin diferencia', 'Con diferencia', 'Por contar'],
+      datasets: [{
+        data: [t.itemsSinDiferencia, t.itemsConDiferencia, Math.max(t.stockTotal - t.codigosContados, 0)],
+        backgroundColor: ['#3E9C6E', '#D5573B', '#E3E7EE']
+      }]
+    },
+    options: { plugins: { legend: { position: 'bottom' } } }
+  });
+}
 
-<script type="module" src="js/shell.js?v=1"></script>
+async function renderAnalista(nombre) {
+  destroyChart();
+  const a = await api('analista', { nombre });
+  if (a.error) { $('content').innerHTML = '<div class="empty-state">No se encontró el analista.</div>'; return; }
+
+  if (!a.activo) {
+    $('content').innerHTML = `
+      <div class="section-title">Analista · ${a.nombre}</div>
+      <div class="card">
+        <div class="detail-header">
+          <h2>${a.nombre}</h2>
+          <span class="badge off">Sin inventario activo</span>
+        </div>
+        <p class="empty-state">Este analista no está participando en ningún inventario activo actualmente.</p>
+        <div class="tag-list">${a.tiendas.map(t=>`<span class="tag">${t}</span>`).join('') || '<span class="tag">Sin tienda asignada</span>'}</div>
+      </div>`;
+    return;
+  }
+
+  $('content').innerHTML = `
+    <div class="section-title">Analista · ${a.nombre}</div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="detail-header">
+          <h2>${a.nombre}</h2>
+          <span class="badge on">Contando activamente</span>
+        </div>
+        <div class="stat-list">
+          <div class="item"><div class="k">Códigos contados</div><div class="v">${fmt(a.codigosContados)}</div></div>
+          <div class="item"><div class="k">Piezas contadas</div><div class="v">${fmt(a.piezasContadas)}</div></div>
+          <div class="item"><div class="k">Promedio códigos / día</div><div class="v">${a.promedioCodigosPorDia}</div></div>
+          <div class="item"><div class="k">Promedio códigos / tienda</div><div class="v">${a.promedioCodigosPorTienda}</div></div>
+        </div>
+        <div class="tag-list">${a.tiendas.map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+      </div>
+      <div class="card">
+        <canvas id="chartAnalista"></canvas>
+      </div>
+    </div>`;
+
+  const ctx = document.getElementById('chartAnalista');
+  chartRef = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['OK', 'Con diferencia'],
+      datasets: [{ data: [a.conteosOk, a.conteosDiferencia], backgroundColor: ['#3E9C6E', '#D5573B'] }]
+    },
+    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleDateString('es-VE');
+}
+
+$('selTienda').addEventListener('change', e => {
+  if (e.target.value) { $('selAnalista').value=''; renderTienda(e.target.value); }
+  else renderVistaGeneral();
+});
+$('selAnalista').addEventListener('change', e => {
+  if (e.target.value) { $('selTienda').value=''; renderAnalista(e.target.value); }
+  else renderVistaGeneral();
+});
+$('btnClear').addEventListener('click', () => {
+  $('selTienda').value=''; $('selAnalista').value=''; renderVistaGeneral();
+});
+
+(async function init(){
+  await Promise.all([loadResumen(), loadFiltros()]);
+  renderVistaGeneral();
+})();
+</script>
 </body>
 </html>
