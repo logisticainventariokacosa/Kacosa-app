@@ -306,6 +306,14 @@ function mostrarPantalla(cual) {
   // en las pantallas de autenticación le pasamos su propio acabado (navy/vidrio,
   // a juego con el fondo fijo del login) en vez del que sigue el tema claro/oscuro.
   document.body.classList.toggle("pantalla-auth", cual === "login" || cual === "cambio-password");
+  // "modo-bienvenida" (el acabado transparente del footer/header sobre el video
+  // de bienvenida) solo se agrega dentro de la app — ver mostrarBienvenida() más
+  // abajo — pero nunca se quitaba al cerrar sesión. Si el usuario cerraba sesión
+  // estando en la pantalla de bienvenida, esa clase se quedaba pegada en <body>
+  // y competía con "pantalla-auth" en el CSS del footer (dos diseños encimados).
+  // Al entrar o salir de "app" siempre partimos de cero; mostrarBienvenida() la
+  // vuelve a agregar si corresponde.
+  document.body.classList.remove("modo-bienvenida");
 }
 
 /* ===================== Construcción del sidebar SAP ===================== */
