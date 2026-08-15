@@ -16,7 +16,11 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
 // Roles con acceso a este dashboard (debe coincidir con "rolesPermitidos" del portal)
-const ROLES_PERMITIDOS_DASHBOARD = ["coordinador", "directiva", "admin"];
+const ROLES_PERMITIDOS_DASHBOARD = ["coordinador", "directiva", "admin", "supervisor"];
+
+// Perfil del usuario autenticado (rol + tiendas asignadas), guardado al
+// verificar acceso para poder filtrar el dashboard más adelante.
+let perfilActual = null;
 
 function mostrarEstadoAuth(msg, esError = false) {
   const el = document.getElementById('authStatus');
@@ -29,12 +33,55 @@ async function verificarAccesoDashboard(email) {
   try {
     const snap = await db.collection("usuarios").doc(email).get();
     if (!snap.exists) return false;
-    const rol = snap.data().rol;
-    return ROLES_PERMITIDOS_DASHBOARD.includes(rol);
+    const data = snap.data();
+    perfilActual = data;
+    return ROLES_PERMITIDOS_DASHBOARD.includes(data.rol);
   } catch (e) {
     console.error("Error verificando acceso:", e);
     return false;
   }
+}
+
+// ==================== RESTRICCIÓN DE TIENDAS PARA "SUPERVISOR" ====================
+// Un supervisor solo debe ver el dashboard de las tiendas que tiene asignadas
+// (campo "tiendas", array, en su documento de la colección "usuarios" —
+// el mismo campo que ya usa el rol "gerente" en Abastecimiento). El valor
+// guardado ahí debe coincidir con el nombre de tienda tal como lo devuelve
+// este dashboard (el mismo texto que aparece en "Filtrar por tienda"), NO con
+// el ID interno usado en Abastecimiento (ej. "UPI_VALENCIA").
+// Los analistas NUNCA se filtran: un supervisor debe ver a todos los
+// analistas de la empresa sin importar la tienda.
+function tiendasPermitidasSupervisor() {
+  if (!perfilActual || perfilActual.rol !== 'supervisor') return null; // null = sin restricción
+  const arr = Array.isArray(perfilActual.tiendas) ? perfilActual.tiendas : [];
+  return arr.map(t => (t || '').toString().trim().toLowerCase()).filter(Boolean);
+}
+
+function tiendaPermitida(nombreTienda, tiendasPermitidas) {
+  if (!tiendasPermitidas) return true; // no es supervisor, sin restricción
+  return tiendasPermitidas.includes((nombreTienda || '').toString().trim().toLowerCase());
+}
+
+// Recorta modeloGlobal.tiendas a solo las tiendas asignadas (si aplica) y
+// recalcula el resumen agregado sobre ese subconjunto, para que las tarjetas
+// KPI no muestren totales de toda la empresa. modeloGlobal.analistas se deja
+// intacto a propósito.
+function aplicarRestriccionSupervisor() {
+  const permitidas = tiendasPermitidasSupervisor();
+  if (!permitidas || !modeloGlobal) return;
+
+  modeloGlobal.tiendas = (modeloGlobal.tiendas || []).filter(t => tiendaPermitida(t.nombre, permitidas));
+
+  const activas = modeloGlobal.tiendas.filter(t => t.activa);
+  modeloGlobal.resumen = {
+    tiendasActivas: activas.length,
+    analistasActivos: modeloGlobal.analistas ? modeloGlobal.analistas.filter(a => a.activo).length : 0,
+    codigosContados: activas.reduce((s, t) => s + (t.codigosContados || 0), 0),
+    piezasContadas: activas.reduce((s, t) => s + (t.piezasContadas || 0), 0),
+    itemsConDiferencia: activas.reduce((s, t) => s + (t.itemsConDiferencia || 0), 0),
+    itemsSinDiferencia: activas.reduce((s, t) => s + (t.itemsSinDiferencia || 0), 0),
+    generadoEn: new Date().toISOString()
+  };
 }
 
 function mensajeErrorAuth(code) {
@@ -183,7 +230,6 @@ async function cargarModeloCompleto() {
     const respuesta = await api('modelo_completo');
     if (respuesta.error) throw new Error(respuesta.error);
     modeloGlobal = respuesta;
-    return modeloGlobal;
   } catch (err) {
     console.error('Error cargando modelo completo:', err);
     const [resumen, tiendas, analistas] = await Promise.all([
@@ -192,10 +238,11 @@ async function cargarModeloCompleto() {
       api('analistas')
     ]);
     modeloGlobal = { resumen, tiendas, analistas };
-    return modeloGlobal;
   } finally {
     hideLoading();
   }
+  aplicarRestriccionSupervisor();
+  return modeloGlobal;
 }
 
 // ==================== MODAL DE TARJETAS KPI ====================
@@ -283,6 +330,15 @@ async function renderVistaGeneral() {
 
 async function renderTienda(nombre) {
   destroyChart();
+
+  const permitidas = tiendasPermitidasSupervisor();
+  if (permitidas && !tiendaPermitida(nombre, permitidas)) {
+    vistaActual = { tipo: 'general', nombre: null, analistaDesplegado: null, tiendaFiltro: null };
+    $('content').innerHTML = `<div class="empty-state">No tienes acceso a esta tienda.</div>`;
+    actualizarFiltros();
+    return;
+  }
+
   vistaActual = { tipo: 'tienda', nombre: nombre, analistaDesplegado: null, tiendaFiltro: null };
   $('content').innerHTML = `<div class="loading-state"><div class="spinner"></div><div class="text">Cargando tienda…</div></div>`;
   
