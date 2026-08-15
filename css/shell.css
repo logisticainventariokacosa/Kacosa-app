@@ -570,11 +570,12 @@ body.modo-bienvenida .sticky.top-0 #role-badge {
    js/shell.js → mostrarPantalla). */
 body.pantalla-auth footer.fixed {
   background: rgba(9, 13, 22, .78) !important;
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px) !important;
+  -webkit-backdrop-filter: blur(18px) !important;
   border-top-color: rgba(255, 255, 255, .08) !important;
 }
 body.pantalla-auth footer.fixed .footer-accent-bar {
+  display: block !important;
   background: linear-gradient(90deg, transparent, rgba(125, 211, 224, .55), rgba(197, 25, 25, .55), transparent) !important;
 }
 body.pantalla-auth footer.fixed span {
