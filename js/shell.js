@@ -20,7 +20,7 @@ import { doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12
    ===================================================================== */
 const ROLES_INVENTARIO = ["admin", "supervisor", "directiva", "gerente"];
 const ROLES_ABASTECIMIENTO = ["gerente", "supervisor", "abastecimiento", "compras", "admin", "directiva"];
-const ROLES_DASHBOARD_INV = ["coordinador", "directiva", "admin"];
+const ROLES_DASHBOARD_INV = ["coordinador", "directiva", "admin", "supervisor"];
 
 const MODULES = [
   {
