@@ -1,5 +1,5 @@
 // js/nav.js
-import { auth } from "./firebase-config.js";
+import { auth } from "./firebase-config.js?v=2";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import { protegerPagina, cerrarSesion, obtenerPerfilPortal, ROLES_PERMITIDOS_ABASTECIMIENTO } from "./auth.js";
 import { nombrePorId } from "./tiendas.js";
