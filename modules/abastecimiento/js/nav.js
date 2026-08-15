@@ -31,9 +31,13 @@ onAuthStateChanged(auth, async (user) => {
   // hacía que un gerente viera el selector completo de tiendas.
   const rolNormalizado = (rol || "").toString().trim().toLowerCase();
   const esGerente = rolNormalizado === "gerente";
-  const tiendaAsignada = (perfil?.tienda || "").toString().trim();
+  // El campo en Firestore es "tiendas" (array), no "tienda" (string) — un
+  // gerente puede tener una o varias tiendas asignadas en ese array.
+  const tiendasAsignadas = Array.isArray(perfil?.tiendas)
+    ? perfil.tiendas.map(t => (t || "").toString().trim()).filter(Boolean)
+    : [];
   const tiendas = esGerente
-    ? (tiendaAsignada ? [tiendaAsignada] : [])
+    ? (tiendasAsignadas.length ? tiendasAsignadas : [])
     : ["TODAS"];
 
   window.KACOSA.usuario = {
@@ -59,7 +63,7 @@ onAuthStateChanged(auth, async (user) => {
 
   // Aviso si un gerente no tiene tienda asignada (no debería pasar, pero evita confusión)
   if (esGerente && tiendas.length === 0) {
-    console.warn("El usuario " + user.email + " es gerente pero no tiene 'tienda' asignada en el portal.");
+    console.warn("El usuario " + user.email + " es gerente pero no tiene 'tiendas' asignadas en el portal.");
   }
 
   // Actualizar modal de usuario
