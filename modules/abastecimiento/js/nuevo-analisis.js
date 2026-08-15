@@ -113,25 +113,28 @@ const COLUMNAS_NOTAS_PENDIENTES = [
 // ============================================================
 //  ESTADO PERSISTENTE
 // ============================================================
-let estado = {
-  ventasProcesadas: null,
-  stockTienda: null,
-  stockKacosa: null,
-  notasPendientes: null,
-  clustersCandidatos: [],
-  gruposGemini: [],
-  tiendaSeleccionada: null,
-  resultadoFinal: null,
-  fechaAnalisis: null,
-  grupos: null,
-  sinRotacion: null,
-  sugerencias: null,
-  periodo: null,
-  mesesCantidad: null,
-  margenPct: null,
-  analisisCompleto: null,
-  analizando: false
-};
+function estadoInicial() {
+  return {
+    ventasProcesadas: null,
+    stockTienda: null,
+    stockKacosa: null,
+    notasPendientes: null,
+    clustersCandidatos: [],
+    gruposGemini: [],
+    tiendaSeleccionada: null,
+    resultadoFinal: null,
+    fechaAnalisis: null,
+    grupos: null,
+    sinRotacion: null,
+    sugerencias: null,
+    periodo: null,
+    mesesCantidad: null,
+    margenPct: null,
+    analisisCompleto: null,
+    analizando: false
+  };
+}
+let estado = estadoInicial();
 
 function tiendasDelUsuario() {
   return window.KACOSA?.tiendas || [];
@@ -1304,11 +1307,17 @@ document.addEventListener("kacosa:vista-cambiada", (e) => {
 // de resolver la sesión y llenar window.KACOSA.tiendas (es una llamada async
 // a Firebase/el portal). En ese caso render() se ejecuta con tiendas = [] y
 // el selector de tienda sale vacío — sin opciones y sin valor por defecto,
-// incluso para un admin. Este listener vuelve a dibujar el formulario en
-// cuanto el usuario/tiendas ya están listos, siempre que el usuario siga en
-// esta vista y no haya un análisis ya completado en pantalla (para no borrar
-// resultados que ya se estén viendo).
+// incluso para un admin.
+//
+// Además, "kacosa:usuario-listo" también se dispara al cambiar de cuenta SIN
+// recargar la página (típico al probar varias cuentas seguidas en la misma
+// pestaña). Sin resetear "estado" aquí, un análisis ya completado (o una
+// tienda seleccionada) de la cuenta anterior se quedaba pegado en pantalla
+// para la cuenta nueva. Por eso siempre se reinicia "estado" a limpio en
+// cuanto el usuario/tiendas ya están listos, y se reconstruye el formulario
+// si el usuario sigue en esta vista.
 document.addEventListener("kacosa:usuario-listo", () => {
+  estado = estadoInicial();
   const vista = document.getElementById("vista-nuevo-analisis");
-  if (vista && vista.classList.contains("activa") && !estado.analisisCompleto) render();
+  if (vista && vista.classList.contains("activa")) render();
 });
