@@ -25,9 +25,15 @@ onAuthStateChanged(auth, async (user) => {
   const nombre = perfil?.nombre || user.displayName || user.email || "";
 
   // GERENTE ve solo su tienda asignada. Los demás roles permitidos ven todas.
-  const esGerente = rol === "gerente";
+  // Se normaliza (minúsculas + sin espacios) para que un rol guardado en el
+  // portal como "Gerente" o "gerente " (con espacio) no caiga por error en
+  // "ve todas las tiendas" — antes una diferencia así en el dato de Firestore
+  // hacía que un gerente viera el selector completo de tiendas.
+  const rolNormalizado = (rol || "").toString().trim().toLowerCase();
+  const esGerente = rolNormalizado === "gerente";
+  const tiendaAsignada = (perfil?.tienda || "").toString().trim();
   const tiendas = esGerente
-    ? (perfil?.tienda ? [perfil.tienda] : [])
+    ? (tiendaAsignada ? [tiendaAsignada] : [])
     : ["TODAS"];
 
   window.KACOSA.usuario = {
