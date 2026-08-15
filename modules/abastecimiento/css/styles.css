@@ -33,14 +33,20 @@
    (sobre todo con el tema oscuro forzado del sistema) ese resaltado sale
    blanco sólido y tapa completamente el texto de la fila. Se reemplaza por
    un resaltado translúcido de la marca que no oculta lo que hay debajo, y
-   se fija el color de letra para que nunca desaparezca sobre el resaltado. */
+   se fija el color de letra para que nunca desaparezca sobre el resaltado.
+   También se quita el "flash" gris/blanco que Chrome Android muestra al
+   tocar cualquier elemento (tap highlight), que en modo oscuro puede verse
+   igual de invasivo sobre una fila. */
 ::selection {
   background: rgba(232, 160, 61, 0.35);
   color: var(--texto-principal);
 }
 html.kacosa-dark ::selection {
-  background: rgba(232, 160, 61, 0.35);
-  color: var(--texto-principal);
+  background: rgba(232, 160, 61, 0.45);
+  color: #f8fafc;
+}
+table, thead, tbody, tr, td, th {
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
