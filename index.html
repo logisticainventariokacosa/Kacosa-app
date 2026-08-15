@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
@@ -61,78 +61,107 @@
 </div>
 
 <!-- ===================== LOGIN ===================== -->
-<div id="login-screen" class="hidden min-h-[calc(100vh-44px)] items-center justify-center px-4 py-10 bg-gradient-to-b from-white to-slate-50">
-  <div class="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-card p-8 sm:p-10 dark:bg-slate-800 dark:border-slate-700">
+<!-- Pantalla fija con tema propio (no seguimos el claro/oscuro del resto del
+     portal aquí a propósito): es la primera imagen que ve cualquiera antes
+     de entrar, así que se diseñó como un momento de marca aparte, siempre
+     con el mismo acabado cuidado — evita además que se nos vuelva a olvidar
+     ajustarla cuando cambie el tema del resto de la app. -->
+<div id="login-screen" class="hidden auth-shell items-center justify-center px-4 py-10">
+  <div class="auth-decor" aria-hidden="true">
+    <div class="auth-decor-glow auth-decor-glow--cyan"></div>
+    <div class="auth-decor-glow auth-decor-glow--red"></div>
+    <svg class="auth-decor-snowflake" viewBox="0 0 200 200" fill="none">
+      <g stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+        <path d="M100 6v188M100 6l-14 20M100 6l14 20M100 194l-14-20M100 194l14-20"/>
+        <path d="M18 53l164 94M18 53l24-5M18 53l6 24M182 147l-24 5M182 147l-6-24"/>
+        <path d="M18 147l164-94M18 147l6-24M18 147l24 5M182 53l-6 24M182 53l-24-5"/>
+      </g>
+    </svg>
+  </div>
+
+  <div class="auth-card">
     <div class="flex flex-col items-center text-center mb-7">
-      <img src="img/logo-kacosa-app.png" alt="KACOSA" class="h-20 w-20 object-contain mb-4">
-      <h1 class="text-2xl font-extrabold text-ink dark:text-white tracking-tight">Kacosa App</h1>
-      <p class="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">Inicia sesión con tu cuenta corporativa para acceder a las herramientas asignadas a tu rol.</p>
+      <div class="auth-logo-ring">
+        <img src="img/logo-kacosa-app.png" alt="KACOSA" class="h-16 w-16 object-contain">
+      </div>
+      <h1 class="auth-title">Kacosa App</h1>
+      <p class="auth-subtitle">Inicia sesión con tu cuenta corporativa para acceder a las herramientas asignadas a tu rol.</p>
     </div>
 
-    <button id="btn-login" class="w-full flex items-center justify-center gap-3 border border-slate-300 dark:border-slate-600 bg-white hover:bg-slate-50 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 font-semibold text-sm rounded-lg py-3 transition-colors">
-      <i class="fa-brands fa-google text-[#4285F4] text-base"></i>
+    <button id="btn-login" class="auth-btn-google">
+      <i class="fa-brands fa-google text-[#8ab4ff] text-base"></i>
       Continuar con Google
     </button>
 
-    <div class="flex items-center gap-3 my-6 text-[11px] font-mono-brand tracking-widest text-slate-400 dark:text-slate-500">
-      <span class="flex-1 h-px bg-slate-200 dark:bg-slate-600"></span>
-      O
-      <span class="flex-1 h-px bg-slate-200 dark:bg-slate-600"></span>
+    <div class="auth-divider">
+      <span></span>O<span></span>
     </div>
 
     <form id="email-form" class="flex flex-col gap-3">
       <input type="email" id="email-input" placeholder="Correo" autocomplete="email" maxlength="50" required
-        class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-sm text-ink dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-kacosa-500/25 focus:border-kacosa-500 transition">
+        class="auth-input">
 
       <div class="relative">
         <input type="password" id="password-input" placeholder="Contraseña" autocomplete="current-password" maxlength="20" required
-          class="w-full rounded-lg border border-slate-300 dark:border-slate-600 pl-4 pr-11 py-3 text-sm text-ink dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-kacosa-500/25 focus:border-kacosa-500 transition">
-        <button type="button" class="toggle-eye absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-kacosa-500 rounded-md" data-target="password-input">
+          class="auth-input pr-11">
+        <button type="button" class="toggle-eye auth-eye-btn" data-target="password-input">
           <i class="fa-solid fa-eye"></i>
         </button>
       </div>
 
-      <button type="submit" id="btn-email-submit" class="w-full bg-kacosa-500 hover:bg-kacosa-600 text-white font-semibold text-sm rounded-lg py-3 transition-colors shadow-card">
+      <button type="submit" id="btn-email-submit" class="auth-btn-primary">
         Iniciar sesión
       </button>
     </form>
 
-    <div class="login-status mt-4 text-xs font-mono-brand min-h-[16px] text-slate-500 dark:text-slate-400" id="login-status"></div>
+    <div class="login-status auth-status" id="login-status"></div>
   </div>
 </div>
 
 <!-- ===================== CAMBIO DE CONTRASEÑA OBLIGATORIO ===================== -->
-<div id="change-password-screen" class="hidden min-h-[calc(100vh-44px)] items-center justify-center px-4 py-10 bg-gradient-to-b from-white to-slate-50">
-  <div class="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-card p-8 sm:p-10 dark:bg-slate-800 dark:border-slate-700">
+<div id="change-password-screen" class="hidden auth-shell items-center justify-center px-4 py-10">
+  <div class="auth-decor" aria-hidden="true">
+    <div class="auth-decor-glow auth-decor-glow--cyan"></div>
+    <div class="auth-decor-glow auth-decor-glow--red"></div>
+    <svg class="auth-decor-snowflake" viewBox="0 0 200 200" fill="none">
+      <g stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+        <path d="M100 6v188M100 6l-14 20M100 6l14 20M100 194l-14-20M100 194l14-20"/>
+        <path d="M18 53l164 94M18 53l24-5M18 53l6 24M182 147l-24 5M182 147l-6-24"/>
+        <path d="M18 147l164-94M18 147l6-24M18 147l24 5M182 53l-6 24M182 53l-24-5"/>
+      </g>
+    </svg>
+  </div>
+
+  <div class="auth-card">
     <div class="flex flex-col items-center text-center mb-7">
-      <div class="w-14 h-14 rounded-full bg-kacosa-50 border border-kacosa-100 flex items-center justify-center mb-4">
+      <div class="auth-logo-ring">
         <i class="fa-solid fa-key text-kacosa-500 text-xl"></i>
       </div>
-      <h1 class="text-2xl font-extrabold text-ink dark:text-white tracking-tight">Crea tu contraseña</h1>
-      <p class="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">Por seguridad, define una contraseña nueva antes de continuar. Debe ser alfanumérica (sin símbolos) y de máximo 20 caracteres.</p>
+      <h1 class="auth-title">Crea tu contraseña</h1>
+      <p class="auth-subtitle">Por seguridad, define una contraseña nueva antes de continuar. Debe ser alfanumérica (sin símbolos) y de máximo 20 caracteres.</p>
     </div>
 
     <form id="change-password-form" class="flex flex-col gap-3">
       <div class="relative">
         <input type="password" id="new-password-input" placeholder="Nueva contraseña" maxlength="20" pattern="[A-Za-z0-9]{1,20}" required
-          class="w-full rounded-lg border border-slate-300 dark:border-slate-600 pl-4 pr-11 py-3 text-sm text-ink dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-kacosa-500/25 focus:border-kacosa-500 transition">
-        <button type="button" class="toggle-eye absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-kacosa-500 rounded-md" data-target="new-password-input">
+          class="auth-input pr-11">
+        <button type="button" class="toggle-eye auth-eye-btn" data-target="new-password-input">
           <i class="fa-solid fa-eye"></i>
         </button>
       </div>
       <div class="relative">
         <input type="password" id="confirm-password-input" placeholder="Confirmar contraseña" maxlength="20" pattern="[A-Za-z0-9]{1,20}" required
-          class="w-full rounded-lg border border-slate-300 dark:border-slate-600 pl-4 pr-11 py-3 text-sm text-ink dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-kacosa-500/25 focus:border-kacosa-500 transition">
-        <button type="button" class="toggle-eye absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-kacosa-500 rounded-md" data-target="confirm-password-input">
+          class="auth-input pr-11">
+        <button type="button" class="toggle-eye auth-eye-btn" data-target="confirm-password-input">
           <i class="fa-solid fa-eye"></i>
         </button>
       </div>
-      <button type="submit" id="btn-change-password" class="w-full bg-kacosa-500 hover:bg-kacosa-600 text-white font-semibold text-sm rounded-lg py-3 transition-colors shadow-card">
+      <button type="submit" id="btn-change-password" class="auth-btn-primary">
         Guardar y continuar
       </button>
     </form>
 
-    <div class="login-status mt-4 text-xs font-mono-brand min-h-[16px] text-slate-500 dark:text-slate-400" id="change-password-status"></div>
+    <div class="login-status auth-status" id="change-password-status"></div>
   </div>
 </div>
 
