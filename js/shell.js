@@ -302,6 +302,10 @@ function mostrarPantalla(cual) {
   changePasswordScreen.classList.toggle("hidden", cual !== "cambio-password");
   changePasswordScreen.classList.toggle("flex", cual === "cambio-password");
   appScreen.classList.toggle("hidden", cual !== "app");
+  // El footer fijo vive fuera de #app-screen (se ve incluso en login), así que
+  // en las pantallas de autenticación le pasamos su propio acabado (navy/vidrio,
+  // a juego con el fondo fijo del login) en vez del que sigue el tema claro/oscuro.
+  document.body.classList.toggle("pantalla-auth", cual === "login" || cual === "cambio-password");
 }
 
 /* ===================== Construcción del sidebar SAP ===================== */
