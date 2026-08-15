@@ -551,3 +551,21 @@ body.modo-bienvenida .sticky.top-0 #role-badge {
   color: #94a3b8;
   text-align: center;
 }
+
+/* El footer fijo vive fuera de #login-screen (siempre está montado), así que
+   durante el login/cambio de contraseña le damos su propio acabado — vidrio
+   navy, a juego con el fondo fijo de esas pantallas — en vez del que sigue
+   el tema claro/oscuro del resto del portal (ver body.pantalla-auth en
+   js/shell.js → mostrarPantalla). */
+body.pantalla-auth footer.fixed {
+  background: rgba(9, 13, 22, .78) !important;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-top-color: rgba(255, 255, 255, .08) !important;
+}
+body.pantalla-auth footer.fixed .footer-accent-bar {
+  background: linear-gradient(90deg, transparent, rgba(125, 211, 224, .55), rgba(197, 25, 25, .55), transparent) !important;
+}
+body.pantalla-auth footer.fixed span {
+  color: rgba(203, 213, 225, .65) !important;
+}
