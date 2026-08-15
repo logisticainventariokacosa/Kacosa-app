@@ -24,21 +24,39 @@ onAuthStateChanged(auth, async (user) => {
   const rol = perfil?.rol || null;
   const nombre = perfil?.nombre || user.displayName || user.email || "";
 
-  // GERENTE ve solo su tienda asignada. Los demás roles permitidos ven todas.
-  // Se normaliza (minúsculas + sin espacios) para que un rol guardado en el
-  // portal como "Gerente" o "gerente " (con espacio) no caiga por error en
-  // "ve todas las tiendas" — antes una diferencia así en el dato de Firestore
-  // hacía que un gerente viera el selector completo de tiendas.
+  // GERENTE ve solo su(s) tienda(s) asignada(s). Los demás roles permitidos
+  // (definidos explícitamente aquí) ven todas. Se normaliza (minúsculas +
+  // sin espacios) para que un rol guardado en el portal como "Gerente" o
+  // "gerente " (con espacio) no caiga por error en "ve todas las tiendas".
+  //
+  // IMPORTANTE — fail-closed, no fail-open: antes, cualquier rol que NO
+  // fuera exactamente "gerente" caía en el `else` y recibía ["TODAS"]. Eso
+  // incluía casos de error real (falla al leer el perfil en Firestore,
+  // condición de carrera, rol mal escrito o vacío): un gerente cuyo perfil
+  // no cargara bien terminaba viendo el selector completo de tiendas en vez
+  // de ninguna. Ahora solo los roles listados explícitamente en
+  // ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS reciben ["TODAS"]; cualquier otro
+  // caso (incluyendo perfil nulo o rol desconocido) no ve ninguna tienda.
   const rolNormalizado = (rol || "").toString().trim().toLowerCase();
   const esGerente = rolNormalizado === "gerente";
+  const ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS = [
+    "supervisor", "abastecimiento", "compras", "admin", "directiva"
+  ];
+  const veTodasLasTiendas = ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS.includes(rolNormalizado);
   // El campo en Firestore es "tiendas" (array), no "tienda" (string) — un
   // gerente puede tener una o varias tiendas asignadas en ese array.
   const tiendasAsignadas = Array.isArray(perfil?.tiendas)
     ? perfil.tiendas.map(t => (t || "").toString().trim()).filter(Boolean)
     : [];
-  const tiendas = esGerente
-    ? (tiendasAsignadas.length ? tiendasAsignadas : [])
-    : ["TODAS"];
+  const tiendas = veTodasLasTiendas
+    ? ["TODAS"]
+    : (esGerente ? tiendasAsignadas : []);
+
+  if (!perfil) {
+    console.warn("No se pudo cargar el perfil de " + user.email + " desde Firestore (usuarios/" + user.email.toLowerCase() + "). Se le está mostrando sin acceso a ninguna tienda por seguridad.");
+  } else if (!esGerente && !veTodasLasTiendas) {
+    console.warn("El usuario " + user.email + " tiene un rol no reconocido ('" + rol + "'). Se le está mostrando sin acceso a ninguna tienda por seguridad.");
+  }
 
   window.KACOSA.usuario = {
     email: user.email,
