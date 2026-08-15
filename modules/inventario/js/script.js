@@ -696,7 +696,7 @@ document.getElementById('filterCenter').addEventListener('change', function() {
                 const direct = getDriveDirectUrl(d.url); 
                 return `<div class="card-item">
                     <div style="flex:0 0 auto">
-                        <a href="${direct}" target="_blank" style="font-weight:bold;color:#cce;font-size:1.1rem">${d.name}</a>
+                        <a href="${direct}" target="_blank" style="font-weight:bold;color:var(--text);font-size:1.1rem">${d.name}</a>
                     </div>
                     <div style="font-size:0.8rem;color:var(--muted);margin-top:10px">
                         📅 ${safeString(d.date)}<br>👤 ${safeString(d.uploaderName) || 'Sin nombre'}<br>✉️ ${safeString(d.uploaderEmail) || 'Sin correo'}
@@ -719,7 +719,7 @@ document.getElementById('filterCenter').addEventListener('change', function() {
                             onerror="this.onerror=null;this.style.display='none';this.insertAdjacentHTML('afterend','<div class=&quot;placeholder&quot;>Sin miniatura</div>');"
                         />
                     </a>
-                    <div style="margin-top:5px;font-weight:bold;color:#ccc;font-size:1.1rem">${i.name}</div>
+                    <div style="margin-top:5px;font-weight:bold;color:var(--text);font-size:1.1rem">${i.name}</div>
                     <div style="font-size:0.8rem;color:var(--muted);margin-top:6px">
                         📅 ${safeString(i.date)}<br>👤 ${safeString(i.uploaderName) || 'Sin nombre'}<br>✉️ ${safeString(i.uploaderEmail) || 'Sin correo'}
                     </div>
