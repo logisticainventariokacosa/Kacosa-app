@@ -367,7 +367,18 @@ function descargarExcelDashboard(materialesOriginal, analisis) {
   notificarExito("El archivo Excel del Dashboard se descargó correctamente.", { titulo: "Excel descargado" });
 }
 
-document.addEventListener("kacosa:usuario-listo", render);
+// Cuando se confirma la sesión del usuario (login, o cambio de cuenta sin
+// recargar la página — típico al probar varias cuentas en la misma pestaña),
+// forzamos una reconstrucción completa del dashboard: sin este reseteo,
+// "vistaConstruida" quedaba en true desde una cuenta anterior y el selector
+// de tienda (y la tienda seleccionada) se quedaban pegados a esos datos
+// viejos, ignorando las tiendas reales de la nueva cuenta.
+document.addEventListener("kacosa:usuario-listo", () => {
+  vistaConstruida = false;
+  tiendaSeleccionada = null;
+  analisisCache = null;
+  render();
+});
 document.addEventListener("kacosa:vista-cambiada", (e) => {
   if (e.detail.vista === "vista-dashboard") {
     if (window.KACOSA?.ultimoAnalisis) {
