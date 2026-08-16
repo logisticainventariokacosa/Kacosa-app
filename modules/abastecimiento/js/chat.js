@@ -25,8 +25,6 @@ function construirUI() {
         </div>
       </div>
       <div class="chat-header-acciones">
-        <button id="chat-manos-libres-toggle" title="Modo manos libres (conversación por voz)" style="display:none"><i class="fa-solid fa-headset"></i></button>
-        <button id="chat-voz-toggle" title="Leer respuestas en voz alta"><i class="fa-solid fa-volume-xmark"></i></button>
         <button id="chat-cerrar" aria-label="Cerrar"><i class="fa-solid fa-xmark"></i></button>
       </div>
     </div>
@@ -55,8 +53,13 @@ function construirUI() {
 //  hablado (texto a voz). Usa la Web Speech API del navegador,
 //  no requiere backend ni configuración adicional.
 // ============================================================
-let vozActivada = localStorage.getItem("kacosa-chat-voz") === "1";
-let modoManosLibres = localStorage.getItem("kacosa-chat-manos-libres") === "1";
+// ============================================================
+//  VOZ: hablarle al agente (reconocimiento de voz, dictar la pregunta) y
+//  escuchar una respuesta puntual con el botón de cada mensaje. Ya NO hay
+//  lectura automática de respuestas ni modo manos libres: el agente solo
+//  lee en voz alta cuando el usuario pulsa el botón de esa respuesta.
+//  Usa la Web Speech API del navegador, no requiere backend ni configuración.
+// ============================================================
 let reconocimiento = null;
 let escuchando = false;
 
@@ -65,24 +68,9 @@ function inicializarVoz() {
   // la lista llega vacía la primera vez y se completa un instante después).
   if (window.speechSynthesis) window.speechSynthesis.getVoices();
 
-  // --- Texto a voz (leer las respuestas del agente) ---
-  const btnVoz = document.getElementById("chat-voz-toggle");
-  if (window.speechSynthesis && btnVoz) {
-    actualizarIconoVoz();
-    btnVoz.addEventListener("click", () => {
-      vozActivada = !vozActivada;
-      localStorage.setItem("kacosa-chat-voz", vozActivada ? "1" : "0");
-      actualizarIconoVoz();
-      if (!vozActivada) window.speechSynthesis.cancel();
-    });
-  } else if (btnVoz) {
-    btnVoz.style.display = "none"; // el navegador no soporta síntesis de voz
-  }
-
   // --- Reconocimiento de voz (hablarle al agente) ---
   const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
   const btnMic = document.getElementById("chat-mic-btn");
-  const btnManosLibres = document.getElementById("chat-manos-libres-toggle");
 
   if (SpeechRecognitionAPI && btnMic) {
     reconocimiento = new SpeechRecognitionAPI();
@@ -123,48 +111,7 @@ function inicializarVoz() {
         try { reconocimiento.start(); } catch (err) { /* ya estaba iniciado */ }
       }
     });
-
-    // El modo manos libres solo tiene sentido si además hay micrófono disponible
-    if (btnManosLibres) {
-      btnManosLibres.style.display = "";
-      actualizarIconoManosLibres();
-      btnManosLibres.addEventListener("click", () => {
-        modoManosLibres = !modoManosLibres;
-        localStorage.setItem("kacosa-chat-manos-libres", modoManosLibres ? "1" : "0");
-        actualizarIconoManosLibres();
-
-        if (modoManosLibres) {
-          // Manos libres implica escuchar las respuestas; se activa la voz si estaba apagada
-          if (!vozActivada) {
-            vozActivada = true;
-            localStorage.setItem("kacosa-chat-voz", "1");
-            actualizarIconoVoz();
-          }
-          // Arranca la conversación escuchando de inmediato
-          if (!escuchando) {
-            try { reconocimiento.start(); } catch (err) { /* ya estaba iniciado */ }
-          }
-        } else if (escuchando) {
-          reconocimiento.stop();
-        }
-      });
-    }
   }
-}
-
-function actualizarIconoVoz() {
-  const btn = document.getElementById("chat-voz-toggle");
-  if (!btn) return;
-  btn.innerHTML = vozActivada ? '<i class="fa-solid fa-volume-high"></i>' : '<i class="fa-solid fa-volume-xmark"></i>';
-  btn.classList.toggle("activo", vozActivada);
-  btn.title = vozActivada ? "Dejar de leer respuestas en voz alta" : "Leer respuestas en voz alta";
-}
-
-function actualizarIconoManosLibres() {
-  const btn = document.getElementById("chat-manos-libres-toggle");
-  if (!btn) return;
-  btn.classList.toggle("activo", modoManosLibres);
-  btn.title = modoManosLibres ? "Desactivar modo manos libres" : "Activar modo manos libres (conversación por voz)";
 }
 
 /**
@@ -392,18 +339,6 @@ async function enviarPregunta(e) {
   const respuesta = resp.ok ? resp.respuesta : "No pude responder: " + resp.error;
   agregarMensaje(respuesta, "agente", resp.archivo || null);
   historial.push({ rol: "agente", texto: respuesta });
-
-  const continuarEscuchando = () => {
-    if (modoManosLibres && abierto && reconocimiento && !escuchando) {
-      try { reconocimiento.start(); } catch (err) { /* ya estaba iniciado */ }
-    }
-  };
-
-  if (vozActivada) {
-    hablar(respuesta, continuarEscuchando);
-  } else if (modoManosLibres) {
-    setTimeout(continuarEscuchando, 400);
-  }
 }
 
 document.addEventListener("kacosa:analisis-listo", actualizarContextoInfo);
