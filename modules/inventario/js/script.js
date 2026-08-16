@@ -25,7 +25,12 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
 // Roles que tienen acceso a esta app (Información Logística)
-const ROLES_PERMITIDOS = ["admin", "supervisor", "directiva", "gerente"];
+// Nota: este mismo módulo sirve tanto "Inventario" (Trazabilidad/Consultas)
+// como "Reportes" (Noticias/Imágenes/Documentos) en el portal. "abastecimiento"
+// se agregó para que pueda entrar a Reportes; el menú del shell (js/shell.js)
+// sigue ocultándole Trazabilidad/Consultas, aunque técnicamente podría llegar
+// a esas secciones si escribe la URL a mano.
+const ROLES_PERMITIDOS = ["admin", "supervisor", "directiva", "gerente", "abastecimiento"];
 
 // Revisa si el correo está dado de alta en el portal y con un rol permitido para esta app
 async function correoAutorizado(email) {
