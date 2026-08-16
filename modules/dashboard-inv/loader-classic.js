@@ -21,7 +21,18 @@
 
   function ocultarKacosaLoader() {
     var loader = document.getElementById("kacosa-loader");
-    if (loader) loader.classList.add("oculto");
+    if (loader) {
+      // Importante: el shell (portal) oculta su propio "Cargando módulo…" de
+      // forma INSTANTÁNEA (sin transición) en cuanto recibe el aviso "listo"
+      // más abajo. Si este loader interno se ocultara con el fundido normal
+      // de loader.css (0.35s de opacity/visibility), quedaría expuesto solo
+      // él durante esa fracción de segundo — un "segundo loader" parpadeando
+      // justo después de que desaparece el del shell. Para evitarlo,
+      // desactivamos la transición antes de ocultarlo, así ambos loaders
+      // desaparecen en el mismo instante.
+      loader.style.transition = "none";
+      loader.classList.add("oculto");
+    }
 
     // Avisa al shell (portal) que este módulo ya terminó de verificar
     // acceso y ya está mostrando #mainApp, para que oculte su propio
