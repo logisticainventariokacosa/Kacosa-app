@@ -246,13 +246,29 @@ changePasswordForm.addEventListener("submit", async (e) => {
 });
 
 /* ===================== Sesión / control de acceso ===================== */
+// Recordamos en localStorage si este navegador llegó a tener una sesión
+// válida la última vez. Firebase siempre necesita un round-trip async para
+// confirmar si hay sesión persistida o no — eso no se puede evitar del
+// todo — pero si YA sabemos (por la última vez) que no había sesión, no
+// tiene sentido hacer esperar al usuario viendo "Verificando sesión…"
+// para terminar mostrándole el login de todas formas: se lo mostramos de
+// una vez, y si Firebase resuelve con un usuario válido más tarde (caso
+// raro), la pantalla igual se actualiza sola a la app.
+const CLAVE_HUBO_SESION = "kacosa-hubo-sesion";
+if (localStorage.getItem(CLAVE_HUBO_SESION) !== "1") {
+  mostrarPantalla("login");
+}
+
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
+    localStorage.removeItem(CLAVE_HUBO_SESION);
     loginStatus.classList.remove("text-kacosa-600");
     loginStatus.textContent = "";
     mostrarPantalla("login");
     return;
   }
+
+  localStorage.setItem(CLAVE_HUBO_SESION, "1");
 
   loginStatus.textContent = "Verificando permisos…";
 
@@ -430,7 +446,34 @@ function abrirSubmodulo(id, { actualizarUrl = false } = {}) {
   cerrarMenu();
 }
 
-moduleFrame.addEventListener("load", () => moduleLoader.classList.add("oculto"));
+// El evento "load" del iframe solo indica que el HTML y los scripts del
+// módulo ya se ejecutaron — NO que el módulo ya terminó de verificar la
+// sesión/permisos y mostrar su contenido real. Cada módulo (ver
+// modules/abastecimiento/js/nav.js y modules/dashboard-inv/loader-classic.js)
+// tiene su propia pantalla de carga interna ("Verificando sesión…",
+// "Verificando acceso…") que sigue visible un momento después del "load"
+// del iframe. Antes ocultábamos "Cargando módulo…" justo en el "load",
+// dejando ver por un instante la pantalla de carga interna del módulo
+// como si fuera un segundo loader — dos loaders en fila en vez de uno solo.
+//
+// Ahora esperamos a que el módulo avise por postMessage que ya terminó
+// ("kacosa:module-listo") antes de ocultar "Cargando módulo…", así el
+// usuario ve un solo loader continuo hasta que el contenido real está listo.
+// Si el módulo no envía ese aviso (ej. algún módulo antiguo sin este parche),
+// no lo dejamos atascado: lo ocultamos igual pasado un tiempo prudencial.
+let temporizadorFallbackLoader = null;
+
+window.addEventListener("message", (e) => {
+  if (e.data && e.data.source === "kacosa-module" && e.data.type === "listo") {
+    if (temporizadorFallbackLoader) clearTimeout(temporizadorFallbackLoader);
+    moduleLoader.classList.add("oculto");
+  }
+});
+
+moduleFrame.addEventListener("load", () => {
+  if (temporizadorFallbackLoader) clearTimeout(temporizadorFallbackLoader);
+  temporizadorFallbackLoader = setTimeout(() => moduleLoader.classList.add("oculto"), 6000);
+});
 
 // Permite volver a un submódulo concreto al recargar la página (ej. #trazabilidad)
 window.addEventListener("hashchange", () => {
