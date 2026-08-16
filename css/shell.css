@@ -539,6 +539,16 @@ body.modo-bienvenida .sticky.top-0 #role-badge {
 }
 .auth-eye-btn:hover { color: #7dd3e0; }
 
+.auth-forgot-link {
+  align-self: flex-end;
+  margin-top: -.35rem;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  color: #7dd3e0;
+  transition: color .15s;
+}
+.auth-forgot-link:hover { color: #a7e6ee; text-decoration: underline; }
+
 .auth-btn-primary {
   width: 100%;
   padding: .85rem 1rem;
