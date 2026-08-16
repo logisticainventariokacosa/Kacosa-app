@@ -246,6 +246,8 @@ changePasswordForm.addEventListener("submit", async (e) => {
 });
 
 /* ===================== Sesión / control de acceso ===================== */
+const bootLoader = document.getElementById("boot-loader");
+
 // Recordamos en localStorage si este navegador llegó a tener una sesión
 // válida la última vez. Firebase siempre necesita un round-trip async para
 // confirmar si hay sesión persistida o no — eso no se puede evitar del
@@ -302,8 +304,6 @@ onAuthStateChanged(auth, async (user) => {
   mostrarPantalla("app");
   mostrarBienvenida();
 });
-
-const bootLoader = document.getElementById("boot-loader");
 
 // Salvaguarda: si por algo Firebase nunca resuelve el estado de sesión, no
 // dejamos al usuario viendo el loader para siempre.
