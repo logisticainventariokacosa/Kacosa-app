@@ -1,8 +1,7 @@
 import { auth, db, googleProvider } from "./firebase-config.js";
 import {
   signInWithPopup, signOut, onAuthStateChanged,
-  signInWithEmailAndPassword, updatePassword, EmailAuthProvider, reauthenticateWithCredential,
-  sendPasswordResetEmail
+  signInWithEmailAndPassword, updatePassword, EmailAuthProvider, reauthenticateWithCredential
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -22,6 +21,9 @@ import { doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12
 const ROLES_INVENTARIO = ["admin", "supervisor", "directiva", "gerente"];
 const ROLES_ABASTECIMIENTO = ["gerente", "supervisor", "abastecimiento", "compras", "admin", "directiva"];
 const ROLES_DASHBOARD_INV = ["coordinador", "directiva", "admin", "supervisor"];
+// Reportes (Noticias/Imágenes/Documentos) usa la misma base que Inventario,
+// más "abastecimiento" para que ese rol también tenga acceso.
+const ROLES_REPORTES = [...ROLES_INVENTARIO, "abastecimiento"];
 
 const MODULES = [
   {
@@ -100,21 +102,21 @@ const MODULES = [
         label: "Noticias",
         icon: "fa-newspaper",
         src: "modules/inventario/index.html#section=news",
-        roles: ROLES_INVENTARIO
+        roles: ROLES_REPORTES
       },
       {
         id: "imagenes",
         label: "Imágenes",
         icon: "fa-image",
         src: "modules/inventario/index.html#section=images",
-        roles: ROLES_INVENTARIO
+        roles: ROLES_REPORTES
       },
       {
         id: "documentos",
         label: "Documentos",
         icon: "fa-file-lines",
         src: "modules/inventario/index.html#section=documents",
-        roles: ROLES_INVENTARIO
+        roles: ROLES_REPORTES
       }
     ]
   }
@@ -196,33 +198,6 @@ function mensajeError(code) {
   };
   return map[code] || ("No se pudo completar (" + code + ")");
 }
-
-/* ===================== Recuperar contraseña olvidada ===================== */
-// Usa el flujo estándar de Firebase Auth: le manda al correo ingresado un
-// enlace (vía la página que Firebase aloja automáticamente) para que el
-// propio usuario elija una contraseña nueva, sin que un admin tenga que
-// crearle otra provisional. Reutiliza el mismo campo "Correo" del login de
-// arriba, así que basta con escribirlo ahí antes de pulsar el link.
-document.getElementById("btn-forgot-password").addEventListener("click", async () => {
-  const email = document.getElementById("email-input").value.trim();
-  loginStatus.classList.remove("text-kacosa-600");
-
-  if (!email) {
-    loginStatus.classList.add("text-kacosa-600");
-    loginStatus.textContent = "Escribe tu correo arriba y vuelve a pulsar \"¿Olvidaste tu contraseña?\".";
-    return;
-  }
-
-  loginStatus.textContent = "Enviando correo…";
-  try {
-    await sendPasswordResetEmail(auth, email);
-    loginStatus.classList.remove("text-kacosa-600");
-    loginStatus.textContent = "Listo. Revisa " + email + " y sigue el enlace para crear una nueva contraseña.";
-  } catch (err) {
-    loginStatus.classList.add("text-kacosa-600");
-    loginStatus.textContent = mensajeError(err.code);
-  }
-});
 
 /* ===================== Cambio de contraseña obligatorio ===================== */
 const changePasswordForm = document.getElementById("change-password-form");
