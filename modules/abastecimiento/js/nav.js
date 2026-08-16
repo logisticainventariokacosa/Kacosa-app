@@ -92,6 +92,15 @@ onAuthStateChanged(auth, async (user) => {
 
   document.dispatchEvent(new CustomEvent("kacosa:usuario-listo"));
   ocultarLoader();
+
+  // Avisa al shell (portal) que este módulo ya terminó de verificar sesión
+  // y permisos y está listo para verse, para que oculte su "Cargando
+  // módulo…" justo en este momento en vez de antes (ver js/shell.js). Si
+  // esta página no está dentro de un iframe (ej. se abrió directamente),
+  // window.parent === window y este mensaje simplemente no llega a nadie.
+  if (window.parent !== window) {
+    window.parent.postMessage({ source: "kacosa-module", type: "listo" }, "*");
+  }
 });
 
 function actualizarUsuarioSidebar() {
