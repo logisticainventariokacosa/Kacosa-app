@@ -22,6 +22,16 @@
   function ocultarKacosaLoader() {
     var loader = document.getElementById("kacosa-loader");
     if (loader) loader.classList.add("oculto");
+
+    // Avisa al shell (portal) que este módulo ya terminó de verificar
+    // acceso y ya está mostrando #mainApp, para que oculte su propio
+    // "Cargando módulo…" justo en este momento (ver js/shell.js) en vez de
+    // antes, cuando este loader interno todavía se veía como un segundo
+    // loader tras el del shell. Si esta página no está dentro de un
+    // iframe, el mensaje simplemente no llega a nadie.
+    if (window.parent !== window) {
+      window.parent.postMessage({ source: "kacosa-module", type: "listo" }, "*");
+    }
   }
 
   construirLoaderSiNoExiste();
