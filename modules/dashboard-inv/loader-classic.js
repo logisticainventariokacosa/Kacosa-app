@@ -3,7 +3,18 @@
 // de inmediato (tapa el parpadeo de la pantalla de login mientras Firebase
 // resuelve la sesión) y se oculta solo cuando #mainApp queda visible.
 (function () {
+  // Si esta página vive dentro del iframe del portal (Kacosa App), el shell
+  // ya muestra su propio "Cargando módulo…" cubriendo todo el área mientras
+  // carga. Construir aquí ADEMÁS este loader interno solo genera dos
+  // pantallas de aspecto distinto peleando por mostrarse. Por eso este
+  // loader interno solo se usa cuando el dashboard se abre standalone
+  // (directamente, fuera del portal), que es el único caso en el que hace
+  // falta para tapar el parpadeo del login mientras Firebase resuelve la
+  // sesión.
+  var dentroDeIframe = window.parent !== window;
+
   function construirLoaderSiNoExiste() {
+    if (dentroDeIframe) return;
     if (document.getElementById("kacosa-loader")) return;
     var div = document.createElement("div");
     div.id = "kacosa-loader";
@@ -14,7 +25,7 @@
           '<div class="loader-titulo">KACOSA</div>' +
         '</div>' +
         '<div class="loader-spinner"></div>' +
-        '<div class="loader-mensaje" id="kacosa-loader-mensaje">Verificando acceso…</div>' +
+        '<div class="loader-mensaje" id="kacosa-loader-mensaje">Cargando módulo…</div>' +
       '</div>';
     document.body.appendChild(div);
   }
