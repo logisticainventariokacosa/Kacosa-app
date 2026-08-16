@@ -1080,28 +1080,6 @@ tbody tr:hover {
   background: rgba(255,255,255,0.1);
 }
 
-#chat-voz-toggle.activo {
-  color: var(--ambar);
-}
-
-#chat-voz-toggle.activo:hover {
-  color: var(--ambar);
-}
-
-#chat-manos-libres-toggle.activo {
-  color: var(--verde-kpi);
-  animation: pulso-manos-libres 1.8s ease-in-out infinite;
-}
-
-#chat-manos-libres-toggle.activo:hover {
-  color: var(--verde-kpi);
-}
-
-@keyframes pulso-manos-libres {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.55; }
-}
-
 .chat-mensajes {
   flex: 1;
   overflow-y: auto;
