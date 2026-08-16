@@ -472,7 +472,11 @@ window.addEventListener("message", (e) => {
 
 moduleFrame.addEventListener("load", () => {
   if (temporizadorFallbackLoader) clearTimeout(temporizadorFallbackLoader);
-  temporizadorFallbackLoader = setTimeout(() => moduleLoader.classList.add("oculto"), 6000);
+  // 13s: por encima del propio timeout de seguridad interno más lento entre
+  // los módulos (Dashboard Inventario tiene 12s, ver loader-classic.js),
+  // para que ese aviso "listo" siempre llegue antes que este fallback y no
+  // se vea un destello del loader interno del módulo tras ocultar este.
+  temporizadorFallbackLoader = setTimeout(() => moduleLoader.classList.add("oculto"), 13000);
 });
 
 // Permite volver a un submódulo concreto al recargar la página (ej. #trazabilidad)
