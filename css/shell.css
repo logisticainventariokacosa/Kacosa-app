@@ -373,6 +373,13 @@ body.modo-bienvenida .sticky.top-0 #role-badge {
     radial-gradient(ellipse 900px 600px at 15% -10%, rgba(56, 97, 158, .35), transparent 55%),
     radial-gradient(ellipse 700px 500px at 105% 105%, rgba(197, 25, 25, .16), transparent 55%),
     linear-gradient(180deg, #0b1220 0%, #0a0e18 55%, #090c14 100%);
+  /* Make auth screens center their content both vertically and horizontally.
+     Previously the HTML used utility classes like "items-center"/"justify-center"
+     which don't exist here; adding flex ensures the login card is centered on desktop. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
 }
 .auth-shell::before {
   /* Textura tipo "plano técnico" a bajo contraste — guiño a SAP/logística sin competir con el contenido */
