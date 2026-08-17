@@ -32,17 +32,73 @@ const db = firebase.firestore();
 // a esas secciones si escribe la URL a mano.
 const ROLES_PERMITIDOS = ["admin", "supervisor", "directiva", "gerente", "abastecimiento"];
 
-// Revisa si el correo está dado de alta en el portal y con un rol permitido para esta app
-async function correoAutorizado(email) {
+// Revisa si el correo está dado de alta en el portal y con un rol permitido para esta app,
+// y devuelve además el perfil completo (rol + tiendas asignadas) para poder aplicar el
+// filtro de tienda de los gerentes en "Consultas" (ver aplicarFiltroTiendaGerente más abajo).
+async function obtenerPerfilInventario(email) {
     try {
         const snap = await db.collection("usuarios").doc(email.toLowerCase()).get();
-        if (!snap.exists) return false;
-        const rol = snap.data().rol;
-        return ROLES_PERMITIDOS.includes(rol);
+        if (!snap.exists) return { autorizado: false, perfil: null };
+        const perfil = snap.data();
+        return { autorizado: ROLES_PERMITIDOS.includes(perfil.rol), perfil };
     } catch (e) {
         console.error("Error verificando acceso:", e);
-        return false;
+        return { autorizado: false, perfil: null };
     }
+}
+
+// Mapa de ID de tienda (como se guarda en el campo "tiendas" del portal, ej. "UPI_MERCADERES")
+// al texto exacto que usa el <select id="filterCenter"> de Consultas (ej. "Upi Mercaderes").
+// Debe reflejar el mismo catálogo que usa el módulo de Abastecimiento (js/tiendas.js).
+const NOMBRE_TIENDA_POR_ID = {
+    UPI_VALENCIA: "Upi Valencia",
+    UPI_LOS_GUAYOS: "Upi Los Guayos",
+    UPI_CASTILLO: "Upi Castillo",
+    UPI_MARACAY: "Upi Maracay",
+    UPI_PUERTO_CABELLO: "Upi Puerto Cabello",
+    UPI_CORO: "Upi Coro",
+    UPI_MERCADERES: "Upi Mercaderes",
+    UPI_ROSAL: "Upi Rosal",
+    GIGANTE: "Gigante",
+    GIGANTE_2: "Gigante 2",
+    COMERCIAL_SALVADOR: "Comercial Salvador",
+    PRODUCTOS_KHALED: "Productos Khaled",
+    FERRETOOLS: "Ferretools",
+    KACOSA: "Kacosa"
+};
+
+// Kacosa App: un usuario con rol "gerente" solo debe ver, en el selector de
+// Consultas, la(s) tienda(s) que tiene asignada(s) en el portal (mismo criterio
+// que ya aplica el módulo de Abastecimiento en js/nav.js). El resto de roles
+// permitidos siguen viendo el listado completo, sin cambios.
+function aplicarFiltroTiendaGerente(perfil) {
+    const filterCenter = document.getElementById('filterCenter');
+    if (!filterCenter) return;
+
+    const rol = (perfil?.rol || '').toString().trim().toLowerCase();
+    if (rol !== 'gerente') return; // otros roles ven todas las tiendas, tal como antes
+
+    const tiendasAsignadas = Array.isArray(perfil?.tiendas)
+        ? perfil.tiendas.map(t => (t || '').toString().trim()).filter(Boolean)
+        : [];
+    const nombresAsignados = tiendasAsignadas
+        .map(id => NOMBRE_TIENDA_POR_ID[id])
+        .filter(Boolean);
+
+    if (nombresAsignados.length === 0) {
+        console.warn('El usuario gerente no tiene tiendas asignadas en el portal (campo "tiendas" en Firestore); se deja el selector sin cambios por seguridad.');
+        return;
+    }
+
+    // Elimina "Todas las tiendas" y cualquier tienda que no sea la(s) suya(s)
+    Array.from(filterCenter.options).forEach(opt => {
+        if (opt.value === '' || !nombresAsignados.includes(opt.value)) {
+            opt.remove();
+        }
+    });
+
+    // Deja su tienda (o la primera, si tiene varias) seleccionada por defecto
+    filterCenter.value = nombresAsignados[0];
 }
 
 // Variables globales
@@ -235,7 +291,7 @@ function getAlertTitle(type) {
 
     auth.onAuthStateChanged(async user => {
         if (user) {
-            const autorizado = await correoAutorizado(user.email);
+            const { autorizado, perfil } = await obtenerPerfilInventario(user.email);
             if (!autorizado) {
                 // No se cierra sesión: es compartida con el portal y las demás apps de KACOSA.
                 document.getElementById('authScreen').classList.remove('hidden');
@@ -246,6 +302,7 @@ function getAlertTitle(type) {
             document.getElementById('authScreen').classList.add('hidden');
             document.getElementById('mainApp').classList.remove('hidden');
             document.getElementById('userEmail').textContent = user.email || user.displayName || '';
+            aplicarFiltroTiendaGerente(perfil);
             loadNews();
             listUploads('documents');
         } else {
@@ -330,7 +387,17 @@ function valorColumna(r, key) {
         case 'ubicacionExhibicion': return safeString(getField(r, 'ubicacionExhibicion', 'ubicacionExhib', 'ubicacion exhib'));
         case 'conteoExhibicion': return safeString(getField(r, 'conteoExhibicion', 'conteoExhb', 'conteo exhb'));
         case 'fechaUltimoConteo': return safeString(getField(r, 'fechaUltimoConteo', 'fecha'));
-        case 'ultimoAuditor': return safeString(getField(r, 'ultimoAuditor', 'auditor'));
+        case 'ultimoAuditor': {
+            // Cuando un material se contó en más de un almacén de la misma tienda
+            // (ej. Ubicación General por un analista y Ubicación Exhibición por
+            // otro), se muestran ambos nombres en vez de descartar uno.
+            const principal = safeString(getField(r, 'ultimoAuditor', 'auditor', 'auditorGeneral', 'ultimoAuditorGeneral'));
+            const secundario = safeString(getField(r, 'auditorExhibicion', 'ultimoAuditorExhibicion', 'auditorExhib', 'segundoAuditor', 'ultimoAuditor2'));
+            if (secundario && secundario.trim().toLowerCase() !== principal.trim().toLowerCase()) {
+                return [principal, secundario].filter(Boolean).join(' / ');
+            }
+            return principal;
+        }
         case 'difGeneral': return safeString(getField(r, 'difGeneral', 'dif_general'));
         case 'difExhibicion': return safeString(getField(r, 'difExhibicion', 'difExhib', 'dif_exhib'));
         case 'centro': return safeString(getField(r, 'Centro_Inventario', 'centro', 'centroinventario'));
@@ -339,12 +406,25 @@ function valorColumna(r, key) {
     }
 }
 
+// La tienda "Kacosa" (casa matriz) a veces llega desde el origen de datos
+// identificada como "Casa Matriz / CD", "Matriz", etc. en vez de "Kacosa"
+// literal (así aparece, por ejemplo, en el dashboard de resumen). Por eso,
+// al filtrar por "Kacosa" también se reconocen esas variantes; de lo
+// contrario sus materiales no aparecían nunca en Consultas.
+function coincideCentro(centroValor, filtroSeleccionado) {
+    const centro = (centroValor || '').toString().toLowerCase();
+    const filtro = (filtroSeleccionado || '').toString().trim().toLowerCase();
+    if (!filtro) return true;
+    if (filtro === 'kacosa') return centro.includes('kacosa') || centro.includes('matriz');
+    return centro.includes(filtro);
+}
+
 function renderInventoryResults() {
     const out = document.getElementById('searchResults');
     const centroFilter = (document.getElementById('filterCenter')?.value || '').trim().toLowerCase();
 
     let filtered = centroFilter
-        ? currentInventoryResults.filter(r => valorColumna(r, 'centro').toLowerCase().includes(centroFilter))
+        ? currentInventoryResults.filter(r => coincideCentro(valorColumna(r, 'centro'), centroFilter))
         : currentInventoryResults;
 
     if (!filtered.length) {
