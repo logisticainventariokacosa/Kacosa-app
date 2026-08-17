@@ -6,6 +6,52 @@ class TrazabilidadSystem {
         this.chart1 = null;
         this.chart2 = null;
         this.isInitialized = false;
+        // Estado de orden de la tabla de "Reporte" — se controla desde los
+        // encabezados (clic para ordenar asc/desc por esa columna), igual
+        // que en la tabla de resultados de Consultas.
+        this.ordenReporte = { columna: null, asc: true };
+    }
+
+    // Columnas numéricas del reporte (para que el orden compare por valor y
+    // no como texto). El resto de columnas se ordenan alfabéticamente.
+    static COLUMNAS_REPORTE_NUMERICAS = new Set([
+        'totalSalidasTienda', 'totalSalidasClientes',
+        'salidaMaxTienda', 'salidaMinTienda',
+        'salidaMaxClientes', 'salidaMinClientes',
+        'promedioSalidaTienda', 'promedioSalidaCliente',
+        'stockActual'
+    ]);
+
+    // Devuelve el valor de una fila del reporte para una columna dada,
+    // usado tanto para pintar la tabla como para ordenarla.
+    valorColumnaReporte(r, key) {
+        switch (key) {
+            case 'totalSalidasTienda': return Math.abs(Number(r.totalSalidasTienda) || 0);
+            case 'totalSalidasClientes': return Math.abs(Number(r.totalSalidasClientes) || 0);
+            case 'salidaMaxTienda': return Number(r.salidaMaxTienda) || 0;
+            case 'salidaMinTienda': return Number(r.salidaMinTienda) || 0;
+            case 'salidaMaxClientes': return Number(r.salidaMaxClientes) || 0;
+            case 'salidaMinClientes': return Number(r.salidaMinClientes) || 0;
+            case 'promedioSalidaTienda': return Number(r.promedioSalidaTienda) || 0;
+            case 'promedioSalidaCliente': return Number(r.promedioSalidaCliente) || 0;
+            case 'stockActual': return Number(this.core.round2(r.stockActual)) || 0;
+            case 'posibleIrregularidad': return r._posibleIrregularidad || '';
+            case 'usuarioIrregularidad': return r._usuarioIrregularidad || '';
+            case 'descIrregularidad': return r._descIrregularidad || '';
+            default: return (r[key] === null || r[key] === undefined) ? '' : r[key];
+        }
+    }
+
+    // Refleja en los encabezados cuál es la columna activa y en qué sentido
+    // se está ordenando (flechita ▲/▼), igual que en Consultas.
+    actualizarEncabezadosReporte() {
+        const ths = document.querySelectorAll('#reportSection thead th[data-col]');
+        ths.forEach(th => {
+            if (!th.dataset.label) th.dataset.label = th.textContent.trim();
+            const activa = this.ordenReporte.columna === th.dataset.col;
+            th.classList.toggle('th-activa', activa);
+            th.textContent = th.dataset.label + (activa ? (this.ordenReporte.asc ? ' ▲' : ' ▼') : '');
+        });
     }
 
     init() {
@@ -103,30 +149,30 @@ class TrazabilidadSystem {
                             <table class="inventory-table">
                                 <thead>
                                     <tr>
-                                        <th>Material</th>
-                                        <th>Texto breve</th>
-                                        <th>UMB</th>
-                                        <th>Centro</th>
-                                        <th>Tienda</th>
-                                        <th>Rango de fecha</th>
-                                        <th>Último ingreso</th>
-                                        <th>Ajustes (+ / -)</th>
-                                        <th>Usuarios Ajuste</th> <!-- NUEVA COLUMNA -->
-                                        <th>Fecha de ajuste</th>
-                                        <th>Puntos cero</th>
-                                        <th>Posible irregularidad</th>
-                                        <th>Usuario de irregularidad</th>
-                                        <th>Descripción de irregularidad</th>
-                                        <th>Tipo de diferencia</th>
-                                        <th>Total salidas por tienda</th>
-                                        <th>Total salidas a clientes</th>
-                                        <th>Salida max. por tienda</th>
-                                        <th>Salida min. por tienda</th>
-                                        <th>Salida max. a clientes</th>
-                                        <th>Salida min. a clientes</th>
-                                        <th>Promedio salida por tienda</th>
-                                        <th>Promedio salida por cliente</th>
-                                        <th>Stock Actual</th>
+                                        <th data-col="material" class="th-ordenable">Material</th>
+                                        <th data-col="texto" class="th-ordenable">Texto breve</th>
+                                        <th data-col="umb" class="th-ordenable">UMB</th>
+                                        <th data-col="centro" class="th-ordenable">Centro</th>
+                                        <th data-col="tienda" class="th-ordenable">Tienda</th>
+                                        <th data-col="rangoFecha" class="th-ordenable">Rango de fecha</th>
+                                        <th data-col="ultimoIngreso" class="th-ordenable">Último ingreso</th>
+                                        <th data-col="ajustes" class="th-ordenable">Ajustes (+ / -)</th>
+                                        <th data-col="usuariosAjuste" class="th-ordenable">Usuarios Ajuste</th> <!-- NUEVA COLUMNA -->
+                                        <th data-col="fechaAjuste" class="th-ordenable">Fecha de ajuste</th>
+                                        <th data-col="puntosCero" class="th-ordenable">Puntos cero</th>
+                                        <th data-col="posibleIrregularidad" class="th-ordenable">Posible irregularidad</th>
+                                        <th data-col="usuarioIrregularidad" class="th-ordenable">Usuario de irregularidad</th>
+                                        <th data-col="descIrregularidad" class="th-ordenable">Descripción de irregularidad</th>
+                                        <th data-col="tipoDiferencia" class="th-ordenable">Tipo de diferencia</th>
+                                        <th data-col="totalSalidasTienda" class="th-ordenable">Total salidas por tienda</th>
+                                        <th data-col="totalSalidasClientes" class="th-ordenable">Total salidas a clientes</th>
+                                        <th data-col="salidaMaxTienda" class="th-ordenable">Salida max. por tienda</th>
+                                        <th data-col="salidaMinTienda" class="th-ordenable">Salida min. por tienda</th>
+                                        <th data-col="salidaMaxClientes" class="th-ordenable">Salida max. a clientes</th>
+                                        <th data-col="salidaMinClientes" class="th-ordenable">Salida min. a clientes</th>
+                                        <th data-col="promedioSalidaTienda" class="th-ordenable">Promedio salida por tienda</th>
+                                        <th data-col="promedioSalidaCliente" class="th-ordenable">Promedio salida por cliente</th>
+                                        <th data-col="stockActual" class="th-ordenable">Stock Actual</th>
                                     </tr>
                                 </thead>
                                 <tbody id="reportBody"></tbody>
@@ -151,14 +197,20 @@ class TrazabilidadSystem {
                 </div>
 
                 <!-- Modal para stock inicial - ACTUALIZADO CON SCROLL -->
+                <!-- Kacosa App: el fondo/color del header y footer ya NO se fuerzan
+                     aquí (antes quedaban fijos en gris oscuro con texto blanco,
+                     ilegibles en modo claro); se dejan en manos de las clases
+                     .modal-header/.modal-footer/.close-btn de styles.css, que ya
+                     siguen las variables de tema (--card-bg, --text, etc). Solo se
+                     mantiene el "sticky" para que no se pierdan al hacer scroll. -->
                 <div id="stockModal" class="modal-overlay hidden">
                     <div class="modal-content" style="max-height: 90vh; overflow-y: auto; width: 90%; max-width: 600px;">
-                        <div class="modal-header" style="position: sticky; top: 0; background: #2d3748; z-index: 10; padding: 20px; border-bottom: 1px solid #4a5568;">
-                            <h5 style="margin: 0; color: white;">Configurar stock inicial</h5>
-                            <button id="closeStockBtnTop" class="close-btn" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">×</button>
+                        <div class="modal-header" style="position: sticky; top: 0; z-index: 10; background: var(--card-bg);">
+                            <h5>Configurar stock inicial</h5>
+                            <button id="closeStockBtnTop" class="close-btn">×</button>
                         </div>
                         <div id="stockModalBody" class="modal-body" style="padding: 20px;"></div>
-                        <div class="modal-footer" style="position: sticky; bottom: 0; background: #2d3748; z-index: 10; padding: 20px; border-top: 1px solid #4a5568; display: flex; gap: 10px; justify-content: flex-end;">
+                        <div class="modal-footer" style="position: sticky; bottom: 0; z-index: 10; background: var(--card-bg);">
                             <button id="saveStockBtn" style="padding: 10px 20px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Guardar</button>
                             <button id="closeStockBtn" class="alt" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Cerrar</button>
                         </div>
@@ -190,6 +242,21 @@ class TrazabilidadSystem {
             console.log('Botón Volver a Reportes clickeado - Delegación'); // Debug
             this.goBackToReports();
         }
+    });
+
+    // Encabezados ordenables de la tabla "Reporte": clic para ordenar
+    // asc/desc por esa columna (se usa delegación porque la tabla puede
+    // volver a construirse mientras el módulo sigue vivo).
+    this.container.addEventListener('click', (e) => {
+        const th = e.target.closest('#reportSection thead th[data-col]');
+        if (!th) return;
+        const columna = th.dataset.col;
+        if (this.ordenReporte.columna === columna) {
+            this.ordenReporte.asc = !this.ordenReporte.asc;
+        } else {
+            this.ordenReporte = { columna, asc: true };
+        }
+        this.renderResults(this.core.results);
     });
 }
 
@@ -823,7 +890,10 @@ goBackToReports() {
 
                 const item = document.createElement('div');
                 item.className = 'material-item';
-                item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 15px; background: rgba(255,255,255,0.02); border-radius: 8px; margin-bottom: 10px;';
+                // Kacosa App: ya no se fuerza aquí un fondo blanco casi transparente
+                // (invisible en modo claro) — la clase .material-item de styles.css
+                // ya trae un estilo correcto y adaptado al tema, así que basta con
+                // dejar que se aplique sola.
                 
                 const left = document.createElement('div');
                 left.style.cssText = 'display: flex; align-items: center; gap: 10px;';
@@ -994,8 +1064,14 @@ goBackToReports() {
         }
 
         toEdit.forEach(m => {
+            // Kacosa App: antes el fondo/borde de esta tarjeta y de los inputs
+            // usaban blancos casi transparentes (rgba(255,255,255,x)), pensados
+            // para un fondo oscuro — en modo claro quedaban blanco-sobre-blanco,
+            // casi invisibles. Se cambia a rgba(15,23,42,x), el mismo tono que ya
+            // usa el resto de la app (.custom-select, .auth-card input, etc.) y
+            // que sí se distingue tanto en modo claro como oscuro.
             const wrapper = document.createElement('div');
-            wrapper.style.cssText = 'margin-bottom: 20px; padding: 15px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);';
+            wrapper.style.cssText = 'margin-bottom: 20px; padding: 15px; background: rgba(15,23,42,0.03); border-radius: 8px; border: 1px solid rgba(15,23,42,0.1);';
             wrapper.dataset.key = m.key;
             
             const h = document.createElement('h6');
@@ -1008,7 +1084,7 @@ goBackToReports() {
             
             const dateInput = document.createElement('input');
             dateInput.type = 'date';
-            dateInput.style.cssText = 'width: 100%; padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: var(--text); margin-bottom: 15px; font-size: 1rem;';
+            dateInput.style.cssText = 'width: 100%; padding: 10px; border-radius: 6px; border: 1px solid rgba(15,23,42,0.15); background: rgba(15,23,42,0.03); color: var(--text); margin-bottom: 15px; font-size: 1rem;';
             
             const oldest = this.core.getOldestDateForKey(m.key);
             dateInput.value = oldest ? oldest.toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
@@ -1021,7 +1097,7 @@ goBackToReports() {
             stockInput.type = 'number';
             stockInput.step = '0.01';
             stockInput.min = '0';
-            stockInput.style.cssText = 'width: 100%; padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: var(--text); font-size: 1rem;';
+            stockInput.style.cssText = 'width: 100%; padding: 10px; border-radius: 6px; border: 1px solid rgba(15,23,42,0.15); background: rgba(15,23,42,0.03); color: var(--text); font-size: 1rem;';
             
             if (this.core.initialStocks[m.key]) { 
                 stockInput.value = this.core.initialStocks[m.key].stock; 
@@ -1044,11 +1120,36 @@ goBackToReports() {
     renderResults(resultsArr) {
         const reportBody = document.getElementById('reportBody');
         const dateRangeSpan = document.getElementById('reportMeta');
-        
+
+        // Calcula (o recalcula) los textos combinados de irregularidades y los
+        // guarda en cada fila, para poder ordenar la tabla por esas columnas
+        // igual que por el resto (ver valorColumnaReporte()).
+        resultsArr.forEach(r => {
+            const todasIrregularidades = r.irregularidadesAll || [];
+            r._posibleIrregularidad = todasIrregularidades.length > 0 ? todasIrregularidades.map(i => i.tipo).join('; ') : '-';
+            r._usuarioIrregularidad = todasIrregularidades.length > 0 ? todasIrregularidades.map(i => i.usuario).join('; ') : '-';
+            r._descIrregularidad = todasIrregularidades.length > 0 ? todasIrregularidades.map(i => i.descripcion).join(' | ') : '-';
+        });
+
+        // Aplica el orden actual (columna + asc/desc) elegido desde los
+        // encabezados, sin alterar el array original de resultados.
+        let filas = resultsArr;
+        if (this.ordenReporte.columna) {
+            const numerica = TrazabilidadSystem.COLUMNAS_REPORTE_NUMERICAS.has(this.ordenReporte.columna);
+            filas = [...resultsArr].sort((a, b) => {
+                const va = this.valorColumnaReporte(a, this.ordenReporte.columna);
+                const vb = this.valorColumnaReporte(b, this.ordenReporte.columna);
+                if (numerica) return this.ordenReporte.asc ? va - vb : vb - va;
+                return this.ordenReporte.asc
+                    ? String(va).localeCompare(String(vb), 'es')
+                    : String(vb).localeCompare(String(va), 'es');
+            });
+        }
+
         reportBody.innerHTML = '';
         dateRangeSpan.textContent = `Rango de fechas: ${resultsArr.map(r => r.rangoFecha).join(' | ')}`;
-        
-        resultsArr.forEach(r => {
+
+        filas.forEach(r => {
             const tr = document.createElement('tr');
             
             const td = (txt, cls = '') => {
@@ -1058,14 +1159,6 @@ goBackToReports() {
                 return cell;
             };
 
-            // Obtener todos los errores
-            const todasIrregularidades = r.irregularidadesAll || [];
-            
-            // Crear strings con todos los errores
-            const todosTipos = todasIrregularidades.map(i => i.tipo).join('; ');
-            const todosUsuarios = todasIrregularidades.map(i => i.usuario).join('; ');
-            const todasDescripciones = todasIrregularidades.map(i => i.descripcion).join(' | ');
-            
             tr.appendChild(td(r.material));
             tr.appendChild(td(r.texto));
             tr.appendChild(td(r.umb));
@@ -1077,16 +1170,9 @@ goBackToReports() {
             tr.appendChild(td(r.usuariosAjuste)); // NUEVA CELDA - Usuarios de ajuste
             tr.appendChild(td(r.fechaAjuste));
             tr.appendChild(td(r.puntosCero));
-            
-            // Mostrar TODOS los tipos de irregularidad
-            tr.appendChild(td(todasIrregularidades.length > 0 ? todosTipos : '-'));
-            
-            // Mostrar TODOS los usuarios de irregularidad
-            tr.appendChild(td(todasIrregularidades.length > 0 ? todosUsuarios : '-'));
-            
-            // Mostrar TODAS las descripciones de irregularidad
-            tr.appendChild(td(todasIrregularidades.length > 0 ? todasDescripciones : '-'));
-            
+            tr.appendChild(td(r._posibleIrregularidad));
+            tr.appendChild(td(r._usuarioIrregularidad));
+            tr.appendChild(td(r._descIrregularidad));
             tr.appendChild(td(r.tipoDiferencia));
             tr.appendChild(td(Math.abs(r.totalSalidasTienda), 'negative-diff'));
             tr.appendChild(td(Math.abs(r.totalSalidasClientes), 'negative-diff'));
@@ -1104,6 +1190,7 @@ goBackToReports() {
             reportBody.appendChild(tr);
         });
 
+        this.actualizarEncabezadosReporte();
         this.renderCharts(resultsArr);
     }
 
