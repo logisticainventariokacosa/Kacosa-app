@@ -24,6 +24,12 @@
     --card-bg: #ffffff;
     --card-news: #ffffff;
     --muted: #64748b;
+    /* Kacosa App: le dice al navegador que dibuje los controles nativos
+       (el desplegable de <select> entre otros) con esquema claro. Sin esto,
+       el navegador podía pintar la opción ya seleccionada de un <select>
+       con texto blanco (esquema oscuro por defecto) sobre el fondo claro
+       de esta app — quedaba invisible al volver a abrir la lista. */
+    color-scheme: light;
   }
   body {
     background: #ffffff !important;
@@ -53,6 +59,7 @@
     --card-bg: #1a1d23;
     --card-news: #1a1d23;
     --muted: #94a3b8;
+    color-scheme: dark;
   }
   html.kacosa-dark body { background: #0f1115 !important; }
   html.kacosa-dark .card-item img,
