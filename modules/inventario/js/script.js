@@ -30,7 +30,7 @@ const db = firebase.firestore();
 // se agregó para que pueda entrar a Reportes; el menú del shell (js/shell.js)
 // sigue ocultándole Trazabilidad/Consultas, aunque técnicamente podría llegar
 // a esas secciones si escribe la URL a mano.
-const ROLES_PERMITIDOS = ["admin", "supervisor", "directiva", "gerente", "abastecimiento"];
+const ROLES_PERMITIDOS = ["admin", "supervisor", "directiva", "gerente", "abastecimiento","coordinador"];
 
 // Revisa si el correo está dado de alta en el portal y con un rol permitido para esta app,
 // y devuelve además el perfil completo (rol + tiendas asignadas) para poder aplicar el
