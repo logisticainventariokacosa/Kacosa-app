@@ -10,7 +10,7 @@ import { mostrarLoader, ocultarLoader } from "./loader.js";
 
 // Roles que tienen acceso a ESTA app (Análisis de Abastecimiento)
 export const ROLES_PERMITIDOS_ABASTECIMIENTO = [
-  "gerente", "supervisor", "abastecimiento", "compras", "admin", "directiva"
+  "gerente", "supervisor", "abastecimiento", "compras", "admin", "directiva", "coordinador"
 ];
 
 // Busca el perfil del usuario en la colección "usuarios" del Portal KACOSA
