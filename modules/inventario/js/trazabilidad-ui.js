@@ -207,7 +207,6 @@ class TrazabilidadSystem {
                     <div class="modal-content" style="max-height: 90vh; overflow-y: auto; width: 90%; max-width: 600px;">
                         <div class="modal-header" style="position: sticky; top: 0; z-index: 10; background: var(--card-bg);">
                             <h5>Configurar stock inicial</h5>
-                            <button id="closeStockBtnTop" class="close-btn">×</button>
                         </div>
                         <div id="stockModalBody" class="modal-body" style="padding: 20px;"></div>
                         <div class="modal-footer" style="position: sticky; bottom: 0; z-index: 10; background: var(--card-bg);">
@@ -759,12 +758,7 @@ goBackToReports() {
             if (modalEventsInitialized) return;
             
             // Eventos del modal de stock - CORREGIDOS CON EVENT LISTENERS DIRECTOS
-            document.getElementById('closeStockBtnTop').addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                this.closeModal();
-            }.bind(this));
-
+            // (el botón "×" de arriba se quitó a pedido — solo queda "Cerrar" abajo)
             document.getElementById('closeStockBtn').addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
