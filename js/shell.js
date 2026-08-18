@@ -149,13 +149,36 @@ const headerModuleLabel = document.getElementById("header-module-label");
 let rolActual = null;
 let submoduloActivoId = null;
 
+/* ===================== Salvaguarda de timeout para login =====================
+   Antes, si signInWithPopup / signInWithEmailAndPassword nunca resolvían ni
+   rechazaban (conexión lenta/intermitente, extensión del navegador que bloquea
+   la petición, etc.), el mensaje "Conectando…" se quedaba pegado para siempre:
+   no había ningún límite de tiempo esperando la respuesta.
+   Esta función corre la promesa real contra un límite de tiempo (mismo
+   espíritu que el "setTimeout" de seguridad que ya existe para el boot-loader
+   más abajo) y, si se cumple el límite antes de que la promesa responda,
+   rechaza con un código propio "auth/timeout" para poder mostrar un mensaje
+   claro en vez de dejar la pantalla congelada. Si la promesa original termina
+   llegando después (tarde), no pasa nada: si tuvo éxito, onAuthStateChanged
+   igual continúa el flujo normal y reemplaza el mensaje de error. */
+function conTimeout(promesa, ms) {
+  return Promise.race([
+    promesa,
+    new Promise((_, reject) => {
+      setTimeout(() => reject({ code: "auth/timeout" }), ms);
+    })
+  ]);
+}
+
 /* ===================== LOGIN ===================== */
 document.getElementById("btn-login").addEventListener("click", () => {
   loginStatus.classList.remove("text-kacosa-600");
   loginStatus.textContent = "Conectando…";
-  signInWithPopup(auth, googleProvider).catch(err => {
+  conTimeout(signInWithPopup(auth, googleProvider), 20000).catch(err => {
     loginStatus.classList.add("text-kacosa-600");
-    loginStatus.textContent = "No se pudo iniciar sesión (" + err.code + ")";
+    loginStatus.textContent = err.code === "auth/timeout"
+      ? "La conexión está tardando demasiado. Verifica tu internet e inténtalo de nuevo."
+      : "No se pudo iniciar sesión (" + err.code + ")";
   });
 });
 
@@ -181,10 +204,12 @@ emailForm.addEventListener("submit", async (e) => {
   loginStatus.classList.remove("text-kacosa-600");
   loginStatus.textContent = "Conectando…";
   try {
-    await signInWithEmailAndPassword(auth, email, pass);
+    await conTimeout(signInWithEmailAndPassword(auth, email, pass), 20000);
   } catch (err) {
     loginStatus.classList.add("text-kacosa-600");
-    loginStatus.textContent = mensajeError(err.code);
+    loginStatus.textContent = err.code === "auth/timeout"
+      ? "La conexión está tardando demasiado. Verifica tu internet e inténtalo de nuevo."
+      : mensajeError(err.code);
   }
 });
 
@@ -214,12 +239,14 @@ document.getElementById("btn-forgot-password").addEventListener("click", async (
 
   loginStatus.textContent = "Enviando enlace de recuperación…";
   try {
-    await sendPasswordResetEmail(auth, email);
+    await conTimeout(sendPasswordResetEmail(auth, email), 20000);
     loginStatus.classList.remove("text-kacosa-600");
     loginStatus.textContent = "Te enviamos un correo a " + email + " para restablecer tu contraseña.";
   } catch (err) {
     loginStatus.classList.add("text-kacosa-600");
-    loginStatus.textContent = mensajeError(err.code);
+    loginStatus.textContent = err.code === "auth/timeout"
+      ? "La conexión está tardando demasiado. Verifica tu internet e inténtalo de nuevo."
+      : mensajeError(err.code);
   }
 });
 
@@ -248,11 +275,16 @@ changePasswordForm.addEventListener("submit", async (e) => {
   changePasswordStatus.textContent = "Verificando…";
   try {
     const cred = EmailAuthProvider.credential(auth.currentUser.email, p1);
-    await reauthenticateWithCredential(auth.currentUser, cred);
+    await conTimeout(reauthenticateWithCredential(auth.currentUser, cred), 20000);
     changePasswordStatus.classList.add("text-kacosa-600");
     changePasswordStatus.textContent = "La nueva contraseña no puede ser igual a la temporal. Elige una diferente.";
     return;
   } catch (err) {
+    if (err.code === "auth/timeout") {
+      changePasswordStatus.classList.add("text-kacosa-600");
+      changePasswordStatus.textContent = "La conexión está tardando demasiado. Verifica tu internet e inténtalo de nuevo.";
+      return;
+    }
     const codigosEsperados = ["auth/wrong-password", "auth/invalid-credential", "auth/user-mismatch"];
     if (!codigosEsperados.includes(err.code)) {
       changePasswordStatus.classList.add("text-kacosa-600");
@@ -263,12 +295,14 @@ changePasswordForm.addEventListener("submit", async (e) => {
 
   changePasswordStatus.textContent = "Guardando…";
   try {
-    await updatePassword(auth.currentUser, p1);
-    await updateDoc(doc(db, "usuarios", auth.currentUser.email), { passwordTemporal: false });
+    await conTimeout(updatePassword(auth.currentUser, p1), 20000);
+    await conTimeout(updateDoc(doc(db, "usuarios", auth.currentUser.email), { passwordTemporal: false }), 20000);
     location.reload();
   } catch (err) {
     changePasswordStatus.classList.add("text-kacosa-600");
-    changePasswordStatus.textContent = "No se pudo actualizar (" + err.code + "). Vuelve a iniciar sesión e inténtalo de nuevo.";
+    changePasswordStatus.textContent = err.code === "auth/timeout"
+      ? "La conexión está tardando demasiado. Verifica tu internet e inténtalo de nuevo."
+      : "No se pudo actualizar (" + err.code + "). Vuelve a iniciar sesión e inténtalo de nuevo.";
   }
 });
 
