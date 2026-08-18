@@ -40,7 +40,7 @@ onAuthStateChanged(auth, async (user) => {
   const rolNormalizado = (rol || "").toString().trim().toLowerCase();
   const esGerente = rolNormalizado === "gerente";
   const ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS = [
-    "supervisor", "abastecimiento", "compras", "admin", "directiva"
+    "supervisor", "abastecimiento", "compras", "admin", "directiva","coordinador"
   ];
   const veTodasLasTiendas = ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS.includes(rolNormalizado);
   // El campo en Firestore es "tiendas" (array), no "tienda" (string) — un
