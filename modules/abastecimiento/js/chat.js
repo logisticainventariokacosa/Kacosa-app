@@ -30,7 +30,11 @@ function construirUI() {
     </div>
     <div class="chat-mensajes" id="chat-mensajes">
       <div class="chat-msg chat-msg-agente">
-        Hola, soy tu asistente de análisis de datos y abastecimiento. Genera o carga un análisis y pregúntame lo que necesites saber sobre los resultados.
+        Hola, soy tu asistente de abastecimiento. Puedo responder preguntas sobre el análisis,
+        el dashboard o las alertas Kacosa que tengas cargados en esta sesión, y también puedo
+        buscar en internet información general que no dependa de los datos de KACOSA.
+        No tengo acceso en vivo a la base de datos completa: si preguntas algo que no está
+        cargado en esta sesión, te lo diré en vez de inventar una respuesta.
       </div>
     </div>
     <form id="chat-form" class="chat-form">
@@ -49,13 +53,8 @@ function construirUI() {
 }
 
 // ============================================================
-//  VOZ: hablarle al agente (reconocimiento de voz) y que responda
-//  hablado (texto a voz). Usa la Web Speech API del navegador,
-//  no requiere backend ni configuración adicional.
-// ============================================================
-// ============================================================
 //  VOZ: hablarle al agente (reconocimiento de voz, dictar la pregunta) y
-//  escuchar una respuesta puntual con el botón de cada mensaje. Ya NO hay
+//  escuchar una respuesta puntual con el botón de cada mensaje. No hay
 //  lectura automática de respuestas ni modo manos libres: el agente solo
 //  lee en voz alta cuando el usuario pulsa el botón de esa respuesta.
 //  Usa la Web Speech API del navegador, no requiere backend ni configuración.
@@ -201,7 +200,7 @@ function actualizarContextoInfo() {
   info.textContent = primerNombre ? `Hola, ${primerNombre}` : "Hola";
 }
 
-function agregarMensaje(texto, rol, archivo) {
+function agregarMensaje(texto, rol) {
   const cont = document.getElementById("chat-mensajes");
   const div = document.createElement("div");
   div.className = "chat-msg " + (rol === "agente" ? "chat-msg-agente" : "chat-msg-usuario");
@@ -211,57 +210,23 @@ function agregarMensaje(texto, rol, archivo) {
   textoEl.textContent = texto;
   div.appendChild(textoEl);
 
-  if (rol === "agente" && (window.speechSynthesis || archivo)) {
+  if (rol === "agente" && window.speechSynthesis) {
     const acciones = document.createElement("div");
     acciones.className = "chat-msg-acciones";
 
-    if (window.speechSynthesis) {
-      const btnEscuchar = document.createElement("button");
-      btnEscuchar.className = "chat-msg-escuchar";
-      btnEscuchar.type = "button";
-      btnEscuchar.title = "Escuchar esta respuesta";
-      btnEscuchar.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
-      btnEscuchar.addEventListener("click", () => hablar(texto));
-      acciones.appendChild(btnEscuchar);
-    }
-
-    if (archivo) {
-      const btnDescargar = document.createElement("button");
-      btnDescargar.className = "chat-msg-descargar";
-      btnDescargar.type = "button";
-      const iconoFormato = archivo.mimeType.includes("pdf") ? "fa-file-pdf"
-        : archivo.mimeType.includes("word") ? "fa-file-word"
-        : "fa-file-excel";
-      btnDescargar.innerHTML = `<i class="fa-solid ${iconoFormato}"></i> Descargar ${archivo.nombre}`;
-      btnDescargar.addEventListener("click", () => descargarArchivoDelChat_(archivo));
-      acciones.appendChild(btnDescargar);
-    }
+    const btnEscuchar = document.createElement("button");
+    btnEscuchar.className = "chat-msg-escuchar";
+    btnEscuchar.type = "button";
+    btnEscuchar.title = "Escuchar esta respuesta";
+    btnEscuchar.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+    btnEscuchar.addEventListener("click", () => hablar(texto));
+    acciones.appendChild(btnEscuchar);
 
     div.appendChild(acciones);
   }
 
   cont.appendChild(div);
   cont.scrollTop = cont.scrollHeight;
-}
-
-/** Convierte el archivo base64 que devolvió el backend en una descarga real del navegador. */
-function descargarArchivoDelChat_(archivo) {
-  try {
-    const bytes = atob(archivo.base64);
-    const arr = new Uint8Array(bytes.length);
-    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-    const blob = new Blob([arr], { type: archivo.mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = archivo.nombre;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-  } catch (err) {
-    console.error("No se pudo descargar el archivo:", err);
-  }
 }
 
 async function enviarPregunta(e) {
@@ -319,7 +284,7 @@ async function enviarPregunta(e) {
     contexto.totalAlertasKacosa = alertasKacosa.length;
   }
 
-  // Contexto del "Dashboard" (último análisis guardado en Sheets para la tienda vista)
+  // Contexto del "Dashboard" (último análisis guardado para la tienda vista)
   if (dashboardAnalisis) {
     contexto.dashboard = {
       tienda: nombrePorId(dashboardAnalisis.tienda),
@@ -337,7 +302,7 @@ async function enviarPregunta(e) {
   cargando.remove();
 
   const respuesta = resp.ok ? resp.respuesta : "No pude responder: " + resp.error;
-  agregarMensaje(respuesta, "agente", resp.archivo || null);
+  agregarMensaje(respuesta, "agente");
   historial.push({ rol: "agente", texto: respuesta });
 }
 
