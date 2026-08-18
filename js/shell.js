@@ -19,8 +19,8 @@ import { doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12
    de negocio reales de KACOSA; se tomó como base los roles que ya
    usaba cada app por separado.
    ===================================================================== */
-const ROLES_INVENTARIO = ["admin", "supervisor", "directiva", "gerente"];
-const ROLES_ABASTECIMIENTO = ["gerente", "supervisor", "abastecimiento", "compras", "admin", "directiva"];
+const ROLES_INVENTARIO = ["admin", "supervisor", "directiva", "gerente","coordinador"];
+const ROLES_ABASTECIMIENTO = ["gerente", "supervisor", "abastecimiento", "compras", "admin", "directiva","coordinador"];
 const ROLES_DASHBOARD_INV = ["coordinador", "directiva", "admin", "supervisor"];
 // Reportes (Noticias/Imágenes/Documentos) usa la misma base que Inventario,
 // más "abastecimiento" para que ese rol también tenga acceso.
