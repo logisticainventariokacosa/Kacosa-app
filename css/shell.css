@@ -569,6 +569,18 @@ body.modo-bienvenida .sticky.top-0 #role-badge {
   -webkit-box-shadow: 0 0 0 1000px rgba(30, 41, 59, .95) inset;
   transition: background-color 9999s ease-in-out 0s;
 }
+/* Edge (y Chromium basados en él) agrega su PROPIO ícono nativo de "mostrar
+   contraseña" (un ojito) dentro de todo <input type="password">. Como ya
+   tenemos nuestro propio botón de ojito (.toggle-eye) superpuesto con
+   position:absolute, por un instante se alcanzan a ver los dos ojitos a la
+   vez (el nativo aparece/desaparece solo, apenas hay texto en el campo).
+   Se desactiva el nativo aquí para que solo quede el nuestro. */
+.auth-input::-ms-reveal,
+.auth-input::-ms-clear {
+  display: none;
+  width: 0;
+  height: 0;
+}
 
 .auth-eye-btn {
   position: absolute; right: .25rem; top: 50%; transform: translateY(-50%);
