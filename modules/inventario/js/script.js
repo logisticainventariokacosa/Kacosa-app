@@ -390,13 +390,16 @@ function valorColumna(r, key) {
         case 'ultimoAuditor': {
             // Cuando un material se contó en más de un almacén de la misma tienda
             // (ej. Ubicación General por un analista y Ubicación Exhibición por
-            // otro), se muestran ambos nombres en vez de descartar uno.
-            const principal = safeString(getField(r, 'ultimoAuditor', 'auditor', 'auditorGeneral', 'ultimoAuditorGeneral'));
+            // otro), se muestran ambos nombres en vez de descartar uno. El backend
+            // (acción "buscar_material") ya manda los campos "auditorGeneral" y
+            // "auditorExhibicion" por separado (además de "ultimoAuditor", que se
+            // deja como respaldo por si vinieran de una fuente más vieja).
+            const principal = safeString(getField(r, 'auditorGeneral', 'ultimoAuditor', 'auditor', 'ultimoAuditorGeneral'));
             const secundario = safeString(getField(r, 'auditorExhibicion', 'ultimoAuditorExhibicion', 'auditorExhib', 'segundoAuditor', 'ultimoAuditor2'));
             if (secundario && secundario.trim().toLowerCase() !== principal.trim().toLowerCase()) {
                 return [principal, secundario].filter(Boolean).join(' / ');
             }
-            return principal;
+            return principal || secundario;
         }
         case 'difGeneral': return safeString(getField(r, 'difGeneral', 'dif_general'));
         case 'difExhibicion': return safeString(getField(r, 'difExhibicion', 'difExhib', 'dif_exhib'));
