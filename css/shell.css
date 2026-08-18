@@ -359,27 +359,42 @@ body.modo-bienvenida .sticky.top-0 #role-badge {
 /* ===================== PANTALLA DE LOGIN / CAMBIO DE CONTRASEÑA =====================
    Tema de marca fijo (no sigue el claro/oscuro del resto del portal, ver nota en el
    HTML): fondo "frost" en tonos navy que remite al negocio de KACOSA (refrigeración),
-   con un acento cálido rojo/ámbar de marca en el llamado a la acción. */
+   con un acento cálido rojo/ámbar de marca en el llamado a la acción.
+
+   AJUSTE DE ALTURA (fix "login muy largo, hay que hacer scroll"): el shell y la
+   tarjeta ahora se dimensionan con clamp() en función de la altura de ventana (vh)
+   en vez de valores fijos en rem, y el shell se fija exactamente al alto visible
+   (100dvh menos el footer) con su propio overflow-y como respaldo. Así la tarjeta
+   siempre encoge lo necesario para caber completa y centrada, sin depender de que
+   el usuario haga scroll, y sigue siendo igual de responsive en móvil/tablet/PC. */
 
 .auth-shell {
   position: relative;
-  /* Resta el alto del footer fijo (44px) para que la tarjeta se centre en el
-     espacio realmente visible arriba del footer, en vez de quedar pegada a
-     él (el body ya reserva esos 44px aparte con padding-bottom). */
-  min-height: calc(100vh - 44px);
-  min-height: calc(100dvh - 44px);
   overflow: hidden;
   background:
     radial-gradient(ellipse 900px 600px at 15% -10%, rgba(56, 97, 158, .35), transparent 55%),
     radial-gradient(ellipse 700px 500px at 105% 105%, rgba(197, 25, 25, .16), transparent 55%),
     linear-gradient(180deg, #0b1220 0%, #0a0e18 55%, #090c14 100%);
-  /* Make auth screens center their content both vertically and horizontally.
-     Previously the HTML used utility classes like "items-center"/"justify-center"
-     which don't exist here; adding flex ensures the login card is centered on desktop. */
   display: flex;
   align-items: center;
   justify-content: center;
   flex-direction: column;
+}
+/* Selector con #id para ganarle en especificidad a las utilidades de Tailwind
+   (px-4 py-10) puestas inline en el HTML, que si no quedarían fijas y romperían
+   el ajuste por altura de ventana. El shell ocupa exactamente el alto visible
+   (viewport menos el footer de 44px); si en una pantalla muy pequeña aun así no
+   alcanzara, se habilita scroll propio aquí (nunca en toda la página). */
+#login-screen.auth-shell,
+#change-password-screen.auth-shell {
+  height: calc(100vh - 44px);
+  height: calc(100dvh - 44px);
+  min-height: 0;
+  overflow-y: auto;
+  padding-top: clamp(0.75rem, 3vh, 2.5rem) !important;
+  padding-bottom: clamp(0.75rem, 3vh, 2.5rem) !important;
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
 }
 .auth-shell::before {
   /* Textura tipo "plano técnico" a bajo contraste — guiño a SAP/logística sin competir con el contenido */
@@ -433,7 +448,11 @@ body.modo-bienvenida .sticky.top-0 #role-badge {
   z-index: 1;
   width: 100%;
   max-width: 26rem;
-  padding: 2.25rem 1.75rem;
+  max-height: 100%;
+  overflow-y: auto;
+  /* Antes: padding fijo 2.25rem/2.75rem. Ahora escala con la altura de ventana
+     (vh) para que en pantallas bajas la tarjeta se encoja en vez de desbordar. */
+  padding: clamp(1.1rem, 4vh, 2.75rem) clamp(1.25rem, 5vw, 2.5rem);
   border-radius: 1.5rem;
   background: rgba(19, 27, 46, .62);
   border: 1px solid rgba(255, 255, 255, .08);
@@ -444,7 +463,6 @@ body.modo-bienvenida .sticky.top-0 #role-badge {
   animation: auth-card-in .5s cubic-bezier(.16, 1, .3, 1);
 }
 .auth-card *, .auth-card *::before, .auth-card *::after { box-sizing: border-box; }
-@media (min-width: 640px) { .auth-card { padding: 2.75rem 2.5rem; } }
 @keyframes auth-card-in {
   from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -453,44 +471,51 @@ body.modo-bienvenida .sticky.top-0 #role-badge {
   .auth-card { animation: none; }
 }
 
+/* Encabezado (logo + título + subtítulo): el HTML usa la utilidad "mb-7" de
+   Tailwind (1.75rem fijo) — se sobrescribe aquí para que también escale con
+   la altura de ventana, igual que el resto de la tarjeta. */
+.auth-card .mb-7 {
+  margin-bottom: clamp(0.75rem, 3vh, 1.75rem) !important;
+}
+
 .auth-logo {
   width: auto;
-  height: 5.5rem;
+  height: clamp(3rem, 9vh, 5.5rem);
   max-width: 78%;
   object-fit: contain;
   border-radius: 1rem;
   background: #fff;
-  padding: .65rem .9rem;
+  padding: .55rem .8rem;
   box-shadow: 0 12px 30px -8px rgba(0, 0, 0, .5);
-  margin-bottom: 1.1rem;
+  margin-bottom: clamp(0.5rem, 1.6vh, 1.1rem);
 }
 .auth-logo-ring {
   position: relative;
   display: flex; align-items: center; justify-content: center;
-  width: 5.5rem; height: 5.5rem;
-  margin-bottom: 1.1rem;
+  width: clamp(3rem, 9vh, 5.5rem); height: clamp(3rem, 9vh, 5.5rem);
+  margin-bottom: clamp(0.5rem, 1.6vh, 1.1rem);
   border-radius: 1.25rem;
   background: rgba(255, 255, 255, .92);
   box-shadow: 0 0 0 1px rgba(255, 255, 255, .1), 0 12px 30px -8px rgba(0, 0, 0, .5);
 }
 .auth-title {
   font-family: 'Space Grotesk', 'Inter', sans-serif;
-  font-size: 1.6rem;
+  font-size: clamp(1.2rem, 3.4vh, 1.6rem);
   font-weight: 700;
   letter-spacing: -0.01em;
   color: #f8fafc;
 }
 .auth-subtitle {
-  margin-top: .55rem;
-  font-size: .875rem;
-  line-height: 1.55;
+  margin-top: clamp(0.3rem, 1vh, .55rem);
+  font-size: .8rem;
+  line-height: 1.5;
   color: #94a3b8;
 }
 
 .auth-btn-google {
   width: 100%;
   display: flex; align-items: center; justify-content: center; gap: .7rem;
-  padding: .8rem 1rem;
+  padding: clamp(0.6rem, 1.8vh, .8rem) 1rem;
   border-radius: .7rem;
   border: 1px solid rgba(255, 255, 255, .14);
   background: rgba(255, 255, 255, .05);
@@ -504,7 +529,7 @@ body.modo-bienvenida .sticky.top-0 #role-badge {
 
 .auth-divider {
   display: flex; align-items: center; gap: .75rem;
-  margin: 1.5rem 0;
+  margin: clamp(0.75rem, 2.6vh, 1.5rem) 0;
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
   letter-spacing: .2em;
@@ -512,9 +537,15 @@ body.modo-bienvenida .sticky.top-0 #role-badge {
 }
 .auth-divider span { flex: 1; height: 1px; background: rgba(255, 255, 255, .12); }
 
+/* El formulario usa "gap-3" de Tailwind (0.75rem fijo); se ajusta un poco
+   hacia abajo en pantallas bajas para ganar aire vertical. */
+.auth-card form {
+  gap: clamp(0.55rem, 1.8vh, 0.75rem) !important;
+}
+
 .auth-input {
   width: 100%;
-  padding: .8rem 1rem;
+  padding: clamp(0.6rem, 1.8vh, .8rem) 1rem;
   border-radius: .7rem;
   border: 1px solid rgba(255, 255, 255, .14);
   background: rgba(255, 255, 255, .05);
@@ -551,7 +582,7 @@ body.modo-bienvenida .sticky.top-0 #role-badge {
 
 .auth-forgot-link {
   align-self: flex-end;
-  margin-top: -.35rem;
+  margin-top: -.25rem;
   font-family: 'Inter', sans-serif;
   font-size: 12px;
   color: #7dd3e0;
@@ -561,7 +592,7 @@ body.modo-bienvenida .sticky.top-0 #role-badge {
 
 .auth-btn-primary {
   width: 100%;
-  padding: .85rem 1rem;
+  padding: clamp(0.65rem, 1.9vh, .85rem) 1rem;
   border-radius: .7rem;
   background: linear-gradient(135deg, #d42323, #a91515);
   color: #fff;
@@ -575,7 +606,7 @@ body.modo-bienvenida .sticky.top-0 #role-badge {
 .auth-btn-primary:active { transform: translateY(1px); }
 
 .auth-status {
-  margin-top: 1rem;
+  margin-top: clamp(0.5rem, 1.6vh, 1rem);
   min-height: 16px;
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
