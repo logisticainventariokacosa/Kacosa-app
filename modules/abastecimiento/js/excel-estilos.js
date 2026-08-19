@@ -37,6 +37,11 @@ const COLORES_ALERTA = {
   "Stock bajo": "FFFCEBD3"
 };
 
+// Fondo para materiales "anexados" (no vinieron en ventas de la tienda; se
+// agregaron porque son de alta rotación y tienen stock en Kacosa pero no en
+// tienda). Tiene prioridad sobre el color de clase, para que salten a la vista.
+const COLOR_ANEXADO = "FFF9D6CF";
+
 /**
  * Construye una hoja de Excel con encabezado estilizado, bordes, anchos de
  * columna automáticos, y coloreado condicional por clase/alerta si aplica.
@@ -60,6 +65,11 @@ export function construirHojaEstilizada(filas, columnas, opciones = {}) {
     let colorFondo = null;
     if (opciones.colorearPorClase && fila.clase) colorFondo = COLORES_CLASE[fila.clase];
     if (opciones.colorearPorAlerta && fila.tipo) colorFondo = COLORES_ALERTA[fila.tipo];
+    // Los "anexados" de alta rotación tienen prioridad sobre el color de clase:
+    // fondo rojo + texto en rojo y negrita, para que se distingan de un vistazo
+    // de los materiales que sí tuvieron ventas registradas.
+    const esAnexado = !!fila.esAnexadoAltaRotacion;
+    if (esAnexado) colorFondo = COLOR_ANEXADO;
 
     columnas.forEach((c, idx) => {
       const addr = XLSX.utils.encode_cell({ r: r + 1, c: idx });
@@ -67,7 +77,8 @@ export function construirHojaEstilizada(filas, columnas, opciones = {}) {
       ws[addr].s = {
         border: BORDE_CELDA,
         alignment: { vertical: "center" },
-        fill: colorFondo ? { fgColor: { rgb: colorFondo } } : undefined
+        fill: colorFondo ? { fgColor: { rgb: colorFondo } } : undefined,
+        font: esAnexado ? { color: { rgb: ROJO }, bold: true } : undefined
       };
     });
   });
