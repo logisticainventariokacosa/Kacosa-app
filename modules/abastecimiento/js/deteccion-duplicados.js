@@ -112,8 +112,9 @@ export async function confirmarConGemini(clusters) {
 
 /**
  * Fusiona en los datos de ventas y stock los grupos de duplicados que el
- * usuario confirmó. El código "canónico" de cada grupo es el que tuvo mayor
- * venta (para conservar el nombre/descr. más relevante).
+ * usuario confirmó. El código "canónico" de cada grupo se elige así: entre
+ * los que tienen stock disponible en Kacosa, el de mayor venta neta; si
+ * ninguno tiene stock en Kacosa, el de mayor venta neta de todo el grupo.
  *
  * @param {Object} ventasPorMaterial - objeto codigo -> {ventaNetaUnidadVenta, ventaNetaUnidadBase, ...}
  * @param {Object} stockTienda - objeto codigo -> {stockDisponible, ...}
@@ -125,10 +126,14 @@ export function fusionarDuplicados(ventasPorMaterial, stockTienda, stockKacosa, 
     const presentes = codigos.filter(c => ventasPorMaterial[c]);
     if (presentes.length < 2) return;
 
-    // El canónico es el de mayor venta neta (unidad de venta)
-    const canonico = presentes.reduce((mejor, c) =>
+    // El canónico se elige así: entre los que SÍ tienen stock en Kacosa, el de
+    // mayor venta neta; si ninguno tiene stock en Kacosa, entonces sí se usa el
+    // de mayor venta neta de todo el grupo (comportamiento anterior).
+    const conStockKacosa = presentes.filter(c => (stockKacosa[c]?.stockDisponible || 0) > 0);
+    const candidatos = conStockKacosa.length > 0 ? conStockKacosa : presentes;
+    const canonico = candidatos.reduce((mejor, c) =>
       ventasPorMaterial[c].ventaNetaUnidadVenta > ventasPorMaterial[mejor].ventaNetaUnidadVenta ? c : mejor
-    , presentes[0]);
+    , candidatos[0]);
 
     presentes.forEach(c => {
       if (c === canonico) return;
