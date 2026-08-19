@@ -20,6 +20,7 @@ const CENTROS_KACOSA = ["1000", "3000"];
 
 let ultimasAlertas = [];
 let periodoSeleccionado = 1;
+let categoriaTiendaSeleccionada = "Tiendas"; // 'Ferretools' | 'Kacosa' | 'Tiendas'
 let mapaEmpaques = {};
 let archivoValido = false;
 let filasCache = null;
@@ -47,6 +48,18 @@ function render() {
           <input type="file" id="input-stock-kacosa" accept=".mht,.MHT">
         </div>
         <div id="validacion-stock-kacosa-alertas" class="estado-texto" style="color:var(--verde-kpi); font-size:12px; margin-top:4px"></div>
+      </div>
+
+      <div style="margin-top:16px">
+        <label class="form-label">Tienda a analizar <span class="required">*</span></label>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
+          <button class="btn-categoria-tienda" data-categoria="Ferretools" style="padding:8px 20px; border:2px solid var(--borde); border-radius:var(--radio-peq); background:var(--blanco); color:var(--texto-principal); cursor:pointer; font-weight:600">Ferretools</button>
+          <button class="btn-categoria-tienda" data-categoria="Kacosa" style="padding:8px 20px; border:2px solid var(--borde); border-radius:var(--radio-peq); background:var(--blanco); color:var(--texto-principal); cursor:pointer; font-weight:600">Kacosa</button>
+          <button class="btn-categoria-tienda activo" data-categoria="Tiendas" style="padding:8px 20px; border:2px solid var(--azul-base); border-radius:var(--radio-peq); background:var(--azul-base); color:#fff; cursor:pointer; font-weight:600">Tiendas</button>
+        </div>
+        <p style="color:var(--texto-secundario); font-size:12px; margin:6px 0 0">
+          Ignora en el cálculo los materiales de alta rotación que pertenecen a las otras 2 categorías.
+        </p>
       </div>
 
       <div style="margin-top:16px">
@@ -81,6 +94,23 @@ function render() {
 
   archivoValido = false;
   filasCache = null;
+  categoriaTiendaSeleccionada = "Tiendas";
+
+  document.querySelectorAll('.btn-categoria-tienda').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.btn-categoria-tienda').forEach(b => {
+        b.classList.remove('activo');
+        b.style.background = 'var(--blanco)';
+        b.style.color = 'var(--texto-principal)';
+        b.style.borderColor = 'var(--borde)';
+      });
+      this.classList.add('activo');
+      this.style.background = 'var(--azul-base)';
+      this.style.color = '#fff';
+      this.style.borderColor = 'var(--azul-base)';
+      categoriaTiendaSeleccionada = this.dataset.categoria;
+    });
+  });
 
   document.querySelectorAll('.btn-periodo').forEach(btn => {
     btn.addEventListener('click', function() {
@@ -198,7 +228,8 @@ async function cargarUltimaAlertaGuardada() {
 
     if (estado) {
       const fecha = resp.creadoEn ? new Date(resp.creadoEn).toLocaleString("es-VE") : "";
-      estado.innerHTML = `<i class="fa-solid fa-clock-rotate-left"></i> Mostrando el último análisis guardado${fecha ? " (" + fecha + ")" : ""}. Sube un archivo nuevo para recalcular.`;
+      const categoriaTxt = resp.categoriaTienda ? ` — tienda: ${resp.categoriaTienda}` : "";
+      estado.innerHTML = `<i class="fa-solid fa-clock-rotate-left"></i> Mostrando el último análisis guardado${fecha ? " (" + fecha + ")" : ""}${categoriaTxt}. Sube un archivo nuevo para recalcular.`;
     }
   } catch (err) {
     console.error("No se pudo cargar el último dashboard de Alertas Kacosa:", err);
@@ -382,6 +413,16 @@ function limpiarAlertasKacosa() {
   });
   periodoSeleccionado = 1;
 
+  // Restablece la tienda a analizar a "Tiendas" por defecto
+  document.querySelectorAll(".btn-categoria-tienda").forEach(b => {
+    const esTiendas = b.dataset.categoria === "Tiendas";
+    b.classList.toggle("activo", esTiendas);
+    b.style.background = esTiendas ? "var(--azul-base)" : "var(--blanco)";
+    b.style.color = esTiendas ? "#fff" : "var(--texto-principal)";
+    b.style.borderColor = esTiendas ? "var(--azul-base)" : "var(--borde)";
+  });
+  categoriaTiendaSeleccionada = "Tiendas";
+
   const resultado = document.getElementById("resultado-alertas");
   if (resultado) resultado.innerHTML = "";
   const estado = document.getElementById("estado-alertas");
@@ -426,6 +467,7 @@ async function procesarArchivo() {
     const resp = await callBridge("alertasKacosa", { 
       stockKacosa: stockPorMaterial,
       periodoMeses: periodoSeleccionado,
+      categoriaTienda: categoriaTiendaSeleccionada,
       mapaEmpaques: mapaEmpaques
     });
 
