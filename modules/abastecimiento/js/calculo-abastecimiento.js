@@ -86,8 +86,9 @@ export function calcularAbastecimiento({ ventasProcesadas, stockTienda, stockKac
     const stockKacosa1000 = infoKacosa?.stockPorCentro?.["1000"] || 0;
     const stockKacosa3000 = infoKacosa?.stockPorCentro?.["3000"] || 0;
     // UMB (unidad de medida base): se extrae del archivo de stock Kacosa; si el
-    // material no aparece ahí, se usa el de stock tienda como respaldo.
-    const umb = infoKacosa?.unidadBase || infoTienda?.unidadBase || "";
+    // material no aparece ahí, se usa el de stock tienda como respaldo; si tampoco
+    // está ahí, se usa "UN" por defecto en vez de dejarlo vacío.
+    const umb = infoKacosa?.unidadBase || infoTienda?.unidadBase || "UN";
     const ubicacionKacosa = obtenerUbicacion(v.codigo);
 
     // --- "Ideal": lo que se pediría si Kacosa tuviera stock ilimitado ---
