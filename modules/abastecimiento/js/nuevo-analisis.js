@@ -881,10 +881,33 @@ async function finalizarCalculo(gruposConfirmados) {
     }
 
     const totalAPedirNotif = estado.grupos?.pedido?.reduce((acc, m) => acc + (m.aPedir || 0), 0) || 0;
-    notificarExito(
-      `Se procesaron ${resultado.length} material(es) — ${totalAPedirNotif} unidades a pedir. El análisis quedó guardado correctamente.`,
-      { titulo: "Análisis completado" }
-    );
+
+    // Aviso de posibles factores de conversión faltantes: materiales que se vendieron
+    // en más de una unidad y a alguna le falta la fila en factores_conversion, lo que
+    // pudo haber inflado o distorsionado su "a pedir" (cae en factor=1 por defecto sin avisar).
+    const advertenciasFactor = estado.ventasProcesadas.advertenciasFactor || [];
+    let mensajeNotif = `Se procesaron ${resultado.length} material(es) — ${totalAPedirNotif} unidades a pedir. El análisis quedó guardado correctamente.`;
+    let iconoNotif = undefined;
+    let segundosNotif = 5;
+
+    if (advertenciasFactor.length > 0) {
+      const vistos = new Set();
+      const unicos = advertenciasFactor.filter(a => {
+        const clave = `${a.codigo}|${a.unidad}`;
+        if (vistos.has(clave)) return false;
+        vistos.add(clave);
+        return true;
+      });
+      const listaHtml = unicos.slice(0, 6)
+        .map(a => `${a.codigo} (${a.descripcion || "sin descripción"}) — unidad "${a.unidad}"`)
+        .join("<br>");
+      const restantes = unicos.length - 6;
+      mensajeNotif += `<br><br><strong><i class="fa-solid fa-triangle-exclamation"></i> Revisa factores_conversion:</strong> ${unicos.length} material(es) con más de una unidad de venta, sin factor configurado para alguna:<br>${listaHtml}${restantes > 0 ? `<br>y ${restantes} más...` : ""}`;
+      iconoNotif = '<i class="fa-solid fa-triangle-exclamation"></i>';
+      segundosNotif = 12;
+    }
+
+    notificarExito(mensajeNotif, { titulo: "Análisis completado", icono: iconoNotif, segundos: segundosNotif });
 
     document.dispatchEvent(new CustomEvent("kacosa:analisis-listo", { detail: window.KACOSA.ultimoAnalisis }));
 
