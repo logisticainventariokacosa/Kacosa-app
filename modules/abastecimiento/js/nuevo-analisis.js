@@ -719,6 +719,15 @@ function mostrarDuplicados(grupos) {
     });
     finalizarCalculo(gruposConfirmados);
   });
+
+  // Aviso + scroll automático: el usuario puede no estar viendo esta parte de
+  // la pantalla cuando termina de responder el agente, así que se le avisa
+  // explícitamente y se lleva la vista hasta los grupos a confirmar.
+  notificarExito(
+    `Se ${grupos.length === 1 ? "detectó 1 posible duplicado" : `detectaron ${grupos.length} posibles duplicados`}. Revisa los grupos y confirma cuáles fusionar antes de continuar.`,
+    { titulo: "Posibles duplicados detectados", icono: '<i class="fa-solid fa-triangle-exclamation"></i>', segundos: 6 }
+  );
+  cont.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 // ============================================================
@@ -1065,7 +1074,7 @@ function anexarAltaRotacionFaltante(resultado, stockTienda, stockKacosa, altaRot
     resultado.push({
       codigo,
       descripcion: m.descripcion,
-      umb: infoKacosa?.unidadBase || infoTienda?.unidadBase || "",
+      umb: infoKacosa?.unidadBase || infoTienda?.unidadBase || "UN",
       clase: m.clase,
       totalVentas: 0,
       promedioVentasPeriodo: 0,
