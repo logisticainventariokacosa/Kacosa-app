@@ -1,6 +1,6 @@
 // js/ventas-parser.js
 import { aNumero } from "./mht-parser.js";
-import { obtenerFactor } from "./factores-conversion.js";
+import { obtenerFactor, tieneFactor } from "./factores-conversion.js";
 import { esCodigoExcluido } from "./exclusiones.js";
 
 // Clases de movimiento relevantes según SAP
@@ -51,6 +51,13 @@ export function procesarVentas(filas) {
   // Calcula, por material: venta neta en unidad de venta (para clasificación ABCD)
   // y venta neta convertida a unidad base (para el cálculo del "a pedir")
   const resultado = {};
+  // Alerta silenciosa: materiales que se vendieron en MÁS DE UNA unidad distinta y a
+  // los que les falta el factor de conversión de alguna de esas unidades en Supabase.
+  // Si un material solo se vende en una unidad, factor=1 por defecto es correcto (esa
+  // unidad ES la base) — por eso solo se marca cuando hay mezcla de unidades, que es
+  // el escenario donde un factor faltante realmente distorsiona el cálculo.
+  const advertenciasFactor = [];
+
   Object.values(porMaterial).forEach(m => {
     // Unidad "principal" = la que más filas tuvo (normalmente solo hay una)
     const unidadPrincipal = Object.keys(m.conteoFilasPorUnidad)
@@ -61,10 +68,16 @@ export function procesarVentas(filas) {
     const ventaNetaUnidadVenta = Math.abs(sumaSignedTotal);
 
     // Venta neta convertida a unidad base: se convierte cada grupo (unidad) por su propio factor
+    const unidadesDelMaterial = Object.keys(m.unidades);
     let ventaNetaUnidadBase = 0;
-    Object.entries(m.unidades).forEach(([unidad, sumaSigned]) => {
+    unidadesDelMaterial.forEach(unidad => {
+      const sumaSigned = m.unidades[unidad];
       const factor = obtenerFactor(m.codigo, unidad);
       ventaNetaUnidadBase += sumaSigned / factor;
+
+      if (unidadesDelMaterial.length > 1 && !tieneFactor(m.codigo, unidad)) {
+        advertenciasFactor.push({ codigo: m.codigo, descripcion: m.descripcion, unidad });
+      }
     });
     ventaNetaUnidadBase = Math.abs(ventaNetaUnidadBase);
 
@@ -83,7 +96,8 @@ export function procesarVentas(filas) {
 
   return {
     porMaterial: resultado,
-    rangoFechas: { inicio: fechaMin, fin: fechaMax, semanas, meses }
+    rangoFechas: { inicio: fechaMin, fin: fechaMax, semanas, meses },
+    advertenciasFactor
   };
 }
 
