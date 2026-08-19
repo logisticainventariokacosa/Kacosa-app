@@ -138,13 +138,24 @@ export function fusionarDuplicados(ventasPorMaterial, stockTienda, stockKacosa, 
       delete ventasPorMaterial[c];
 
       if (stockTienda[c]) {
-        stockTienda[canonico] = stockTienda[canonico] || { stockDisponible: 0 };
+        stockTienda[canonico] = stockTienda[canonico] || { stockDisponible: 0, unidadBase: stockTienda[c].unidadBase };
         stockTienda[canonico].stockDisponible += stockTienda[c].stockDisponible;
+        if (!stockTienda[canonico].unidadBase) stockTienda[canonico].unidadBase = stockTienda[c].unidadBase;
         delete stockTienda[c];
       }
       if (stockKacosa[c]) {
-        stockKacosa[canonico] = stockKacosa[canonico] || { stockDisponible: 0 };
+        stockKacosa[canonico] = stockKacosa[canonico] || { stockDisponible: 0, stockPorCentro: {}, unidadBase: stockKacosa[c].unidadBase };
         stockKacosa[canonico].stockDisponible += stockKacosa[c].stockDisponible;
+
+        // Fusiona también el desglose por centro (Stock Kacosa 1000 / 3000) y
+        // conserva la unidad base, para que las columnas nuevas no queden
+        // desactualizadas tras fusionar duplicados.
+        stockKacosa[canonico].stockPorCentro = stockKacosa[canonico].stockPorCentro || {};
+        Object.entries(stockKacosa[c].stockPorCentro || {}).forEach(([centro, valor]) => {
+          stockKacosa[canonico].stockPorCentro[centro] = (stockKacosa[canonico].stockPorCentro[centro] || 0) + valor;
+        });
+        if (!stockKacosa[canonico].unidadBase) stockKacosa[canonico].unidadBase = stockKacosa[c].unidadBase;
+
         delete stockKacosa[c];
       }
     });
