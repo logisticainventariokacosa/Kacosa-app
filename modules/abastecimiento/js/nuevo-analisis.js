@@ -4,6 +4,7 @@ import { procesarVentas } from "./ventas-parser.js";
 import { cargarFactoresConversion } from "./factores-conversion.js";
 import { agruparStock, procesarNotasPendientes } from "./stock-parser.js";
 import { cargarPaquetes } from "./paquetes.js";
+import { cargarUbicaciones, obtenerUbicacion } from "./ubicaciones.js";
 import { calcularAbastecimiento } from "./calculo-abastecimiento.js";
 import { detectarCandidatosLocal, confirmarConGemini, fusionarDuplicados } from "./deteccion-duplicados.js";
 import { TIENDAS, nombrePorId, centrosDeTienda } from "./tiendas.js";
@@ -612,6 +613,9 @@ async function ejecutarAnalisis() {
     estadoTexto.textContent = "Cargando lista de paquetes...";
     await cargarPaquetes();
 
+    estadoTexto.textContent = "Cargando ubicaciones de materiales en Kacosa...";
+    await cargarUbicaciones();
+
     estadoTexto.textContent = "Buscando posibles códigos duplicados...";
     const materialesParaComparar = Object.values(ventasProcesadas.porMaterial)
       .map(m => ({ codigo: m.codigo, descripcion: m.descripcion }));
@@ -966,11 +970,15 @@ function mostrarResultados(resultado, sugerencias) {
   const columnas = [
     { key: 'codigo', label: 'Código' },
     { key: 'descripcion', label: 'Descripción' },
+    { key: 'umb', label: 'UMB' },
     { key: 'clase', label: 'Clase' },
     { key: 'totalVentas', label: 'Total ventas', numeric: true },
     { key: 'promedioVentasPeriodo', label: 'Promedio ventas periodo', numeric: true },
     { key: 'stockTienda', label: 'Stock tienda', numeric: true },
-    { key: 'stockKacosa', label: 'Stock Kacosa', numeric: true },
+    { key: 'stockKacosa1000', label: 'Stock Kacosa 1000', numeric: true },
+    { key: 'stockKacosa3000', label: 'Stock Kacosa 3000', numeric: true },
+    { key: 'stockKacosa', label: 'Total Stock Kacosa', numeric: true },
+    { key: 'ubicacionKacosa', label: 'Ubicación Kacosa' },
     { key: 'aPedir', label: 'A pedir', numeric: true },
     { key: 'porDespacho', label: 'Por despacho', numeric: true },
     { key: 'numeroDeNota', label: 'Número de nota' },
@@ -1057,11 +1065,15 @@ function anexarAltaRotacionFaltante(resultado, stockTienda, stockKacosa, altaRot
     resultado.push({
       codigo,
       descripcion: m.descripcion,
+      umb: infoKacosa?.unidadBase || infoTienda?.unidadBase || "",
       clase: m.clase,
       totalVentas: 0,
       promedioVentasPeriodo: 0,
       stockTienda: stockTiendaDisp,
+      stockKacosa1000: infoKacosa?.stockPorCentro?.["1000"] || 0,
+      stockKacosa3000: infoKacosa?.stockPorCentro?.["3000"] || 0,
       stockKacosa: stockKacosaDisp,
+      ubicacionKacosa: obtenerUbicacion(codigo),
       aPedir,
       aPedirIdeal: aPedir,
       pendiente: 0,
@@ -1222,11 +1234,15 @@ function construirWorkbookCompleto() {
   const columnasCompletas = [
     { key: 'codigo', label: 'Codigo', ancho: 14 },
     { key: 'descripcion', label: 'Descripcion', ancho: 38 },
+    { key: 'umb', label: 'UMB', ancho: 10 },
     { key: 'clase', label: 'Clase', ancho: 8 },
     { key: 'totalVentas', label: 'Total_Ventas', ancho: 12 },
     { key: 'promedioVentasPeriodo', label: 'Promedio_Ventas_Periodo', ancho: 16 },
     { key: 'stockTienda', label: 'Stock_Tienda', ancho: 12 },
-    { key: 'stockKacosa', label: 'Stock_Kacosa', ancho: 12 },
+    { key: 'stockKacosa1000', label: 'Stock_Kacosa_1000', ancho: 14 },
+    { key: 'stockKacosa3000', label: 'Stock_Kacosa_3000', ancho: 14 },
+    { key: 'stockKacosa', label: 'Total_Stock_Kacosa', ancho: 14 },
+    { key: 'ubicacionKacosa', label: 'Ubicacion_Kacosa', ancho: 16 },
     { key: 'aPedir', label: 'A_Pedir', ancho: 10 },
     { key: 'porDespacho', label: 'Por_Despacho', ancho: 12 },
     { key: 'numeroDeNota', label: 'Numero_De_Nota', ancho: 14 },
@@ -1251,9 +1267,13 @@ function construirWorkbookCompleto() {
     pendienteStock.map(m => ({ ...m, pendiente: (m.aPedirIdeal || 0) - (m.aPedir || 0) })),
     [
       { key: 'codigo', label: 'Codigo', ancho: 14 }, { key: 'descripcion', label: 'Descripcion', ancho: 38 },
+      { key: 'umb', label: 'UMB', ancho: 10 },
       { key: 'clase', label: 'Clase', ancho: 8 }, { key: 'aPedirIdeal', label: 'A_Pedir_Ideal', ancho: 12 },
       { key: 'aPedir', label: 'A_Pedir_Real', ancho: 12 }, { key: 'pendiente', label: 'Pendiente', ancho: 12 },
-      { key: 'stockKacosa', label: 'Stock_Kacosa', ancho: 12 },
+      { key: 'stockKacosa1000', label: 'Stock_Kacosa_1000', ancho: 14 },
+      { key: 'stockKacosa3000', label: 'Stock_Kacosa_3000', ancho: 14 },
+      { key: 'stockKacosa', label: 'Total_Stock_Kacosa', ancho: 14 },
+      { key: 'ubicacionKacosa', label: 'Ubicacion_Kacosa', ancho: 16 },
       { key: 'periodoAbastecimiento', label: 'Periodo_Abastecimiento', ancho: 16 },
       { key: 'tienda', label: 'Tienda', ancho: 14 },
       { key: 'rangoSeguridadUsado', label: 'Rango_Seguridad_Usado', ancho: 14 }
