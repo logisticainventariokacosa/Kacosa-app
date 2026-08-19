@@ -10,6 +10,15 @@ function construirUI() {
   boton.id = "chat-boton-flotante";
   boton.innerHTML = '<i class="fa-solid fa-robot"></i>';
   boton.title = "Hablar con el agente de abastecimiento";
+  // Oculto por defecto: solo aparece después de generar un análisis en esta
+  // sesión (evita gastar consultas de la IA sin necesidad, y evita que se use
+  // como atajo para tareas que deben pasar por el flujo normal, como la
+  // agrupación/fusión de materiales duplicados en Nuevo Análisis). Si ya hay
+  // un análisis generado en esta sesión (ej. se volvió a esta vista), se
+  // muestra de una vez.
+  if (!window.KACOSA?.ultimoAnalisis) {
+    boton.classList.add("oculto");
+  }
   document.body.appendChild(boton);
 
   const panel = document.createElement("div");
@@ -306,7 +315,13 @@ async function enviarPregunta(e) {
   historial.push({ rol: "agente", texto: respuesta });
 }
 
+/** Muestra el botón flotante del chat (se llama cuando se termina de generar un análisis). */
+function mostrarBotonChat() {
+  document.getElementById("chat-boton-flotante")?.classList.remove("oculto");
+}
+
 document.addEventListener("kacosa:analisis-listo", actualizarContextoInfo);
+document.addEventListener("kacosa:analisis-listo", mostrarBotonChat);
 document.addEventListener("kacosa:usuario-listo", actualizarContextoInfo);
 document.addEventListener("DOMContentLoaded", construirUI);
 // Por si el script carga después de DOMContentLoaded
