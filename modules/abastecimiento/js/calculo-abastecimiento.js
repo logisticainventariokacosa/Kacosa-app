@@ -1,5 +1,6 @@
 // js/calculo-abastecimiento.js
 import { obtenerEmpaque } from "./paquetes.js";
+import { obtenerUbicacion } from "./ubicaciones.js";
 
 /**
  * Clasifica un material según su tasa de venta (en unidad de venta, NO base),
@@ -81,6 +82,14 @@ export function calcularAbastecimiento({ ventasProcesadas, stockTienda, stockKac
     const infoKacosa = stockKacosa[v.codigo];
     const stockKacosaDisp = infoKacosa ? infoKacosa.stockDisponible : 0;
 
+    // --- Desglose de stock Kacosa por centro (solo para mostrar; el cálculo sigue usando la suma) ---
+    const stockKacosa1000 = infoKacosa?.stockPorCentro?.["1000"] || 0;
+    const stockKacosa3000 = infoKacosa?.stockPorCentro?.["3000"] || 0;
+    // UMB (unidad de medida base): se extrae del archivo de stock Kacosa; si el
+    // material no aparece ahí, se usa el de stock tienda como respaldo.
+    const umb = infoKacosa?.unidadBase || infoTienda?.unidadBase || "";
+    const ubicacionKacosa = obtenerUbicacion(v.codigo);
+
     // --- "Ideal": lo que se pediría si Kacosa tuviera stock ilimitado ---
     const aPedirIdealEnteros = Math.ceil(aPedirBruto);
     const aPedirIdeal = (empaque > 1 && aPedirIdealEnteros > 0)
@@ -102,11 +111,15 @@ export function calcularAbastecimiento({ ventasProcesadas, stockTienda, stockKac
     resultado.push({
       codigo: v.codigo,
       descripcion: v.descripcion,
+      umb,
       clase,
       totalVentas: Math.round(v.ventaNetaUnidadVenta * 100) / 100,
       promedioVentasPeriodo: Math.round(tasaClasificacion * 100) / 100,
       stockTienda: stockTiendaDisp,
-      stockKacosa: stockKacosaDisp,
+      stockKacosa1000,
+      stockKacosa3000,
+      stockKacosa: stockKacosaDisp, // Total stock Kacosa (1000 + 3000) — se mantiene igual para no romper el cálculo
+      ubicacionKacosa,
       aPedir: aPedirFinal,
       aPedirIdeal,
       pendiente,
