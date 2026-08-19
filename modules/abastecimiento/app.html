@@ -33,6 +33,15 @@
       --texto-titulo: #f8fafc;
       --borde: #2a2f3a;
       --borde-focus: #3a4150;
+      /* Los tonos "claro" (verde-claro, rojo-claro, ambar-claro) se usan como FONDO
+         de insignias/alertas (ej. barra de "Cargado" al subir un archivo, tarjeta
+         de error de login, insignias de estado). En modo oscuro se quedaban con su
+         tono pastel original (pensado para texto oscuro encima), mientras que el
+         texto sí pasaba a claro — texto claro sobre fondo claro, ilegible. Se
+         reemplazan por versiones translúcidas sobre el fondo oscuro. */
+      --verde-claro: rgba(30, 166, 114, 0.18);
+      --rojo-claro: rgba(217, 74, 61, 0.2);
+      --ambar-claro: rgba(232, 160, 61, 0.18);
     }
     html.kacosa-dark body { background: #0f1115 !important; }
     html.kacosa-dark input,
@@ -56,7 +65,14 @@
     html.kacosa-dark .login-card .brand h1 {
       color: var(--texto-titulo) !important;
     }
+    /* La tarjeta de notificación (notificarExito, usada en Nuevo Análisis y en el
+       Dashboard) tenía el fondo blanco fijo en el CSS (no usaba variable), así que
+       en modo oscuro se quedaba blanca con texto claro encima — ilegible. */
+    html.kacosa-dark .kn-tarjeta {
+      background: var(--blanco) !important;
+    }
   </style>
+
 
   <!-- Favicon / manifest -->
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
