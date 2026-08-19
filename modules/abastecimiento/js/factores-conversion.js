@@ -45,3 +45,14 @@ export function obtenerFactor(codigoMaterial, unidadVenta) {
   if (!cache) return 1; // aún no se llamó a cargarFactoresConversion()
   return cache.get(`${codigoMaterial}|${unidadVenta}`) || 1;
 }
+
+/**
+ * Indica si existe una fila EXPLÍCITA en factores_conversion para ese material+unidad
+ * (a diferencia de obtenerFactor, que siempre devuelve un número usable). Sirve para
+ * distinguir "no necesita conversión" (unidad de venta = unidad base, factor 1 real)
+ * de "falta configurar el factor" (cayó en el 1 por defecto sin que nadie lo sepa).
+ */
+export function tieneFactor(codigoMaterial, unidadVenta) {
+  if (!cache) return false;
+  return cache.has(`${codigoMaterial}|${unidadVenta}`);
+}
