@@ -9,7 +9,7 @@ import { aNumero } from "./mht-parser.js";
  *
  * @param {Array<Object>} filas - salida de parsearMHT()
  * @param {Array<string>} centrosFiltro - centros SAP a incluir (ej. ["1300"] o ["1000","3000"])
- * @returns {Object} codigo -> { codigo, descripcion, unidadBase, stockDisponible }
+ * @returns {Object} codigo -> { codigo, descripcion, unidadBase, stockDisponible, stockPorCentro }
  */
 export function agruparStock(filas, centrosFiltro) {
   const mapa = {};
@@ -31,10 +31,15 @@ export function agruparStock(filas, centrosFiltro) {
         codigo,
         descripcion: f["Texto breve de material"] || "",
         unidadBase: f["Unidad medida base"] || "UN",
-        stockDisponible: 0
+        stockDisponible: 0,
+        // NUEVO: desglose de stock por centro SAP, ej. { "1000": 5, "3000": 2 }.
+        // Permite mostrar Stock Kacosa 1000 / Stock Kacosa 3000 por separado,
+        // sin afectar el cálculo (que sigue usando la suma en stockDisponible).
+        stockPorCentro: {}
       };
     }
     mapa[codigo].stockDisponible += disponible;
+    mapa[codigo].stockPorCentro[centro] = (mapa[codigo].stockPorCentro[centro] || 0) + disponible;
   });
 
   return mapa;
