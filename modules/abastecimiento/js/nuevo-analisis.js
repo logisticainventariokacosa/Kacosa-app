@@ -1115,7 +1115,12 @@ function anexarAltaRotacionFaltante(resultado, stockTienda, stockKacosa, altaRot
       rangoSeguridadUsado,
       porDespacho: 0,
       numeroDeNota: '',
-      fechaDeNota: ''
+      fechaDeNota: '',
+      // Marca este material como "anexado": no vino en el archivo de ventas de
+      // esta tienda, se agregó porque está en la base de alta rotación, tiene
+      // stock en Kacosa y no tiene stock en la tienda. Sirve para resaltarlo
+      // en rojo en el Excel y distinguirlo de los que sí tuvieron ventas.
+      esAnexadoAltaRotacion: true
     });
     anexados.push(codigo);
   });
