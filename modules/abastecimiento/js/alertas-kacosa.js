@@ -524,6 +524,10 @@ function agruparStockKacosa(filas) {
       mapa[codigo] = {
         codigo: codigo,
         descripcion: f["Texto breve de material"] || "",
+        // UMB (unidad de medida base): se extrae del archivo de stock Kacosa,
+        // igual que en Nuevo Análisis. Se usa para mostrar y guardar el umb
+        // de cada alerta, y como respaldo si el material no está en "paquetes".
+        unidadBase: f["Unidad medida base"] || "UN",
         stockDisponible: 0
       };
     }
@@ -560,6 +564,7 @@ function mostrarAlertas(alertas) {
   const datosTabla = alertas.map(a => ({
     codigo: a.codigo,
     descripcion: a.descripcion,
+    umb: a.umb || 'UN', // red de seguridad para alertas guardadas antes de este cambio
     clase: a.clase,
     stockKacosa: a.stockKacosa,
     totalAPedir: a.totalAPedir,
@@ -620,6 +625,7 @@ function mostrarAlertas(alertas) {
     const columnas = [
       { key: 'codigo', label: 'Código' },
       { key: 'descripcion', label: 'Descripción' },
+      { key: 'umb', label: 'UMB' },
       { key: 'clase', label: 'Clase' },
       { key: 'stockKacosa', label: 'Stock Kacosa', numeric: true },
       { key: 'totalAPedir', label: 'A pedir (todas)', numeric: true },
@@ -710,7 +716,7 @@ function mostrarDistribucion(alerta) {
       <h3 style="margin:0 0 12px; color:var(--azul-base)"><i class="fa-solid fa-chart-column"></i> Distribución sugerida por tienda</h3>
       <p style="font-size:13px; color:var(--texto-secundario); margin-bottom:18px">
         <strong>${alerta.codigo}</strong> — ${alerta.descripcion}<br>
-        Total a distribuir: <strong style="color:var(--azul-base)">${alerta.proyeccionCompra}</strong> unidades (empaque de ${alerta.empaque})
+        Total a distribuir: <strong style="color:var(--azul-base)">${alerta.proyeccionCompra}</strong> ${alerta.umb || 'unidades'} (empaque de ${alerta.empaque})
       </p>
       <div style="display:flex; flex-direction:column; gap:12px">
         ${filasOrdenadas.map(([tienda, cantidad], idx) => {
@@ -748,6 +754,7 @@ function construirWorkbookAlertas_(alertas) {
   const filas = alertas.map(a => ({
     codigo: a.codigo,
     descripcion: a.descripcion,
+    umb: a.umb || 'UN', // red de seguridad para alertas guardadas antes de este cambio
     clase: a.clase,
     stockKacosa: a.stockKacosa,
     totalAPedir: a.totalAPedir,
@@ -786,6 +793,7 @@ function construirWorkbookAlertas_(alertas) {
   const wsAlertas = construirHojaEstilizada(filas, [
     { key: 'codigo', label: 'Código', ancho: 14 },
     { key: 'descripcion', label: 'Descripción', ancho: 36 },
+    { key: 'umb', label: 'UMB', ancho: 10 },
     { key: 'clase', label: 'Clase', ancho: 8 },
     { key: 'stockKacosa', label: 'Stock Kacosa', ancho: 12 },
     { key: 'totalAPedir', label: 'A Pedir (todas)', ancho: 14 },
