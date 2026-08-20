@@ -283,6 +283,7 @@ async function enviarPregunta(e) {
     contexto.alertasKacosa = alertasKacosa.slice(0, 250).map(a => ({
       codigo: a.codigo,
       descripcion: a.descripcion,
+      umb: a.umb || 'UN',
       clase: a.clase,
       stockKacosa: a.stockKacosa,
       totalAPedir: a.totalAPedir,
