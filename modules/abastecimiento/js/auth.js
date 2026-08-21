@@ -13,6 +13,16 @@ export const ROLES_PERMITIDOS_ABASTECIMIENTO = [
   "gerente", "supervisor", "abastecimiento", "compras", "admin", "directiva", "coordinador"
 ];
 
+// Roles "privilegiados": ven TODAS las tiendas (no solo la suya) y, por lo
+// mismo, pueden ver el último análisis guardado por CUALQUIER usuario para
+// una tienda — no solo el propio. "gerente" NO está en esta lista a propósito:
+// un gerente solo ve su(s) tienda(s) asignada(s) y, dentro de ellas, solo el
+// último análisis que él mismo haya guardado (nunca el de otro usuario),
+// aunque varios usuarios generen análisis para la misma tienda.
+export const ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS = [
+  "supervisor", "abastecimiento", "compras", "admin", "directiva", "coordinador"
+];
+
 // Busca el perfil del usuario en la colección "usuarios" del Portal KACOSA
 export async function obtenerPerfilPortal(email) {
   try {
