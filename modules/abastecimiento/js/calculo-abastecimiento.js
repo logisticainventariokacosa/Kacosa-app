@@ -112,14 +112,15 @@ export function calcularAbastecimiento({ ventasProcesadas, stockTienda, stockKac
     resultado.push({
       codigo: v.codigo,
       descripcion: v.descripcion,
-      umb,
+      unidadVenta: v.unidadVenta || "UN", // <-- NUEVA: unidad de medida en ventas
+      umb: umb,
       clase,
       totalVentas: Math.round(v.ventaNetaUnidadVenta * 100) / 100,
       promedioVentasPeriodo: Math.round(tasaClasificacion * 100) / 100,
       stockTienda: stockTiendaDisp,
       stockKacosa1000,
       stockKacosa3000,
-      stockKacosa: stockKacosaDisp, // Total stock Kacosa (1000 + 3000) — se mantiene igual para no romper el cálculo
+      stockKacosa: stockKacosaDisp,
       ubicacionKacosa,
       aPedir: aPedirFinal,
       aPedirIdeal,
@@ -127,7 +128,8 @@ export function calcularAbastecimiento({ ventasProcesadas, stockTienda, stockKac
       empaque,
       periodoVentas,
       periodoAbastecimiento,
-      rangoSeguridadUsado
+      rangoSeguridadUsado,
+      materiales_fusionados: v.materiales_fusionados || [] // <-- NUEVA: códigos fusionados
     });
   });
 
