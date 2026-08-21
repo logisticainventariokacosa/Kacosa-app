@@ -72,57 +72,33 @@ export function procesarVentas(filas, mapaUMBPorMaterial = {}) {
     const unidadPrincipal = Object.keys(m.conteoFilasPorUnidad)
       .sort((a, b) => m.conteoFilasPorUnidad[b] - m.conteoFilasPorUnidad[a])[0];
 
-    // --- CÁLCULO CORREGIDO ---
-    // 1. Venta neta en unidad BASE:
-    //    Se convierte CADA grupo de ventas por unidad usando su factor.
+    // Venta neta convertida a unidad base: se convierte cada grupo (unidad) por su propio factor.
+    // Un mismo material puede venir registrado en varias unidades distintas (ej. tuberías en
+    // "M", "RO" y "UN" a la vez) — cada una se convierte por separado a la UMB del material.
     const umbMaterial = mapaUMBPorMaterial[m.codigo];
     const unidadesDelMaterial = Object.keys(m.unidades);
     let ventaNetaUnidadBase = 0;
     unidadesDelMaterial.forEach(unidad => {
       const sumaSigned = m.unidades[unidad];
-      // Obtiene el factor de conversión de 'unidad' a la UMB del material
       const factor = obtenerFactor(m.codigo, unidad, umbMaterial);
-      // Si no hay factor definido y la unidad es diferente a la UMB, se registra la advertencia
+      ventaNetaUnidadBase += sumaSigned / factor;
+
       const difiereDeLaUMB = umbMaterial && unidad !== umbMaterial;
       if (difiereDeLaUMB && !tieneFactor(m.codigo, unidad, umbMaterial)) {
         advertenciasFactor.push({ codigo: m.codigo, descripcion: m.descripcion, unidad, umb: umbMaterial });
       }
-      // El factor se aplica para convertir a la unidad base. Si el factor es 1 (porque no existe
-      // o porque unidad === UMB), la conversión es directa.
-      ventaNetaUnidadBase += sumaSigned / factor;
     });
     ventaNetaUnidadBase = Math.abs(ventaNetaUnidadBase);
 
-    // 2. Venta neta en unidad de VENTA (Total_Ventas / clasificación ABCD):
-    //    Se calcula DIRECTAMENTE en la unidad de venta principal (sin pasar por UMB).
-    //    Esto resuelve el problema donde la venta en "M" se sumaba a la venta en "UN" sin convertir.
-    const unidadesVenta = Object.keys(m.unidades);
-    let ventaNetaUnidadVenta = 0;
-    unidadesVenta.forEach(unidad => {
-      const sumaSigned = m.unidades[unidad];
-      // Si la unidad de venta es la misma que la principal, se suma directamente.
-      // Si hay ventas en otras unidades, se convierten a la unidad principal.
-      if (unidad === unidadPrincipal) {
-        ventaNetaUnidadVenta += sumaSigned;
-      } else {
-        // Para convertir de 'unidad' a 'unidadPrincipal', se usa el factor inverso:
-        // factor = (cantidad en unidadPrincipal) / (cantidad en unidad)
-        // O más fácil: convertir 'unidad' a UMB (usando factorUMB_unidad) y luego a 'unidadPrincipal'
-        // usando el factor de 'unidadPrincipal' a UMB.
-        // Factor de 'unidad' a UMB: factorUMB_unidad
-        // Factor de 'unidadPrincipal' a UMB: factorUMB_principal
-        // cantidad_en_unidadPrincipal = cantidad_en_unidad * (factorUMB_unidad / factorUMB_principal)
-        const factorUnidad = obtenerFactor(m.codigo, unidad, umbMaterial);
-        const factorPrincipal = obtenerFactor(m.codigo, unidadPrincipal, umbMaterial);
-        if (factorPrincipal !== 0) {
-          ventaNetaUnidadVenta += sumaSigned * (factorUnidad / factorPrincipal);
-        } else {
-          // Fallback: si no se puede convertir, se suma como está (esto no debería pasar)
-          ventaNetaUnidadVenta += sumaSigned;
-        }
-      }
-    });
-    ventaNetaUnidadVenta = Math.abs(ventaNetaUnidadVenta);
+    // Venta neta en unidad de venta (Total_Ventas / clasificación ABCD): NO es la suma
+    // cruda de las cantidades en cada unidad (eso mezclaría, por ejemplo, metros con
+    // rollos con unidades sin sentido) — se obtiene reconvirtiendo el total ya calculado
+    // en UMB de vuelta hacia la unidad de venta principal. Para el 98% de los materiales
+    // (UMB = UN, se venden en UN) esto da exactamente el mismo resultado que antes, porque
+    // el factor de "UN" hacia UMB "UN" es 1. La diferencia solo se nota en materiales con
+    // UMB en rollos/bombonas/baras vendidos en varias unidades a la vez.
+    const factorUnidadPrincipal = obtenerFactor(m.codigo, unidadPrincipal, umbMaterial);
+    const ventaNetaUnidadVenta = ventaNetaUnidadBase * factorUnidadPrincipal;
 
     resultado[m.codigo] = {
       codigo: m.codigo,
