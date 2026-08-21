@@ -70,6 +70,10 @@ async function cargarAnalisis() {
     return;
   }
 
+  // Roles privilegiados (ver ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS en auth.js) ven el
+  // último análisis de la tienda sin importar quién lo haya hecho. Cualquier otro rol
+  // (ej. "gerente") solo debe ver el último análisis que ÉL MISMO guardó para su
+  // tienda — aunque otro usuario haya hecho uno más reciente para esa misma tienda.
   const rolNormalizado = window.KACOSA?.usuario?.rolNormalizado
     || (window.KACOSA?.usuario?.rol || "").toString().trim().toLowerCase();
   const esPrivilegiado = ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS.includes(rolNormalizado);
@@ -107,7 +111,6 @@ async function cargarAnalisis() {
       codigo: String(m.codigo || ''),
       descripcion: String(m.descripcion || ''),
       umb: String(m.umb || 'UN'),
-      unidadVenta: String(m.unidadVenta || 'UN'),
       clase: String(m.clase || ''),
       totalVentas: Number(m.totalVentas) || 0,
       promedioVentasPeriodo: Number(m.promedioVentasPeriodo) || 0,
@@ -126,8 +129,7 @@ async function cargarAnalisis() {
       periodoVentas: String(m.periodoVentas || ''),
       periodoAbastecimiento: String(m.periodoAbastecimiento || ''),
       rangoSeguridadUsado: String(m.rangoSeguridadUsado || ''),
-      tienda: String(m.tienda || ''),
-      materiales_fusionados: m.materiales_fusionados || []
+      tienda: String(m.tienda || '')
     };
   });
 
@@ -259,7 +261,7 @@ function mostrarDashboard(analisis) {
   const columnas = [
     { key: 'codigo', label: 'Código' },
     { key: 'descripcion', label: 'Descripción' },
-    { key: 'unidadVenta', label: 'UMV' },
+    { key: 'umb', label: 'UMB' },
     { key: 'clase', label: 'Clase' },
     { key: 'totalVentas', label: 'Total ventas', numeric: true },
     { key: 'promedioVentasPeriodo', label: 'Promedio ventas periodo', numeric: true },
@@ -268,12 +270,10 @@ function mostrarDashboard(analisis) {
     { key: 'stockKacosa3000', label: 'Stock Kacosa 3000', numeric: true },
     { key: 'stockKacosa', label: 'Total Stock Kacosa', numeric: true },
     { key: 'ubicacionKacosa', label: 'Ubicación Kacosa' },
-    { key: 'umb', label: 'UMB', numeric: true },
     { key: 'aPedir', label: 'A pedir', numeric: true },
     { key: 'porDespacho', label: 'Por despacho', numeric: true },
     { key: 'numeroDeNota', label: 'Número de nota' },
-    { key: 'fechaDeNota', label: 'Fecha de nota' },
-    { key: 'materiales_fusionados', label: 'Materiales Fusionados' }
+    { key: 'fechaDeNota', label: 'Fecha de nota' }
   ];
 
   const container = document.getElementById('dash-tabla-container');
@@ -311,7 +311,6 @@ function descargarExcelDashboard(materialesOriginal, analisis) {
     return {
       ...m,
       umb: String(m.umb || 'UN'),
-      unidadVenta: String(m.unidadVenta || 'UN'),
       aPedir: aPedir,
       stockKacosa1000: Number(m.stockKacosa1000) || 0,
       stockKacosa3000: Number(m.stockKacosa3000) || 0,
@@ -320,8 +319,7 @@ function descargarExcelDashboard(materialesOriginal, analisis) {
       porDespacho: porDespacho,
       numeroDeNota: String(m.numeroDeNota || ''),
       fechaDeNota: String(m.fechaDeNota || ''),
-      fechaAnalisis: analisis.fechaAnalisis || '',
-      materiales_fusionados: m.materiales_fusionados || []
+      fechaAnalisis: analisis.fechaAnalisis || ''
     };
   });
 
@@ -363,11 +361,10 @@ function descargarExcelDashboard(materialesOriginal, analisis) {
   );
   XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
 
-  // --- Columnas para A_Pedir y No_Amerito_Pedido en el Dashboard ---
   const columnasCompletas = [
     { key: 'codigo', label: 'Codigo', ancho: 14 },
     { key: 'descripcion', label: 'Descripcion', ancho: 38 },
-    { key: 'unidadVenta', label: 'UMV', ancho: 10 },
+    { key: 'umb', label: 'UMB', ancho: 10 },
     { key: 'clase', label: 'Clase', ancho: 8 },
     { key: 'totalVentas', label: 'Total_Ventas', ancho: 12 },
     { key: 'promedioVentasPeriodo', label: 'Promedio_Ventas_Periodo', ancho: 16 },
@@ -376,7 +373,6 @@ function descargarExcelDashboard(materialesOriginal, analisis) {
     { key: 'stockKacosa3000', label: 'Stock_Kacosa_3000', ancho: 14 },
     { key: 'stockKacosa', label: 'Total_Stock_Kacosa', ancho: 14 },
     { key: 'ubicacionKacosa', label: 'Ubicacion_Kacosa', ancho: 16 },
-    { key: 'umb', label: 'UMB', ancho: 10 },
     { key: 'aPedir', label: 'A_Pedir', ancho: 10 },
     { key: 'porDespacho', label: 'Por_Despacho', ancho: 12 },
     { key: 'numeroDeNota', label: 'Numero_De_Nota', ancho: 14 },
@@ -385,8 +381,7 @@ function descargarExcelDashboard(materialesOriginal, analisis) {
     { key: 'periodoAbastecimiento', label: 'Periodo_Abastecimiento', ancho: 16 },
     { key: 'rangoSeguridadUsado', label: 'Rango_Seguridad_Usado', ancho: 14 },
     { key: 'tienda', label: 'Tienda', ancho: 14 },
-    { key: 'fechaAnalisis', label: 'Fecha_Analisis', ancho: 14 },
-    { key: 'materiales_fusionados', label: 'Materiales_Fusionados', ancho: 20 }
+    { key: 'fechaAnalisis', label: 'Fecha_Analisis', ancho: 14 }
   ];
 
   XLSX.utils.book_append_sheet(wb, construirHojaEstilizada(pedido, columnasCompletas, {
@@ -398,30 +393,7 @@ function descargarExcelDashboard(materialesOriginal, analisis) {
     colorearPorClase: true
   }), "No_Amerito_Pedido");
 
-  // --- Columnas para Pendiente_Stock_Kacosa en el Dashboard ---
-  const columnasPendiente = [
-    { key: 'codigo', label: 'Codigo', ancho: 14 },
-    { key: 'descripcion', label: 'Descripcion', ancho: 38 },
-    { key: 'unidadVenta', label: 'UMV', ancho: 10 },
-    { key: 'clase', label: 'Clase', ancho: 8 },
-    { key: 'totalVentas', label: 'Total_Ventas', ancho: 12 },
-    { key: 'promedioVentasPeriodo', label: 'Promedio_Ventas_Periodo', ancho: 16 },
-    { key: 'stockTienda', label: 'Stock_Tienda', ancho: 12 },
-    { key: 'aPedirIdeal', label: 'A_Pedir_Ideal', ancho: 12 },
-    { key: 'aPedir', label: 'A_Pedir_Real', ancho: 12 },
-    { key: 'pendiente', label: 'Pendiente', ancho: 12 },
-    { key: 'stockKacosa1000', label: 'Stock_Kacosa_1000', ancho: 14 },
-    { key: 'stockKacosa3000', label: 'Stock_Kacosa_3000', ancho: 14 },
-    { key: 'stockKacosa', label: 'Total_Stock_Kacosa', ancho: 14 },
-    { key: 'ubicacionKacosa', label: 'Ubicacion_Kacosa', ancho: 16 },
-    { key: 'umb', label: 'UMB', ancho: 10 },
-    { key: 'periodoAbastecimiento', label: 'Periodo_Abastecimiento', ancho: 16 },
-    { key: 'tienda', label: 'Tienda', ancho: 14 },
-    { key: 'rangoSeguridadUsado', label: 'Rango_Seguridad_Usado', ancho: 14 },
-    { key: 'materiales_fusionados', label: 'Materiales_Fusionados', ancho: 20 }
-  ];
-
-  XLSX.utils.book_append_sheet(wb, construirHojaEstilizada(pendienteStock, columnasPendiente, {
+  XLSX.utils.book_append_sheet(wb, construirHojaEstilizada(pendienteStock, columnasCompletas, {
     colorearPorClase: true
   }), "Pendiente_Stock_Kacosa");
 
