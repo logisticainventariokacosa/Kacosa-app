@@ -364,7 +364,8 @@ function descargarExcelDashboard(materialesOriginal, analisis) {
   const columnasCompletas = [
     { key: 'codigo', label: 'Codigo', ancho: 14 },
     { key: 'descripcion', label: 'Descripcion', ancho: 38 },
-    { key: 'umb', label: 'UMB', ancho: 10 },
+    { key: 'unidadVenta', label: 'UMV', ancho: 10 },
+    { key: 'materialesFusionados', label: 'Materiales_Fusionados', ancho: 22 },
     { key: 'clase', label: 'Clase', ancho: 8 },
     { key: 'totalVentas', label: 'Total_Ventas', ancho: 12 },
     { key: 'promedioVentasPeriodo', label: 'Promedio_Ventas_Periodo', ancho: 16 },
@@ -373,6 +374,7 @@ function descargarExcelDashboard(materialesOriginal, analisis) {
     { key: 'stockKacosa3000', label: 'Stock_Kacosa_3000', ancho: 14 },
     { key: 'stockKacosa', label: 'Total_Stock_Kacosa', ancho: 14 },
     { key: 'ubicacionKacosa', label: 'Ubicacion_Kacosa', ancho: 16 },
+    { key: 'umb', label: 'UMB', ancho: 10 },
     { key: 'aPedir', label: 'A_Pedir', ancho: 10 },
     { key: 'porDespacho', label: 'Por_Despacho', ancho: 12 },
     { key: 'numeroDeNota', label: 'Numero_De_Nota', ancho: 14 },
