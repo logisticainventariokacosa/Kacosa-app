@@ -4,6 +4,7 @@ import { TIENDAS, nombrePorId } from "./tiendas.js";
 import { crearTablaPaginada } from "./tabla-utils.js";
 import { notificarExito } from "./notificaciones.js";
 import { construirHojaEstilizada, construirHojaResumen } from "./excel-estilos.js";
+import { ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS } from "./auth.js";
 
 let tiendaSeleccionada = null;
 let materialesCache = [];
@@ -69,7 +70,16 @@ async function cargarAnalisis() {
     return;
   }
 
-  const resp = await callBridge("leerAnalisis", { tienda: tiendaSeleccionada });
+  // Roles privilegiados (ver ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS en auth.js) ven el
+  // último análisis de la tienda sin importar quién lo haya hecho. Cualquier otro rol
+  // (ej. "gerente") solo debe ver el último análisis que ÉL MISMO guardó para su
+  // tienda — aunque otro usuario haya hecho uno más reciente para esa misma tienda.
+  const rolNormalizado = window.KACOSA?.usuario?.rolNormalizado
+    || (window.KACOSA?.usuario?.rol || "").toString().trim().toLowerCase();
+  const esPrivilegiado = ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS.includes(rolNormalizado);
+  const filtroUsuario = esPrivilegiado ? {} : { usuarioEmail: window.KACOSA?.usuario?.email || "" };
+
+  const resp = await callBridge("leerAnalisis", { tienda: tiendaSeleccionada, ...filtroUsuario });
 
   if (!resp.ok) {
     resultadoDiv.innerHTML = `<p class="vista-sub">Error al cargar: ${resp.error}</p>`;
@@ -80,7 +90,9 @@ async function cargarAnalisis() {
     resultadoDiv.innerHTML = `
       <div class="card">
         <p class="vista-sub" style="margin:0">
-          Todavía no hay ningún análisis guardado para <strong>${nombrePorId(tiendaSeleccionada)}</strong>.
+          ${esPrivilegiado
+            ? `Todavía no hay ningún análisis guardado para <strong>${nombrePorId(tiendaSeleccionada)}</strong>.`
+            : `Todavía no has generado ningún análisis para <strong>${nombrePorId(tiendaSeleccionada)}</strong> con tu usuario.`}
           Ve a "Nuevo Análisis" para generar el primero.
         </p>
       </div>
@@ -124,6 +136,8 @@ async function cargarAnalisis() {
   analisisCache = {
     tienda: tiendaSeleccionada,
     fechaAnalisis: resp.fechaAnalisis || "Sin fecha",
+    usuarioNombre: resp.usuarioNombre || "",
+    usuarioEmail: resp.usuarioEmail || "",
     materiales: materiales
   };
   
@@ -168,7 +182,10 @@ function mostrarDashboard(analisis) {
   });
 
   resultadoDiv.innerHTML = `
-    <p class="vista-sub" style="margin-top:0">Último análisis: <strong>${analisis.fechaAnalisis || "—"}</strong></p>
+    <p class="vista-sub" style="margin-top:0">
+      Último análisis: <strong>${analisis.fechaAnalisis || "—"}</strong>
+      ${analisis.usuarioNombre ? ` — realizado por <strong>${analisis.usuarioNombre}</strong>` : ""}
+    </p>
     <div class="kpi-grid">
       <!-- Tarjeta 1: Materiales con ventas (AZUL) -->
       <div class="kpi-card azul" style="background: linear-gradient(135deg, var(--blanco) 55%, #E8F0FE 130%);">
@@ -338,6 +355,7 @@ function descargarExcelDashboard(materialesOriginal, analisis) {
       `Período de ventas analizado: ${materiales[0]?.periodoVentas || "—"}`,
       `Horizonte de abastecimiento: ${materiales[0]?.periodoAbastecimiento || "—"}`,
       `Rango de seguridad usado: ${materiales[0]?.rangoSeguridadUsado || "—"}`,
+      `Analista: ${analisis.usuarioNombre || "—"}`,
       "Generado desde el Dashboard del sistema de Abastecimiento KACOSA."
     ]
   );
@@ -401,6 +419,8 @@ document.addEventListener("kacosa:vista-cambiada", (e) => {
       analisisCache = {
         tienda: window.KACOSA.ultimoAnalisis.tienda,
         fechaAnalisis: window.KACOSA.ultimoAnalisis.fechaAnalisis,
+        usuarioNombre: window.KACOSA?.usuario?.nombre || window.KACOSA?.usuario?.email || "",
+        usuarioEmail: window.KACOSA?.usuario?.email || "",
         materiales: window.KACOSA.ultimoAnalisis.materiales
       };
     }
