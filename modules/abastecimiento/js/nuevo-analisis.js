@@ -861,7 +861,9 @@ async function finalizarCalculo(gruposConfirmados) {
       tienda: estado.tiendaSeleccionada,
       centro: centrosDeTienda(estado.tiendaSeleccionada).join(","),
       fechaAnalisis: estado.fechaAnalisis,
-      materiales: estado.resultadoFinal
+      materiales: estado.resultadoFinal,
+      usuarioEmail: window.KACOSA?.usuario?.email || "",
+      usuarioNombre: window.KACOSA?.usuario?.nombre || window.KACOSA?.usuario?.email || ""
     });
 
     if (!respGuardado.ok) {
@@ -887,9 +889,10 @@ async function finalizarCalculo(gruposConfirmados) {
     estadoTexto.textContent = `Análisis completo — ${resultado.length} material(es) procesados. Período usado: ${mesesUsadosRedondeado} meses (${semanasUsadasRedondeado} semanas).`;
     mostrarResultados(resultado, sugerencias);
 
+    const nombreAnalista = window.KACOSA?.usuario?.nombre || window.KACOSA?.usuario?.email || "";
     const estadoAcciones = document.getElementById("na-estado-acciones");
     if (estadoAcciones) {
-      estadoAcciones.innerHTML = `<i class="fa-solid fa-circle-check"></i> Guardado correctamente. ${respGuardado.altaRotacionAgregados > 0 ? `(${respGuardado.altaRotacionAgregados} nuevo(s) en Alta Rotación)` : ""}`;
+      estadoAcciones.innerHTML = `<i class="fa-solid fa-circle-check"></i> Guardado correctamente${nombreAnalista ? ` por ${nombreAnalista}` : ""}. ${respGuardado.altaRotacionAgregados > 0 ? `(${respGuardado.altaRotacionAgregados} nuevo(s) en Alta Rotación)` : ""}`;
     }
 
     const totalAPedirNotif = estado.grupos?.pedido?.reduce((acc, m) => acc + (m.aPedir || 0), 0) || 0;
@@ -1276,6 +1279,7 @@ function construirWorkbookCompleto() {
       `Período de ventas analizado: ${pedido[0]?.periodoVentas || noPedido[0]?.periodoVentas || "—"}`,
       `Horizonte de abastecimiento: ${pedido[0]?.periodoAbastecimiento || "—"}`,
       `Rango de seguridad usado: ${pedido[0]?.rangoSeguridadUsado || "—"}`,
+      `Analista: ${window.KACOSA?.usuario?.nombre || window.KACOSA?.usuario?.email || "—"}`,
       "Generado automáticamente por el sistema de Abastecimiento KACOSA."
     ]
   );
