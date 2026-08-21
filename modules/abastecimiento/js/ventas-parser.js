@@ -10,9 +10,14 @@ const CLASES_RELEVANTES = [...CLASES_VENTA, ...CLASES_DEVOLUCION];
 
 /**
  * Procesa las filas ya parseadas del archivo de ventas (salida de parsearMHT).
+ * @param {Array<Object>} filas
+ * @param {Object} [mapaUMBPorMaterial] - código -> UMB (unidad de medida base),
+ *   tomado del stock Kacosa/tienda ANTES de llamar esta función. Se usa para
+ *   resolver el factor de conversión genérico por UMB (ver factores-conversion.js)
+ *   cuando no hay un factor específico configurado para ese material.
  * @returns {{ porMaterial: Object, rangoFechas: {inicio:Date, fin:Date, semanas:number, meses:number} }}
  */
-export function procesarVentas(filas) {
+export function procesarVentas(filas, mapaUMBPorMaterial = {}) {
   const porMaterial = {}; // codigo -> { descripcion, unidades: { unidad: sumaSigned }, unidadMasUsada }
   let fechaMin = null;
   let fechaMax = null;
@@ -51,35 +56,49 @@ export function procesarVentas(filas) {
   // Calcula, por material: venta neta en unidad de venta (para clasificación ABCD)
   // y venta neta convertida a unidad base (para el cálculo del "a pedir")
   const resultado = {};
-  // Alerta silenciosa: materiales que se vendieron en MÁS DE UNA unidad distinta y a
-  // los que les falta el factor de conversión de alguna de esas unidades en Supabase.
-  // Si un material solo se vende en una unidad, factor=1 por defecto es correcto (esa
-  // unidad ES la base) — por eso solo se marca cuando hay mezcla de unidades, que es
-  // el escenario donde un factor faltante realmente distorsiona el cálculo.
+  // Alerta silenciosa: materiales cuya unidad de venta es DISTINTA a su UMB (unidad
+  // de medida base, tomada del stock) y a los que les falta el factor de conversión
+  // correspondiente — ni específico por material, ni genérico por UMB — en Supabase.
+  // Si la unidad de venta coincide con la UMB, factor=1 por defecto es correcto (no
+  // hace falta convertir) — por eso solo se marca cuando de verdad difieren y no hay
+  // forma de convertir, que es el escenario donde un factor faltante distorsiona el
+  // cálculo del "a pedir".
   const advertenciasFactor = [];
 
   Object.values(porMaterial).forEach(m => {
-    // Unidad "principal" = la que más filas tuvo (normalmente solo hay una)
+    // Unidad "principal" = la que más filas tuvo (normalmente solo hay una).
+    // Es la unidad en la que se reporta el Total_Ventas y en la que se clasifica
+    // el material (A/B/C/D).
     const unidadPrincipal = Object.keys(m.conteoFilasPorUnidad)
       .sort((a, b) => m.conteoFilasPorUnidad[b] - m.conteoFilasPorUnidad[a])[0];
 
-    // Venta neta total en unidad de venta (suma de TODAS las unidades registradas, sin convertir)
-    const sumaSignedTotal = Object.values(m.unidades).reduce((acc, v) => acc + v, 0);
-    const ventaNetaUnidadVenta = Math.abs(sumaSignedTotal);
-
-    // Venta neta convertida a unidad base: se convierte cada grupo (unidad) por su propio factor
+    // Venta neta convertida a unidad base: se convierte cada grupo (unidad) por su propio factor.
+    // Un mismo material puede venir registrado en varias unidades distintas (ej. tuberías en
+    // "M", "RO" y "UN" a la vez) — cada una se convierte por separado a la UMB del material.
+    const umbMaterial = mapaUMBPorMaterial[m.codigo];
     const unidadesDelMaterial = Object.keys(m.unidades);
     let ventaNetaUnidadBase = 0;
     unidadesDelMaterial.forEach(unidad => {
       const sumaSigned = m.unidades[unidad];
-      const factor = obtenerFactor(m.codigo, unidad);
+      const factor = obtenerFactor(m.codigo, unidad, umbMaterial);
       ventaNetaUnidadBase += sumaSigned / factor;
 
-      if (unidadesDelMaterial.length > 1 && !tieneFactor(m.codigo, unidad)) {
-        advertenciasFactor.push({ codigo: m.codigo, descripcion: m.descripcion, unidad });
+      const difiereDeLaUMB = umbMaterial && unidad !== umbMaterial;
+      if (difiereDeLaUMB && !tieneFactor(m.codigo, unidad, umbMaterial)) {
+        advertenciasFactor.push({ codigo: m.codigo, descripcion: m.descripcion, unidad, umb: umbMaterial });
       }
     });
     ventaNetaUnidadBase = Math.abs(ventaNetaUnidadBase);
+
+    // Venta neta en unidad de venta (Total_Ventas / clasificación ABCD): NO es la suma
+    // cruda de las cantidades en cada unidad (eso mezclaría, por ejemplo, metros con
+    // rollos con unidades sin sentido) — se obtiene reconvirtiendo el total ya calculado
+    // en UMB de vuelta hacia la unidad de venta principal. Para el 98% de los materiales
+    // (UMB = UN, se venden en UN) esto da exactamente el mismo resultado que antes, porque
+    // el factor de "UN" hacia UMB "UN" es 1. La diferencia solo se nota en materiales con
+    // UMB en rollos/bombonas/baras vendidos en varias unidades a la vez.
+    const factorUnidadPrincipal = obtenerFactor(m.codigo, unidadPrincipal, umbMaterial);
+    const ventaNetaUnidadVenta = ventaNetaUnidadBase * factorUnidadPrincipal;
 
     resultado[m.codigo] = {
       codigo: m.codigo,
