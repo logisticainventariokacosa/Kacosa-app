@@ -1,5 +1,4 @@
 // js/deteccion-duplicados.js
-import { callBridge } from "./bridge.js";
 
 /** Normaliza texto para comparar: mayúsculas, sin acentos, sin espacios repetidos. */
 function normalizar(texto) {
@@ -38,6 +37,38 @@ function similitud(a, b) {
 
 const UMBRAL_SIMILITUD = 0.75;
 
+// Colores conocidos: si dos descripciones mencionan colores DISTINTOS de esta
+// lista, nunca se consideran duplicados (son SKUs distintos), sin importar
+// qué tan parecido sea el resto del texto.
+const COLORES_CONOCIDOS = [
+  "BLANCO", "NEGRO", "GRIS", "AZUL", "ROJO", "VERDE", "AMARILLO",
+  "MARRON", "BEIGE", "CREMA", "PLATA", "DORADO", "BRONCE", "MARFIL",
+  "NARANJA", "MORADO", "VIOLETA"
+];
+
+/** Devuelve el primer color conocido mencionado en el texto normalizado, o null si no hay ninguno. */
+function colorDetectado(textoNormalizado) {
+  return COLORES_CONOCIDOS.find(c => textoNormalizado.includes(c)) || null;
+}
+
+// Reglas de palabra distintiva por categoría: aunque el resto de la descripción
+// sea muy parecido, si UNA de las dos menciona la palabra clave y la otra no
+// (dentro de la misma categoría/prefijo), son variantes distintas, no duplicados.
+// Portado de las reglas que antes se le explicaban a Gemini en el prompt.
+const REGLAS_PALABRA_DISTINTIVA = [
+  { prefijo: "FILTRO SECADOR", palabra: "SOLD" }, // "Sold" = soldable
+  { prefijo: "MOTOR VENT", palabra: "C PR" }       // "C/Pr" = con protector
+];
+
+/** true si, según las reglas de palabra distintiva, dos descripciones normalizadas de la
+ *  misma categoría difieren en una característica que las distingue (no son duplicados). */
+function difierenPorReglaEspecial(normA, normB) {
+  return REGLAS_PALABRA_DISTINTIVA.some(regla => {
+    if (!normA.startsWith(regla.prefijo) || !normB.startsWith(regla.prefijo)) return false;
+    return normA.includes(regla.palabra) !== normB.includes(regla.palabra);
+  });
+}
+
 /**
  * Detecta grupos de materiales candidatos a ser duplicados, comparando solo
  * dentro de "cubetas" (mismo primer palabra normalizada) para que sea rápido
@@ -75,6 +106,16 @@ export function detectarCandidatosLocal(materiales) {
         // o "110V" vs "220V"), NUNCA se consideran duplicados, sin importar qué tan parecido
         // sea el resto del texto. Esto evita fusionar variantes distintas de un mismo producto.
         if (grupo[i].firma !== grupo[j].firma) continue;
+
+        // Guardia de color: colores distintos = SKUs distintos.
+        const colorI = colorDetectado(grupo[i].norm);
+        const colorJ = colorDetectado(grupo[j].norm);
+        if (colorI && colorJ && colorI !== colorJ) continue;
+
+        // Guardia de palabra distintiva (ej. "Sold" en filtros secadores, "C/Pr" en
+        // motores de ventilador): si una la menciona y la otra no, son variantes distintas.
+        if (difierenPorReglaEspecial(grupo[i].norm, grupo[j].norm)) continue;
+
         if (similitud(grupo[i].norm, grupo[j].norm) >= UMBRAL_SIMILITUD) {
           unir(grupo[i].codigo, grupo[j].codigo);
         }
@@ -92,23 +133,14 @@ export function detectarCandidatosLocal(materiales) {
   return Object.values(clusters).filter(c => c.length > 1);
 }
 
-/**
- * Toma los clusters candidatos (ya filtrados localmente) y le pide a Gemini
- * que confirme cuáles realmente son el mismo producto, con alta confianza.
- * @param {Array<Array<{codigo, descripcion}>>} clusters
- * @returns {Promise<{ok:boolean, grupos:Array<Array<string>>, razonamiento:string}>}
- */
-export async function confirmarConGemini(clusters) {
-  if (clusters.length === 0) {
-    return { ok: true, grupos: [], razonamiento: "No se detectaron candidatos locales." };
-  }
+// NOTA: antes existía aquí confirmarConGemini(), que le pedía a Gemini
+// confirmar los clusters candidatos. Se eliminó porque a veces la llamada al
+// agente fallaba o no se ejecutaba, y el código lo trataba silenciosamente
+// como "no hay duplicados" — dejando materiales sin fusionar sin avisar.
+// Ahora los candidatos que arma detectarCandidatosLocal() se muestran
+// directamente al usuario en la pantalla de revisión para que confirme
+// manualmente cuáles fusionar (ver mostrarDuplicados() en nuevo-analisis.js).
 
-  // Aplanamos y limitamos para no exceder un prompt razonable
-  const materialesPlanos = clusters.flat().slice(0, 300)
-    .map(m => ({ codigo: m.codigo, descripcion: m.descripcion }));
-
-  return await callBridge("resolveDuplicates", { materiales: materialesPlanos });
-}
 
 /**
  * Fusiona en los datos de ventas y stock los grupos de duplicados que el
