@@ -6,7 +6,7 @@ import { agruparStock, procesarNotasPendientes } from "./stock-parser.js";
 import { cargarPaquetes } from "./paquetes.js";
 import { cargarUbicaciones, obtenerUbicacion } from "./ubicaciones.js";
 import { calcularAbastecimiento } from "./calculo-abastecimiento.js";
-import { detectarCandidatosLocal, confirmarConGemini, fusionarDuplicados } from "./deteccion-duplicados.js";
+import { detectarCandidatosLocal, fusionarDuplicados } from "./deteccion-duplicados.js";
 import { TIENDAS, nombrePorId, centrosDeTienda } from "./tiendas.js";
 import { callBridge } from "./bridge.js";
 import { crearTablaPaginada } from "./tabla-utils.js";
@@ -121,7 +121,7 @@ function estadoInicial() {
     stockKacosa: null,
     notasPendientes: null,
     clustersCandidatos: [],
-    gruposGemini: [],
+    gruposCandidatos: [],
     tiendaSeleccionada: null,
     resultadoFinal: null,
     fechaAnalisis: null,
@@ -476,7 +476,7 @@ function limpiarAnalisis() {
   estado.stockKacosa = null;
   estado.notasPendientes = null;
   estado.clustersCandidatos = [];
-  estado.gruposGemini = [];
+  estado.gruposCandidatos = [];
   estado.resultadoFinal = null;
   estado.fechaAnalisis = null;
   estado.grupos = null;
@@ -634,26 +634,25 @@ async function ejecutarAnalisis() {
       .map(m => ({ codigo: m.codigo, descripcion: m.descripcion }));
     const clusters = detectarCandidatosLocal(materialesParaComparar);
 
-    let gruposGemini = [];
-    if (clusters.length > 0) {
-      estadoTexto.textContent = `Confirmando ${clusters.length} grupo(s) candidato(s) con el agente...`;
-      const respGemini = await confirmarConGemini(clusters);
-      if (respGemini.ok) gruposGemini = respGemini.grupos;
-    }
+    // Los candidatos detectados localmente (similitud de texto + guardias de número,
+    // color y palabra distintiva) se muestran directo al usuario para que confirme
+    // manualmente cuáles fusionar — ya no se le pide confirmación a un agente de IA,
+    // para no depender de que esa llamada esté disponible o funcione.
+    const gruposCandidatos = clusters.map(cluster => cluster.map(m => m.codigo));
 
     estado = {
       ...estado,
       ventasProcesadas, stockTienda, stockKacosa,
       notasPendientes: notasPendientes || null,
-      clustersCandidatos: clusters, gruposGemini,
+      clustersCandidatos: clusters, gruposCandidatos,
       tiendaSeleccionada: tienda, periodo, mesesCantidad, margenPct,
       fechaAnalisis: new Date().toLocaleDateString("es-VE"),
       analisisCompleto: null
     };
 
-    if (gruposGemini.length > 0) {
-      estadoTexto.textContent = `Se detectaron ${gruposGemini.length} posible(s) duplicado(s). Revísalos abajo.`;
-      mostrarDuplicados(gruposGemini);
+    if (gruposCandidatos.length > 0) {
+      estadoTexto.textContent = `Se detectaron ${gruposCandidatos.length} posible(s) duplicado(s). Revísalos abajo.`;
+      mostrarDuplicados(gruposCandidatos);
     } else {
       estadoTexto.textContent = "No se detectaron duplicados. Calculando...";
       await finalizarCalculo([]);
@@ -734,8 +733,8 @@ function mostrarDuplicados(grupos) {
   });
 
   // Aviso + scroll automático: el usuario puede no estar viendo esta parte de
-  // la pantalla cuando termina de responder el agente, así que se le avisa
-  // explícitamente y se lleva la vista hasta los grupos a confirmar.
+  // la pantalla cuando termina el análisis, así que se le avisa explícitamente
+  // y se lleva la vista hasta los grupos a confirmar.
   notificarExito(
     `Se ${grupos.length === 1 ? "detectó 1 posible duplicado" : `detectaron ${grupos.length} posibles duplicados`}. Revisa los grupos y confirma cuáles fusionar antes de continuar.`,
     { titulo: "Posibles duplicados detectados", icono: '<i class="fa-solid fa-triangle-exclamation"></i>', segundos: 6 }
