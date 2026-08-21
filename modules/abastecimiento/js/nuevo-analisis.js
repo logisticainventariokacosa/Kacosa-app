@@ -563,10 +563,23 @@ async function ejecutarAnalisis() {
       return;
     }
 
-    await cargarFactoresConversion(); // trae desde Supabase el contenido de empaque/caja por material
-    const ventasProcesadas = procesarVentas(filasVentas);
+    estadoTexto.textContent = "Agrupando stock por material...";
     const stockTienda = agruparStock(filasStockTienda, centrosValidos);
     const stockKacosa = agruparStock(filasStockKacosa, CENTROS_KACOSA);
+
+    // Mapa código -> UMB (unidad de medida base), tomado del stock: Kacosa primero,
+    // stock tienda como respaldo si el material no aparece ahí — mismo criterio que
+    // se usa más adelante para mostrar la UMB de cada material (calculo-abastecimiento.js).
+    // Se arma ANTES de procesar las ventas porque hace falta para convertir correctamente
+    // cualquier unidad de venta (M, RO, KG, G, etc.) a la unidad base del material.
+    const mapaUMBPorMaterial = {};
+    Object.values(stockKacosa).forEach(m => { mapaUMBPorMaterial[m.codigo] = m.unidadBase; });
+    Object.values(stockTienda).forEach(m => {
+      if (!mapaUMBPorMaterial[m.codigo]) mapaUMBPorMaterial[m.codigo] = m.unidadBase;
+    });
+
+    await cargarFactoresConversion(); // trae desde Supabase los factores por material y por UMB
+    const ventasProcesadas = procesarVentas(filasVentas, mapaUMBPorMaterial);
 
     // Alimenta las tablas de Stock y Movimientos en Supabase con los datos crudos
     // de los archivos que se acaban de subir. No bloquea el análisis si falla.
@@ -882,9 +895,10 @@ async function finalizarCalculo(gruposConfirmados) {
 
     const totalAPedirNotif = estado.grupos?.pedido?.reduce((acc, m) => acc + (m.aPedir || 0), 0) || 0;
 
-    // Aviso de posibles factores de conversión faltantes: materiales que se vendieron
-    // en más de una unidad y a alguna le falta la fila en factores_conversion, lo que
-    // pudo haber inflado o distorsionado su "a pedir" (cae en factor=1 por defecto sin avisar).
+    // Aviso de posibles factores de conversión faltantes: materiales cuya unidad de
+    // venta es distinta a su UMB y no tienen factor configurado (ni por material, ni
+    // genérico por UMB) para convertirla — cae en factor=1 por defecto sin avisar,
+    // lo que pudo haber inflado o distorsionado su "a pedir".
     const advertenciasFactor = estado.ventasProcesadas.advertenciasFactor || [];
     let mensajeNotif = `Se procesaron ${resultado.length} material(es) — ${totalAPedirNotif} unidades a pedir. El análisis quedó guardado correctamente.`;
     let iconoNotif = undefined;
@@ -899,10 +913,10 @@ async function finalizarCalculo(gruposConfirmados) {
         return true;
       });
       const listaHtml = unicos.slice(0, 6)
-        .map(a => `${a.codigo} (${a.descripcion || "sin descripción"}) — unidad "${a.unidad}"`)
+        .map(a => `${a.codigo} (${a.descripcion || "sin descripción"}) — vendido en "${a.unidad}", UMB "${a.umb}"`)
         .join("<br>");
       const restantes = unicos.length - 6;
-      mensajeNotif += `<br><br><strong><i class="fa-solid fa-triangle-exclamation"></i> Revisa factores_conversion:</strong> ${unicos.length} material(es) con más de una unidad de venta, sin factor configurado para alguna:<br>${listaHtml}${restantes > 0 ? `<br>y ${restantes} más...` : ""}`;
+      mensajeNotif += `<br><br><strong><i class="fa-solid fa-triangle-exclamation"></i> Revisa factores_conversion / factores_conversion_umb:</strong> ${unicos.length} material(es) con unidad de venta distinta a su UMB, sin factor configurado para convertir:<br>${listaHtml}${restantes > 0 ? `<br>y ${restantes} más...` : ""}`;
       iconoNotif = '<i class="fa-solid fa-triangle-exclamation"></i>';
       segundosNotif = 12;
     }
@@ -1305,7 +1319,10 @@ function construirWorkbookCompleto() {
     [
       { key: 'codigo', label: 'Codigo', ancho: 14 }, { key: 'descripcion', label: 'Descripcion', ancho: 38 },
       { key: 'umb', label: 'UMB', ancho: 10 },
-      { key: 'clase', label: 'Clase', ancho: 8 }, { key: 'aPedirIdeal', label: 'A_Pedir_Ideal', ancho: 12 },
+      { key: 'clase', label: 'Clase', ancho: 8 },
+      { key: 'totalVentas', label: 'Total_Ventas', ancho: 12 },
+      { key: 'promedioVentasPeriodo', label: 'Promedio_Ventas_Periodo', ancho: 16 },
+      { key: 'aPedirIdeal', label: 'A_Pedir_Ideal', ancho: 12 },
       { key: 'aPedir', label: 'A_Pedir_Real', ancho: 12 }, { key: 'pendiente', label: 'Pendiente', ancho: 12 },
       { key: 'stockKacosa1000', label: 'Stock_Kacosa_1000', ancho: 14 },
       { key: 'stockKacosa3000', label: 'Stock_Kacosa_3000', ancho: 14 },
