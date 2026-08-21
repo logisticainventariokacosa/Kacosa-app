@@ -1,7 +1,7 @@
 // js/nav.js
 import { auth } from "./firebase-config.js?v=2";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-import { protegerPagina, cerrarSesion, obtenerPerfilPortal, ROLES_PERMITIDOS_ABASTECIMIENTO } from "./auth.js";
+import { protegerPagina, cerrarSesion, obtenerPerfilPortal, ROLES_PERMITIDOS_ABASTECIMIENTO, ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS } from "./auth.js";
 import { nombrePorId } from "./tiendas.js";
 import { mostrarLoader, ocultarLoader } from "./loader.js";
 
@@ -39,9 +39,6 @@ onAuthStateChanged(auth, async (user) => {
   // caso (incluyendo perfil nulo o rol desconocido) no ve ninguna tienda.
   const rolNormalizado = (rol || "").toString().trim().toLowerCase();
   const esGerente = rolNormalizado === "gerente";
-  const ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS = [
-    "supervisor", "abastecimiento", "compras", "admin", "directiva","coordinador"
-  ];
   const veTodasLasTiendas = ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS.includes(rolNormalizado);
   // El campo en Firestore es "tiendas" (array), no "tienda" (string) — un
   // gerente puede tener una o varias tiendas asignadas en ese array.
@@ -63,6 +60,8 @@ onAuthStateChanged(auth, async (user) => {
     nombre: nombre,
     displayName: nombre,
     rol: rol,
+    rolNormalizado: rolNormalizado,
+    veTodasLasTiendas: veTodasLasTiendas,
     ...user
   };
 
