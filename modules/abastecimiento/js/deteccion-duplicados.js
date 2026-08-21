@@ -167,26 +167,11 @@ export function fusionarDuplicados(ventasPorMaterial, stockTienda, stockKacosa, 
       ventasPorMaterial[c].ventaNetaUnidadVenta > ventasPorMaterial[mejor].ventaNetaUnidadVenta ? c : mejor
     , candidatos[0]);
 
-    // Inicializa el array de materiales fusionados en el canónico
-    if (!ventasPorMaterial[canonico].materiales_fusionados) {
-      ventasPorMaterial[canonico].materiales_fusionados = [];
-    }
-
-    // Guarda la unidad de venta del canónico para preservarla
-    const unidadVentaCanonica = ventasPorMaterial[canonico].unidadVenta;
-
     presentes.forEach(c => {
       if (c === canonico) return;
 
-      // Guarda el código que se está fusionando
-      ventasPorMaterial[canonico].materiales_fusionados.push(c);
-
       ventasPorMaterial[canonico].ventaNetaUnidadVenta += ventasPorMaterial[c].ventaNetaUnidadVenta;
       ventasPorMaterial[canonico].ventaNetaUnidadBase += ventasPorMaterial[c].ventaNetaUnidadBase;
-      
-      // La unidad de venta se mantiene como la del canónico
-      ventasPorMaterial[canonico].unidadVenta = unidadVentaCanonica;
-      
       delete ventasPorMaterial[c];
 
       if (stockTienda[c]) {
