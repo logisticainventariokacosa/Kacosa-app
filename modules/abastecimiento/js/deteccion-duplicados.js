@@ -172,6 +172,17 @@ export function fusionarDuplicados(ventasPorMaterial, stockTienda, stockKacosa, 
 
       ventasPorMaterial[canonico].ventaNetaUnidadVenta += ventasPorMaterial[c].ventaNetaUnidadVenta;
       ventasPorMaterial[canonico].ventaNetaUnidadBase += ventasPorMaterial[c].ventaNetaUnidadBase;
+
+      // Registra qué código(s) quedaron fusionados dentro del canónico, para
+      // poder mostrarlo luego en la columna "Materiales_Fusionados".
+      ventasPorMaterial[canonico].materialesFusionados = ventasPorMaterial[canonico].materialesFusionados || [];
+      ventasPorMaterial[canonico].materialesFusionados.push(c);
+      // Si "c" ya traía fusionados de una fusión anterior (fusión de 3+ códigos
+      // en cadena), esos también se arrastran al canónico final.
+      if (ventasPorMaterial[c].materialesFusionados) {
+        ventasPorMaterial[canonico].materialesFusionados.push(...ventasPorMaterial[c].materialesFusionados);
+      }
+
       delete ventasPorMaterial[c];
 
       if (stockTienda[c]) {
