@@ -635,7 +635,8 @@ async function ejecutarAnalisis() {
     const clusters = detectarCandidatosLocal(materialesParaComparar);
 
     // Los candidatos detectados localmente (similitud de texto + guardias de número,
-    // color y palabra distintiva) se muestran directo al usuario para que confirme    // manualmente cuáles fusionar — ya no se le pide confirmación a un agente de IA,
+    // color y palabra distintiva) se muestran directo al usuario para que confirme
+    // manualmente cuáles fusionar — ya no se le pide confirmación a un agente de IA,
     // para no depender de que esa llamada esté disponible o funcione.
     const gruposCandidatos = clusters.map(cluster => cluster.map(m => m.codigo));
 
@@ -1017,7 +1018,6 @@ function mostrarResultados(resultado, sugerencias) {
   const columnas = [
     { key: 'codigo', label: 'Código' },
     { key: 'descripcion', label: 'Descripción' },
-    { key: 'unidadVenta', label: 'UMV' },
     { key: 'umb', label: 'UMB' },
     { key: 'clase', label: 'Clase' },
     { key: 'totalVentas', label: 'Total ventas', numeric: true },
@@ -1030,8 +1030,7 @@ function mostrarResultados(resultado, sugerencias) {
     { key: 'aPedir', label: 'A pedir', numeric: true },
     { key: 'porDespacho', label: 'Por despacho', numeric: true },
     { key: 'numeroDeNota', label: 'Número de nota' },
-    { key: 'fechaDeNota', label: 'Fecha de nota' },
-    { key: 'materiales_fusionados', label: 'Materiales Fusionados' }
+    { key: 'fechaDeNota', label: 'Fecha de nota' }
   ];
 
   const container = document.getElementById('na-tabla-container');
@@ -1114,7 +1113,6 @@ function anexarAltaRotacionFaltante(resultado, stockTienda, stockKacosa, altaRot
     resultado.push({
       codigo,
       descripcion: m.descripcion,
-      unidadVenta: infoKacosa?.unidadBase || infoTienda?.unidadBase || "UN",
       umb: infoKacosa?.unidadBase || infoTienda?.unidadBase || "UN",
       clase: m.clase,
       totalVentas: 0,
@@ -1134,7 +1132,6 @@ function anexarAltaRotacionFaltante(resultado, stockTienda, stockKacosa, altaRot
       porDespacho: 0,
       numeroDeNota: '',
       fechaDeNota: '',
-      materiales_fusionados: [],
       // Marca este material como "anexado": no vino en el archivo de ventas de
       // esta tienda, se agregó porque está en la base de alta rotación, tiene
       // stock en Kacosa y no tiene stock en la tienda. Sirve para resaltarlo
@@ -1288,11 +1285,10 @@ function construirWorkbookCompleto() {
   );
   XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
 
-  // --- Columnas para A_Pedir y No_Amerito_Pedido ---
   const columnasCompletas = [
     { key: 'codigo', label: 'Codigo', ancho: 14 },
     { key: 'descripcion', label: 'Descripcion', ancho: 38 },
-    { key: 'unidadVenta', label: 'UMV', ancho: 10 },
+    { key: 'umb', label: 'UMB', ancho: 10 },
     { key: 'clase', label: 'Clase', ancho: 8 },
     { key: 'totalVentas', label: 'Total_Ventas', ancho: 12 },
     { key: 'promedioVentasPeriodo', label: 'Promedio_Ventas_Periodo', ancho: 16 },
@@ -1301,7 +1297,6 @@ function construirWorkbookCompleto() {
     { key: 'stockKacosa3000', label: 'Stock_Kacosa_3000', ancho: 14 },
     { key: 'stockKacosa', label: 'Total_Stock_Kacosa', ancho: 14 },
     { key: 'ubicacionKacosa', label: 'Ubicacion_Kacosa', ancho: 16 },
-    { key: 'umb', label: 'UMB', ancho: 10 },
     { key: 'aPedir', label: 'A_Pedir', ancho: 10 },
     { key: 'porDespacho', label: 'Por_Despacho', ancho: 12 },
     { key: 'numeroDeNota', label: 'Numero_De_Nota', ancho: 14 },
@@ -1310,8 +1305,7 @@ function construirWorkbookCompleto() {
     { key: 'periodoAbastecimiento', label: 'Periodo_Abastecimiento', ancho: 16 },
     { key: 'rangoSeguridadUsado', label: 'Rango_Seguridad_Usado', ancho: 14 },
     { key: 'tienda', label: 'Tienda', ancho: 14 },
-    { key: 'fechaAnalisis', label: 'Fecha_Analisis', ancho: 14 },
-    { key: 'materiales_fusionados', label: 'Materiales_Fusionados', ancho: 20 }
+    { key: 'fechaAnalisis', label: 'Fecha_Analisis', ancho: 14 }
   ];
 
   XLSX.utils.book_append_sheet(wb, construirHojaEstilizada(pedido, columnasCompletas, {
@@ -1323,32 +1317,24 @@ function construirWorkbookCompleto() {
     colorearPorClase: true
   }), "No_Amerito_Pedido");
 
-  // --- Columnas para Pendiente_Stock_Kacosa ---
-  const columnasPendiente = [
-    { key: 'codigo', label: 'Codigo', ancho: 14 },
-    { key: 'descripcion', label: 'Descripcion', ancho: 38 },
-    { key: 'unidadVenta', label: 'UMV', ancho: 10 },
-    { key: 'clase', label: 'Clase', ancho: 8 },
-    { key: 'totalVentas', label: 'Total_Ventas', ancho: 12 },
-    { key: 'promedioVentasPeriodo', label: 'Promedio_Ventas_Periodo', ancho: 16 },
-    { key: 'stockTienda', label: 'Stock_Tienda', ancho: 12 },
-    { key: 'aPedirIdeal', label: 'A_Pedir_Ideal', ancho: 12 },
-    { key: 'aPedir', label: 'A_Pedir_Real', ancho: 12 },
-    { key: 'pendiente', label: 'Pendiente', ancho: 12 },
-    { key: 'stockKacosa1000', label: 'Stock_Kacosa_1000', ancho: 14 },
-    { key: 'stockKacosa3000', label: 'Stock_Kacosa_3000', ancho: 14 },
-    { key: 'stockKacosa', label: 'Total_Stock_Kacosa', ancho: 14 },
-    { key: 'ubicacionKacosa', label: 'Ubicacion_Kacosa', ancho: 16 },
-    { key: 'umb', label: 'UMB', ancho: 10 },
-    { key: 'periodoAbastecimiento', label: 'Periodo_Abastecimiento', ancho: 16 },
-    { key: 'tienda', label: 'Tienda', ancho: 14 },
-    { key: 'rangoSeguridadUsado', label: 'Rango_Seguridad_Usado', ancho: 14 },
-    { key: 'materiales_fusionados', label: 'Materiales_Fusionados', ancho: 20 }
-  ];
-
   XLSX.utils.book_append_sheet(wb, construirHojaEstilizada(
     pendienteStock.map(m => ({ ...m, pendiente: (m.aPedirIdeal || 0) - (m.aPedir || 0) })),
-    columnasPendiente,
+    [
+      { key: 'codigo', label: 'Codigo', ancho: 14 }, { key: 'descripcion', label: 'Descripcion', ancho: 38 },
+      { key: 'umb', label: 'UMB', ancho: 10 },
+      { key: 'clase', label: 'Clase', ancho: 8 },
+      { key: 'totalVentas', label: 'Total_Ventas', ancho: 12 },
+      { key: 'promedioVentasPeriodo', label: 'Promedio_Ventas_Periodo', ancho: 16 },
+      { key: 'aPedirIdeal', label: 'A_Pedir_Ideal', ancho: 12 },
+      { key: 'aPedir', label: 'A_Pedir_Real', ancho: 12 }, { key: 'pendiente', label: 'Pendiente', ancho: 12 },
+      { key: 'stockKacosa1000', label: 'Stock_Kacosa_1000', ancho: 14 },
+      { key: 'stockKacosa3000', label: 'Stock_Kacosa_3000', ancho: 14 },
+      { key: 'stockKacosa', label: 'Total_Stock_Kacosa', ancho: 14 },
+      { key: 'ubicacionKacosa', label: 'Ubicacion_Kacosa', ancho: 16 },
+      { key: 'periodoAbastecimiento', label: 'Periodo_Abastecimiento', ancho: 16 },
+      { key: 'tienda', label: 'Tienda', ancho: 14 },
+      { key: 'rangoSeguridadUsado', label: 'Rango_Seguridad_Usado', ancho: 14 }
+    ],
     {
       colorearPorClase: true,
       columnasDestacadas: [{ key: 'pendiente', color: 'FFC4432B' }]
