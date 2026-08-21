@@ -113,6 +113,8 @@ export function calcularAbastecimiento({ ventasProcesadas, stockTienda, stockKac
       codigo: v.codigo,
       descripcion: v.descripcion,
       umb,
+      unidadVenta: v.unidadVenta || "UN",
+      materialesFusionados: (v.materialesFusionados || []).join(", "),
       clase,
       totalVentas: Math.round(v.ventaNetaUnidadVenta * 100) / 100,
       promedioVentasPeriodo: Math.round(tasaClasificacion * 100) / 100,
