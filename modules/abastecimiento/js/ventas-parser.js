@@ -105,7 +105,13 @@ export function procesarVentas(filas, mapaUMBPorMaterial = {}) {
       descripcion: m.descripcion,
       unidadVenta: unidadPrincipal || "UN",
       ventaNetaUnidadVenta: redondear(ventaNetaUnidadVenta),
-      ventaNetaUnidadBase: redondear(ventaNetaUnidadBase)
+      ventaNetaUnidadBase: redondear(ventaNetaUnidadBase),
+      // Se conservan SIN redondear ni convertir — la fusión de duplicados
+      // (deteccion-duplicados.js) las necesita para recalcular desde cero al
+      // combinar dos códigos, en vez de sumar los totales ya reconvertidos
+      // (que pueden estar cada uno en una unidad de venta principal distinta).
+      unidadesRaw: { ...m.unidades },
+      conteoFilasPorUnidad: { ...m.conteoFilasPorUnidad }
     };
   });
 
