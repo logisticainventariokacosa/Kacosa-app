@@ -395,8 +395,34 @@ function descargarExcelDashboard(materialesOriginal, analisis) {
     colorearPorClase: true
   }), "No_Amerito_Pedido");
 
-  XLSX.utils.book_append_sheet(wb, construirHojaEstilizada(pendienteStock, columnasCompletas, {
-    colorearPorClase: true
+  // Pendiente_Stock_Kacosa necesita su propio desglose (A_Pedir_Ideal / A_Pedir_Real /
+  // Pendiente), no el mismo "A_Pedir" genérico de las otras hojas — igual que en el
+  // Excel de Nuevo Análisis.
+  const columnasPendienteStock = [
+    { key: 'codigo', label: 'Codigo', ancho: 14 },
+    { key: 'descripcion', label: 'Descripcion', ancho: 38 },
+    { key: 'unidadVenta', label: 'UMV', ancho: 10 },
+    { key: 'materialesFusionados', label: 'Materiales_Fusionados', ancho: 22 },
+    { key: 'clase', label: 'Clase', ancho: 8 },
+    { key: 'totalVentas', label: 'Total_Ventas', ancho: 12 },
+    { key: 'promedioVentasPeriodo', label: 'Promedio_Ventas_Periodo', ancho: 16 },
+    { key: 'stockTienda', label: 'Stock_Tienda', ancho: 12 },
+    { key: 'umb', label: 'UMB', ancho: 10 },
+    { key: 'aPedirIdeal', label: 'A_Pedir_Ideal', ancho: 12 },
+    { key: 'aPedir', label: 'A_Pedir_Real', ancho: 12 },
+    { key: 'pendiente', label: 'Pendiente', ancho: 12 },
+    { key: 'stockKacosa1000', label: 'Stock_Kacosa_1000', ancho: 14 },
+    { key: 'stockKacosa3000', label: 'Stock_Kacosa_3000', ancho: 14 },
+    { key: 'stockKacosa', label: 'Total_Stock_Kacosa', ancho: 14 },
+    { key: 'ubicacionKacosa', label: 'Ubicacion_Kacosa', ancho: 16 },
+    { key: 'periodoAbastecimiento', label: 'Periodo_Abastecimiento', ancho: 16 },
+    { key: 'tienda', label: 'Tienda', ancho: 14 },
+    { key: 'rangoSeguridadUsado', label: 'Rango_Seguridad_Usado', ancho: 14 }
+  ];
+
+  XLSX.utils.book_append_sheet(wb, construirHojaEstilizada(pendienteStock, columnasPendienteStock, {
+    colorearPorClase: true,
+    columnasDestacadas: [{ key: 'pendiente', color: 'FFC4432B' }]
   }), "Pendiente_Stock_Kacosa");
 
   XLSX.writeFile(wb, `Dashboard_${base}.xlsx`);
