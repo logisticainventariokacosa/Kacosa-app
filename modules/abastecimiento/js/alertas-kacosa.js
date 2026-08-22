@@ -6,7 +6,7 @@ import { nombrePorId, TIENDAS } from "./tiendas.js";
 import { obtenerInfoPaquete, cargarPaquetes } from "./paquetes.js";
 import { notificarExito } from "./notificaciones.js";
 import { construirHojaEstilizada, construirHojaResumen } from "./excel-estilos.js";
-import { esCodigoExcluido } from "./exclusiones.js";
+import { esCodigoExcluido, cargarCodigosExcluidos } from "./exclusiones.js";
 
 // Columnas requeridas para el archivo de stock
 const COLUMNAS_STOCK = [
@@ -461,6 +461,7 @@ async function procesarArchivo() {
     const filas = filasCache;
 
     if (estado) estado.textContent = "Agrupando stock por material...";
+    await cargarCodigosExcluidos(); // trae desde Supabase la lista de códigos a ignorar
     const stockPorMaterial = agruparStockKacosa(filas);
 
     if (estado) estado.textContent = "Cruzando contra Alta Rotación y los últimos análisis de las tiendas...";
