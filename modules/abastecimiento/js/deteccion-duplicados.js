@@ -1,4 +1,5 @@
 // js/deteccion-duplicados.js
+import { obtenerFactor } from "./factores-conversion.js";
 
 /** Normaliza texto para comparar: mayúsculas, sin acentos, sin espacios repetidos. */
 function normalizar(texto) {
@@ -148,9 +149,14 @@ export function detectarCandidatosLocal(materiales) {
  * los que tienen stock disponible en Kacosa, el de mayor venta neta; si
  * ninguno tiene stock en Kacosa, el de mayor venta neta de todo el grupo.
  *
- * @param {Object} ventasPorMaterial - objeto codigo -> {ventaNetaUnidadVenta, ventaNetaUnidadBase, ...}
- * @param {Object} stockTienda - objeto codigo -> {stockDisponible, ...}
- * @param {Object} stockKacosa - objeto codigo -> {stockDisponible, ...}
+ * Las ventas NO se fusionan sumando los totales ya calculados de cada código
+ * (eso mezclaría unidades si cada uno tenía una unidad de venta principal
+ * distinta) — se combinan las cantidades sin convertir (unidadesRaw) de todos
+ * los códigos del grupo y se recalcula una sola vez con la UMB del canónico.
+ *
+ * @param {Object} ventasPorMaterial - objeto codigo -> {ventaNetaUnidadVenta, ventaNetaUnidadBase, unidadesRaw, conteoFilasPorUnidad, ...}
+ * @param {Object} stockTienda - objeto codigo -> {stockDisponible, unidadBase, ...}
+ * @param {Object} stockKacosa - objeto codigo -> {stockDisponible, unidadBase, ...}
  * @param {Array<Array<string>>} gruposConfirmados - array de arrays de códigos confirmados como duplicados
  */
 export function fusionarDuplicados(ventasPorMaterial, stockTienda, stockKacosa, gruposConfirmados) {
@@ -167,11 +173,49 @@ export function fusionarDuplicados(ventasPorMaterial, stockTienda, stockKacosa, 
       ventasPorMaterial[c].ventaNetaUnidadVenta > ventasPorMaterial[mejor].ventaNetaUnidadVenta ? c : mejor
     , candidatos[0]);
 
+    // UMB del canónico: se toma del stock (Kacosa primero, tienda como respaldo),
+    // igual criterio que se usa en todo el resto de la app.
+    const umbCanonico = stockKacosa[canonico]?.unidadBase || stockTienda[canonico]?.unidadBase;
+
+    // IMPORTANTE: no se suman directamente los "ventaNetaUnidadVenta" ya calculados
+    // de cada código — cada uno pudo haberse reconvertido a SU PROPIA unidad de venta
+    // principal (ej. uno vendido solo en "M" y el otro solo en "RO6"), y sumar esos
+    // totales sería mezclar números en unidades distintas sin sentido (el mismo tipo
+    // de error que se corrigió para un solo material vendido en varias unidades).
+    // En vez de eso, se combinan las cantidades SIN CONVERTIR (unidadesRaw) de todos
+    // los códigos del grupo, y se recalcula UNA sola vez con la UMB del canónico.
+    const unidadesCombinadas = {};
+    const conteoCombinado = {};
+    presentes.forEach(c => {
+      const m = ventasPorMaterial[c];
+      Object.entries(m.unidadesRaw || {}).forEach(([unidad, cant]) => {
+        unidadesCombinadas[unidad] = (unidadesCombinadas[unidad] || 0) + cant;
+      });
+      Object.entries(m.conteoFilasPorUnidad || {}).forEach(([unidad, n]) => {
+        conteoCombinado[unidad] = (conteoCombinado[unidad] || 0) + n;
+      });
+    });
+
+    let ventaNetaUnidadBase = 0;
+    Object.entries(unidadesCombinadas).forEach(([unidad, sumaSigned]) => {
+      const factor = obtenerFactor(canonico, unidad, umbCanonico);
+      ventaNetaUnidadBase += sumaSigned / factor;
+    });
+    ventaNetaUnidadBase = Math.abs(ventaNetaUnidadBase);
+
+    const unidadPrincipal = Object.keys(conteoCombinado)
+      .sort((a, b) => conteoCombinado[b] - conteoCombinado[a])[0] || "UN";
+    const factorPrincipal = obtenerFactor(canonico, unidadPrincipal, umbCanonico);
+    const ventaNetaUnidadVenta = ventaNetaUnidadBase * factorPrincipal;
+
+    ventasPorMaterial[canonico].ventaNetaUnidadBase = ventaNetaUnidadBase;
+    ventasPorMaterial[canonico].ventaNetaUnidadVenta = ventaNetaUnidadVenta;
+    ventasPorMaterial[canonico].unidadVenta = unidadPrincipal;
+    ventasPorMaterial[canonico].unidadesRaw = unidadesCombinadas;
+    ventasPorMaterial[canonico].conteoFilasPorUnidad = conteoCombinado;
+
     presentes.forEach(c => {
       if (c === canonico) return;
-
-      ventasPorMaterial[canonico].ventaNetaUnidadVenta += ventasPorMaterial[c].ventaNetaUnidadVenta;
-      ventasPorMaterial[canonico].ventaNetaUnidadBase += ventasPorMaterial[c].ventaNetaUnidadBase;
 
       // Registra qué código(s) quedaron fusionados dentro del canónico, para
       // poder mostrarlo luego en la columna "Materiales_Fusionados".
