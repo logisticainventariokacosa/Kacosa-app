@@ -2,6 +2,7 @@
 import { parsearMHT, aNumero } from "./mht-parser.js";
 import { procesarVentas } from "./ventas-parser.js";
 import { cargarFactoresConversion } from "./factores-conversion.js";
+import { cargarCodigosExcluidos } from "./exclusiones.js";
 import { agruparStock, procesarNotasPendientes } from "./stock-parser.js";
 import { cargarPaquetes } from "./paquetes.js";
 import { cargarUbicaciones, obtenerUbicacion } from "./ubicaciones.js";
@@ -578,7 +579,10 @@ async function ejecutarAnalisis() {
       if (!mapaUMBPorMaterial[m.codigo]) mapaUMBPorMaterial[m.codigo] = m.unidadBase;
     });
 
-    await cargarFactoresConversion(); // trae desde Supabase los factores por material y por UMB
+    await Promise.all([
+      cargarFactoresConversion(), // trae desde Supabase los factores por material y por UMB
+      cargarCodigosExcluidos()    // trae desde Supabase la lista de códigos a ignorar
+    ]);
     const ventasProcesadas = procesarVentas(filasVentas, mapaUMBPorMaterial);
 
     // Alimenta las tablas de Stock y Movimientos en Supabase con los datos crudos
