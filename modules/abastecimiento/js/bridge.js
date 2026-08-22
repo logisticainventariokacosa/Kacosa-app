@@ -45,7 +45,24 @@ export async function callBridge(action, payload = {}) {
     if (!resp.ok) {
       return { ok: false, error: "Error de red: " + resp.status };
     }
-    return await resp.json();
+    const data = await resp.json();
+
+    // TEMPORAL (fase de verificación de seguridad, quitar cuando se confirme):
+    // muestra un aviso emergente con el método real que usó el backend para
+    // autorizar esta petición, para poder comprobarlo directo desde el celular
+    // sin tener que entrar al panel de Ejecuciones de Apps Script.
+    if (data && data._authMetodo && !window.__authMetodoAvisado) {
+      window.__authMetodoAvisado = true; // solo una vez por sesión, para no ser molesto
+      setTimeout(() => {
+        alert(
+          data._authMetodo === "idToken"
+            ? "✅ Verificación de seguridad: entrando por idToken de Firebase (correcto)."
+            : "⚠️ Verificación de seguridad: entrando por el token de respaldo, NO por idToken. Avísale a Claude."
+        );
+      }, 300);
+    }
+
+    return data;
   } catch (err) {
     return { ok: false, error: "No se pudo conectar con el servidor: " + err.message };
   }
