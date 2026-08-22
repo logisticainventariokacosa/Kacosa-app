@@ -1114,6 +1114,8 @@ function anexarAltaRotacionFaltante(resultado, stockTienda, stockKacosa, altaRot
       codigo,
       descripcion: m.descripcion,
       umb: infoKacosa?.unidadBase || infoTienda?.unidadBase || "UN",
+      unidadVenta: "UN", // no vino en el archivo de ventas, no hay unidad de venta real que reportar
+      materialesFusionados: "",
       clase: m.clase,
       totalVentas: 0,
       promedioVentasPeriodo: 0,
