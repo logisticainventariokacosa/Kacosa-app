@@ -7,6 +7,7 @@ import { obtenerInfoPaquete, cargarPaquetes } from "./paquetes.js";
 import { notificarExito } from "./notificaciones.js";
 import { construirHojaEstilizada, construirHojaResumen } from "./excel-estilos.js";
 import { esCodigoExcluido, cargarCodigosExcluidos } from "./exclusiones.js";
+import { ROLES_CON_ACCESO_A_ALERTAS_DE_OTROS } from "./auth.js";
 
 // Columnas requeridas para el archivo de stock
 const COLUMNAS_STOCK = [
@@ -221,7 +222,15 @@ function render() {
 async function cargarUltimaAlertaGuardada() {
   const estado = document.getElementById("estado-alertas");
   try {
-    const resp = await callBridge("leerUltimaAlertaKacosa", {});
+    // Roles admin/coordinador/directiva ven la última alerta sin importar quién
+    // la haya generado. Cualquier otro rol solo ve la última que él mismo generó
+    // (aunque otro usuario haya calculado una más reciente).
+    const rolNormalizado = window.KACOSA?.usuario?.rolNormalizado
+      || (window.KACOSA?.usuario?.rol || "").toString().trim().toLowerCase();
+    const esPrivilegiado = ROLES_CON_ACCESO_A_ALERTAS_DE_OTROS.includes(rolNormalizado);
+    const filtroUsuario = esPrivilegiado ? {} : { usuarioEmail: window.KACOSA?.usuario?.email || "" };
+
+    const resp = await callBridge("leerUltimaAlertaKacosa", filtroUsuario);
     if (!resp.ok || !resp.alertas || resp.alertas.length === 0) return;
 
     mostrarAlertas(resp.alertas);
@@ -229,7 +238,8 @@ async function cargarUltimaAlertaGuardada() {
     if (estado) {
       const fecha = resp.creadoEn ? new Date(resp.creadoEn).toLocaleString("es-VE") : "";
       const categoriaTxt = resp.categoriaTienda ? ` — tienda: ${resp.categoriaTienda}` : "";
-      estado.innerHTML = `<i class="fa-solid fa-clock-rotate-left"></i> Mostrando el último análisis guardado${fecha ? " (" + fecha + ")" : ""}${categoriaTxt}. Sube un archivo nuevo para recalcular.`;
+      const usuarioTxt = resp.usuarioNombre ? ` — realizado por ${resp.usuarioNombre}` : "";
+      estado.innerHTML = `<i class="fa-solid fa-clock-rotate-left"></i> Mostrando el último análisis guardado${fecha ? " (" + fecha + ")" : ""}${categoriaTxt}${usuarioTxt}. Sube un archivo nuevo para recalcular.`;
     }
   } catch (err) {
     console.error("No se pudo cargar el último dashboard de Alertas Kacosa:", err);
@@ -469,7 +479,9 @@ async function procesarArchivo() {
       stockKacosa: stockPorMaterial,
       periodoMeses: periodoSeleccionado,
       categoriaTienda: categoriaTiendaSeleccionada,
-      mapaEmpaques: mapaEmpaques
+      mapaEmpaques: mapaEmpaques,
+      usuarioEmail: window.KACOSA?.usuario?.email || "",
+      usuarioNombre: window.KACOSA?.usuario?.nombre || window.KACOSA?.usuario?.email || ""
     });
 
     if (!resp.ok) {
