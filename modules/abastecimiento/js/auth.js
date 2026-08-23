@@ -23,6 +23,12 @@ export const ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS = [
   "supervisor", "abastecimiento", "compras", "admin", "directiva", "coordinador"
 ];
 
+// Roles con acceso a ver la última Alerta Kacosa guardada por CUALQUIER usuario.
+// Es una lista MÁS CHICA y DISTINTA de ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS
+// (esa es para el Dashboard de Abastecimiento; esta es solo para Alertas
+// Kacosa) — cualquier otro rol solo ve la última alerta que él mismo generó.
+export const ROLES_CON_ACCESO_A_ALERTAS_DE_OTROS = ["admin", "coordinador", "directiva"];
+
 // Busca el perfil del usuario en la colección "usuarios" del Portal KACOSA
 export async function obtenerPerfilPortal(email) {
   try {
