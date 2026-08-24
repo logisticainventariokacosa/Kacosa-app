@@ -1331,19 +1331,43 @@ tbody tr:hover {
   background: #fff;
   border-radius: 16px;
   padding: 28px 26px 22px;
-  max-width: 340px;
-  width: 100%;
+  width: min(92vw, 420px);
+  max-width: 420px;
+  max-height: min(85vh, 640px);
+  display: flex;
+  flex-direction: column;
   text-align: center;
   box-shadow: 0 20px 50px rgba(0,0,0,0.3);
   transform: scale(0.9) translateY(10px);
   transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
 }
 #kacosa-notificacion.visible .kn-tarjeta { transform: scale(1) translateY(0); }
+
+.kn-cerrar {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: var(--fondo);
+  color: var(--texto-secundario);
+  border-radius: 50%;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.kn-cerrar:hover { background: var(--rojo-alerta); color: #fff; }
 
 .kn-icono {
   font-size: 42px;
   line-height: 1;
   margin-bottom: 10px;
+  flex-shrink: 0;
 }
 .kn-titulo {
   font-family: 'Space Grotesk', sans-serif;
@@ -1351,19 +1375,27 @@ tbody tr:hover {
   font-weight: 700;
   color: var(--texto-titulo);
   margin-bottom: 6px;
+  flex-shrink: 0;
 }
 .kn-mensaje {
   font-size: 13px;
   color: var(--texto-secundario);
   line-height: 1.5;
   margin-bottom: 16px;
+  text-align: left;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-right: 4px;
 }
+.kn-mensaje:first-line { text-align: center; } /* la primera línea (resumen corto) se ve mejor centrada */
 .kn-barra-tiempo {
   height: 3px;
   background: var(--fondo);
   border-radius: 3px;
   overflow: hidden;
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 .kn-barra-relleno {
   height: 100%;
@@ -1386,6 +1418,7 @@ tbody tr:hover {
   font-weight: 700;
   font-size: 14px;
   cursor: pointer;
+  flex-shrink: 0;
 }
 .kn-boton:hover { background: var(--azul-base-alto); }
 /* --- Sección de usuario al final del sidebar (sin espacio debajo) --- */
