@@ -1255,7 +1255,8 @@ async function finalizarCalculo(gruposConfirmados) {
 
   const { resultadoConAnexos } = anexarAltaRotacionFaltante(
     resultado, estado.stockTienda, estado.stockKacosa, altaRotacion,
-    resultado[0]?.periodoVentas || "", resultado[0]?.periodoAbastecimiento || "", resultado[0]?.rangoSeguridadUsado || ""
+    resultado[0]?.periodoVentas || "", resultado[0]?.periodoAbastecimiento || "", resultado[0]?.rangoSeguridadUsado || "",
+    resultado[0]?.rangoFechasTexto || "—"
   );
   resultado = resultadoConAnexos;
 
@@ -1274,6 +1275,11 @@ async function finalizarCalculo(gruposConfirmados) {
   const mesesUsadosRedondeado = Math.round(estado.ventasProcesadas.rangoFechas?.meses || 0);
   const semanasUsadasRedondeado = Math.round(estado.ventasProcesadas.rangoFechas?.semanas || 0);
 
+  // Rango de fechas EXACTO de los movimientos que realmente se usaron para calcular
+  // Total_Ventas (fechaMin/fechaMax reales de lo leído, ya recortado a mesesAnalisis) —
+  // no la ventana solicitada a Supabase, sino lo que de verdad había en esos días.
+  const rangoFechasTexto = resultado[0]?.rangoFechasTexto || "—";
+
   estado.analisisCompleto = {
     resultado: resultado,
     sugerencias: sugerencias,
@@ -1283,7 +1289,8 @@ async function finalizarCalculo(gruposConfirmados) {
     periodo: estado.periodo,
     margenPct: estado.margenPct,
     mesesUsados: mesesUsadosRedondeado,
-    semanasUsadas: semanasUsadasRedondeado
+    semanasUsadas: semanasUsadasRedondeado,
+    rangoFechasTexto
   };
 
   window.KACOSA.ultimoAnalisis = {
@@ -1293,6 +1300,7 @@ async function finalizarCalculo(gruposConfirmados) {
     margenPct: estado.margenPct,
     mesesUsados: mesesUsadosRedondeado,
     semanasUsadas: semanasUsadasRedondeado,
+    rangoFechasTexto,
     materiales: resultado,
     sugerencias
   };
@@ -1432,7 +1440,7 @@ function mostrarResultados(resultado, sugerencias) {
 
   const infoPeriodo = window.KACOSA.ultimoAnalisis;
   const textoPeriodo = infoPeriodo
-    ? `Período usado: ${infoPeriodo.mesesUsados ?? '?'} meses (${infoPeriodo.semanasUsadas ?? '?'} semanas)`
+    ? `Período usado: ${infoPeriodo.mesesUsados ?? '?'} meses (${infoPeriodo.semanasUsadas ?? '?'} semanas) — movimientos del ${infoPeriodo.rangoFechasTexto ?? '—'}`
     : '';
 
   cont.innerHTML = `
@@ -1566,7 +1574,7 @@ function validarCentros(filasVentas, filasStockTienda, filasStockKacosa, centros
   return null;
 }
 
-function anexarAltaRotacionFaltante(resultado, stockTienda, stockKacosa, altaRotacion, periodoVentas, periodoAbastecimiento, rangoSeguridadUsado) {
+function anexarAltaRotacionFaltante(resultado, stockTienda, stockKacosa, altaRotacion, periodoVentas, periodoAbastecimiento, rangoSeguridadUsado, rangoFechasTexto) {
   const codigosEnResultado = new Set(resultado.map(m => m.codigo));
   const anexados = [];
 
@@ -1606,6 +1614,7 @@ function anexarAltaRotacionFaltante(resultado, stockTienda, stockKacosa, altaRot
       periodoVentas,
       periodoAbastecimiento,
       rangoSeguridadUsado,
+      rangoFechasTexto,
       porDespacho: 0,
       numeroDeNota: '',
       fechaDeNota: '',
@@ -1776,6 +1785,7 @@ function construirWorkbookCompleto() {
     ],
     [
       `Período de ventas analizado: ${pedido[0]?.periodoVentas || noPedido[0]?.periodoVentas || "—"}`,
+      `Rango de fechas de movimientos: ${pedido[0]?.rangoFechasTexto || noPedido[0]?.rangoFechasTexto || pendienteStock[0]?.rangoFechasTexto || "—"}`,
       `Horizonte de abastecimiento: ${pedido[0]?.periodoAbastecimiento || "—"}`,
       `Rango de seguridad usado: ${pedido[0]?.rangoSeguridadUsado || "—"}`,
       `Analista: ${window.KACOSA?.usuario?.nombre || window.KACOSA?.usuario?.email || "—"}`,
