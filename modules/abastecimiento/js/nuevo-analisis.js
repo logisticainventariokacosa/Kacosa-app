@@ -176,6 +176,25 @@ function clampMesesAnalisis(meses) {
 }
 
 /**
+ * Fecha máxima real encontrada en un conjunto de filas (según "Fe.contabilización").
+ * Se usa para anclar el rango de "mesesAnalisis" a la última venta REAL disponible,
+ * en vez de a la fecha del sistema (new Date()) — ver ejecutarAnalisis(). Si el
+ * análisis se corre varios días después de la última venta cargada (porque no hay
+ * ventas más recientes que subir todavía), anclar al reloj del sistema hace que la
+ * ventana de fechas se "deslice" hacia adelante sin ganar nada al final, perdiendo
+ * silenciosamente los días más viejos del rango y dando un Total_Ventas distinto
+ * (más bajo) según qué día se corra el análisis, aunque los datos no cambien.
+ */
+function fechaMaximaEnFilas(filas) {
+  let fechaMax = null;
+  filas.forEach(f => {
+    const fecha = parsearFechaSAP(f["Fe.contabilización"]);
+    if (fecha && (!fechaMax || fecha > fechaMax)) fechaMax = fecha;
+  });
+  return fechaMax;
+}
+
+/**
  * Primera carga para una tienda (sin historial en Supabase todavía): sugiere
  * automáticamente cuántos meses de análisis usar, a partir del propio rango
  * de fechas que trae el archivo recién adjuntado (min a máx), dentro de los
@@ -979,10 +998,22 @@ async function ejecutarAnalisis() {
     // ABCD y del cálculo de "a pedir": ya no depende solo de lo que traiga el archivo
     // (que ahora puede ser apenas unos días), sino de los "mesesAnalisis" meses de
     // historial acumulados en la base de datos, que ya incluyen lo que se acaba de guardar.
+    //
+    // La ventana [fechaDesde, fechaHasta] se ancla a la fecha máxima REAL con datos
+    // (el mayor entre lo ya registrado en Supabase antes de este análisis y lo que
+    // trae el archivo recién subido) — NUNCA a new Date()/"hoy". Si se ancla al reloj
+    // del sistema, cada día que pasa sin subir un archivo nuevo desplaza la ventana
+    // hacia adelante sin ganar datos al final, y se pierden silenciosamente los días
+    // más antiguos del rango: mismo archivo, mismos "mesesAnalisis", pero Total_Ventas
+    // distinto (más bajo) solo porque cambió el día en que se corrió el análisis.
     estadoTexto.textContent = `Leyendo histórico de ventas (${mesesAnalisis} mes(es))...`;
-    const hoy = new Date();
-    const fechaHasta = formatearFechaISO(hoy);
-    const fechaDesde = formatearFechaISO(sumarMeses(hoy, -mesesAnalisis));
+    const fechaMaxArchivo = fechaMaximaEnFilas(filasVentas);
+    const fechaMaxRegistrada = estado.ultimaFechaRegistrada ? fechaISOaDate(estado.ultimaFechaRegistrada) : null;
+    const fechaAncla = [fechaMaxArchivo, fechaMaxRegistrada]
+      .filter(Boolean)
+      .reduce((max, f) => (!max || f > max ? f : max), null) || new Date();
+    const fechaHasta = formatearFechaISO(fechaAncla);
+    const fechaDesde = formatearFechaISO(sumarMeses(fechaAncla, -mesesAnalisis));
     const respHistorico = await callBridge("leerMovimientosRango", {
       centros: centrosValidos, fechaDesde, fechaHasta
     });
