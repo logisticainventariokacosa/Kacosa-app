@@ -127,7 +127,7 @@ export function procesarVentas(filas, mapaUMBPorMaterial = {}) {
 }
 
 /** SAP suele exportar la fecha como DD.MM.AAAA o similar; intentamos varios formatos comunes. */
-export function parsearFechaSAP(valor) {
+function parsearFechaSAP(valor) {
   if (!valor) return null;
   const texto = String(valor).trim();
 
@@ -153,31 +153,4 @@ function diasEntre(a, b) {
 
 function redondear(n) {
   return Math.round(n * 100) / 100;
-}
-
-/**
- * Convierte filas del histórico traído desde Supabase (tabla "movimientos",
- * columnas snake_case) al mismo formato de objeto que produce parsearMHT()
- * (llaves con los nombres de columna de SAP). Así procesarVentas() puede
- * usarse sin cambios sobre datos que vienen del archivo recién subido O de
- * Supabase (carga incremental — ver nuevo-analisis.js).
- * @param {Array<Object>} filasDB - filas devueltas por leerMovimientosRango (bridge)
- * @returns {Array<Object>}
- */
-export function adaptarFilasMovimientosDB(filasDB) {
-  return (filasDB || []).map(f => ({
-    "Material": f.material || "",
-    "Texto breve de material": f.texto_breve || "",
-    "Centro": f.centro || "",
-    "Almacén": f.almacen || "",
-    "Clase de movimiento": f.clase_movimiento || "",
-    "Documento material": f.documento_material || "",
-    "Fe.contabilización": f.fecha_contabilizacion || "",
-    "Hora de entrada": f.hora_entrada || "",
-    "Ctd.en UM entrada": f.cantidad_um_entrada,
-    "Un.medida de entrada": f.unidad_medida_entrada || "",
-    "Cliente": f.cliente || "",
-    "Nombre del usuario": f.nombre_usuario || "",
-    "Texto cab.documento": f.texto_cab_documento || ""
-  }));
 }
