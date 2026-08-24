@@ -1,6 +1,6 @@
 // js/nuevo-analisis.js
 import { parsearMHT, aNumero } from "./mht-parser.js";
-import { procesarVentas, adaptarFilasMovimientosDB, parsearFechaSAP } from "./ventas-parser.js";
+import { procesarVentas } from "./ventas-parser.js";
 import { cargarFactoresConversion } from "./factores-conversion.js";
 import { cargarCodigosExcluidos } from "./exclusiones.js";
 import { agruparStock, procesarNotasPendientes } from "./stock-parser.js";
@@ -31,35 +31,8 @@ const CONFIG_ARCHIVOS = [
 // un análisis (para evitar cargas o cambios a mitad de proceso).
 const IDS_CAMPOS_FORMULARIO = [
   'na-tienda', 'na-ventas', 'na-stock-tienda', 'na-stock-kacosa',
-  'na-notas-pendientes', 'na-pendientes-sync', 'na-periodo', 'na-meses-cantidad', 'na-margen',
-  'na-meses-analisis'
+  'na-notas-pendientes', 'na-pendientes-sync', 'na-periodo', 'na-meses-cantidad', 'na-margen'
 ];
-
-// Límites del rango de historial de ventas que el usuario puede elegir para
-// el análisis (independiente del "horizonte de abastecimiento").
-const MESES_ANALISIS_MIN = 3;
-const MESES_ANALISIS_MAX = 12;
-const MESES_ANALISIS_DEFECTO = 3;
-
-// Margen de días que se tolera si el archivo de ventas trae movimientos con
-// fecha anterior a la última ya registrada (SAP puede sincronizar movimientos
-// backdateados días después). Debe coincidir con MARGEN_DIAS_MOVIMIENTOS en Code.gs.
-const MARGEN_DIAS_MOVIMIENTOS = 30;
-
-// Almacenes permitidos para el archivo de "Stock de la tienda": solo
-// almacenes de general y exhibición. Cualquier otro almacén en el archivo
-// (ej. de otra tienda, o un almacén interno no relevante) hace que se
-// rechace el archivo completo — ver validarAlmacenesArchivo().
-const ALMACENES_PERMITIDOS_STOCK_TIENDA = [
-  "1200", "1203", "1300", "1303", "1400", "1403", "1500", "1503",
-  "1600", "1603", "1700", "1703", "1900", "1903",
-  "11A0", "11A3", "12A0", "12A3", "19A0", "19A3",
-  "2010", "2013", "2017", "2090", "2093",
-  "1020", "1023", "1000", "3000", "1029", "3029", "1001", "3001"
-];
-
-// Almacenes permitidos para el archivo de "Stock de Kacosa".
-const ALMACENES_PERMITIDOS_STOCK_KACOSA = ["1000", "1029", "3000", "3029"];
 
 /** Bloquea o desbloquea todos los campos del formulario (archivos, período, margen, tienda). */
 function bloquearFormulario(bloquear) {
@@ -72,9 +45,13 @@ function bloquearFormulario(bloquear) {
 // ============================================================
 //  SINCRONIZACIÓN CON SUPABASE (stock y movimientos)
 // ============================================================
-/** Convierte las filas crudas de stock (tienda + Kacosa) al formato que espera "guardarStock". */
-function prepararFilasStock(filasStockTienda, filasStockKacosa) {
-  return [...filasStockTienda, ...filasStockKacosa].map(f => ({
+/**
+ * Envía las filas crudas de stock (tienda + Kacosa) y de movimientos (archivo de ventas)
+ * a las tablas "stock" y "movimientos" de Supabase, vía el bridge (Apps Script).
+ * Se ejecuta en segundo plano: si falla, solo se registra en consola y no interrumpe el análisis.
+ */
+function sincronizarStockYMovimientos(filasVentas, filasStockTienda, filasStockKacosa) {
+  const filasStock = [...filasStockTienda, ...filasStockKacosa].map(f => ({
     material: String(f["Material"] || "").trim(),
     centro: String(f["Centro"] || "").trim(),
     almacen: String(f["Almacén"] || "").trim(),
@@ -87,11 +64,8 @@ function prepararFilasStock(filasStockTienda, filasStockKacosa) {
     bloqueado: aNumero(f["Bloqueado"]),
     devoluciones: aNumero(f["Devoluciones"])
   })).filter(f => f.material && f.centro);
-}
 
-/** Convierte las filas crudas del archivo de ventas al formato que espera "guardarMovimientos". */
-function prepararFilasMovimientos(filasVentas) {
-  return filasVentas.map(f => ({
+  const filasMovimientos = filasVentas.map(f => ({
     material: String(f["Material"] || "").trim(),
     textoBreve: f["Texto breve de material"] || "",
     centro: String(f["Centro"] || "").trim(),
@@ -106,264 +80,17 @@ function prepararFilasMovimientos(filasVentas) {
     nombreUsuario: f["Nombre del usuario"] || "",
     textoCabDocumento: f["Texto cab.documento"] || ""
   })).filter(f => f.material && f.centro);
-}
 
-/**
- * Envía las filas crudas de stock (tienda + Kacosa) a la tabla "stock" de Supabase.
- * Se ejecuta en segundo plano: si falla, solo se registra en consola y no interrumpe el análisis.
- * (El stock siempre se reescribe completo — a diferencia de movimientos, no hay carga incremental aquí.)
- */
-function sincronizarStock(filasStockTienda, filasStockKacosa) {
-  const filasStock = prepararFilasStock(filasStockTienda, filasStockKacosa);
   if (filasStock.length > 0) {
     callBridge("guardarStock", { filas: filasStock }).catch(err =>
       console.error("No se pudo sincronizar el stock con Supabase:", err)
     );
   }
-}
-
-// ============================================================
-//  FECHAS: helpers para el rango de movimientos registrados
-// ============================================================
-/** "2026-07-27" -> "27/07/2026" (para mostrarle la fecha al usuario). */
-function formatearFechaISOaVE(fechaISO) {
-  if (!fechaISO) return "";
-  const [a, m, d] = fechaISO.split("-");
-  if (!a || !m || !d) return fechaISO;
-  return `${d}/${m}/${a}`;
-}
-
-/** Date -> "AAAA-MM-DD" (para mandarle fechas a Supabase). */
-function formatearFechaISO(fecha) {
-  const a = fecha.getFullYear();
-  const m = String(fecha.getMonth() + 1).padStart(2, "0");
-  const d = String(fecha.getDate()).padStart(2, "0");
-  return `${a}-${m}-${d}`;
-}
-
-/** "2026-07-27" -> Date (medianoche local). */
-function fechaISOaDate(fechaISO) {
-  const [a, m, d] = fechaISO.split("-").map(Number);
-  return new Date(a, m - 1, d);
-}
-
-/** Devuelve una nueva Date con "dias" sumados (puede ser negativo). */
-function sumarDias(fecha, dias) {
-  const copia = new Date(fecha);
-  copia.setDate(copia.getDate() + dias);
-  return copia;
-}
-
-/** Devuelve una nueva Date con "meses" sumados (puede ser negativo). */
-function sumarMeses(fecha, meses) {
-  const copia = new Date(fecha);
-  copia.setMonth(copia.getMonth() + meses);
-  return copia;
-}
-
-/** Cantidad de meses (redondeados, mínimo 1) entre dos fechas. */
-function mesesEntreFechas(fechaInicio, fechaFin) {
-  const msPorDia = 24 * 60 * 60 * 1000;
-  const dias = Math.round((fechaFin - fechaInicio) / msPorDia);
-  return Math.max(1, Math.round(dias / 30));
-}
-
-/** Ajusta un número de meses a los límites permitidos para el análisis (3-12). */
-function clampMesesAnalisis(meses) {
-  if (meses < MESES_ANALISIS_MIN) return MESES_ANALISIS_MIN;
-  if (meses > MESES_ANALISIS_MAX) return MESES_ANALISIS_MAX;
-  return meses;
-}
-
-/**
- * Fecha máxima real encontrada en un conjunto de filas (según "Fe.contabilización").
- * Se usa para anclar el rango de "mesesAnalisis" a la última venta REAL disponible,
- * en vez de a la fecha del sistema (new Date()) — ver ejecutarAnalisis(). Si el
- * análisis se corre varios días después de la última venta cargada (porque no hay
- * ventas más recientes que subir todavía), anclar al reloj del sistema hace que la
- * ventana de fechas se "deslice" hacia adelante sin ganar nada al final, perdiendo
- * silenciosamente los días más viejos del rango y dando un Total_Ventas distinto
- * (más bajo) según qué día se corra el análisis, aunque los datos no cambien.
- */
-function fechaMaximaEnFilas(filas) {
-  let fechaMax = null;
-  filas.forEach(f => {
-    const fecha = parsearFechaSAP(f["Fe.contabilización"]);
-    if (fecha && (!fechaMax || fecha > fechaMax)) fechaMax = fecha;
-  });
-  return fechaMax;
-}
-
-/**
- * Primera carga para una tienda (sin historial en Supabase todavía): sugiere
- * automáticamente cuántos meses de análisis usar, a partir del propio rango
- * de fechas que trae el archivo recién adjuntado (min a máx), dentro de los
- * límites permitidos (3-12). El usuario puede cambiarlo a mano después.
- */
-function sugerirMesesAnalisisDesdeArchivo(filas) {
-  let fechaMin = null, fechaMax = null;
-  filas.forEach(f => {
-    const fecha = parsearFechaSAP(f["Fe.contabilización"]);
-    if (!fecha) return;
-    if (!fechaMin || fecha < fechaMin) fechaMin = fecha;
-    if (!fechaMax || fecha > fechaMax) fechaMax = fecha;
-  });
-  if (!fechaMin || !fechaMax) return;
-  const mesesAnalisisEl = document.getElementById("na-meses-analisis");
-  if (mesesAnalisisEl) {
-    mesesAnalisisEl.value = clampMesesAnalisis(mesesEntreFechas(fechaMin, fechaMax));
+  if (filasMovimientos.length > 0) {
+    callBridge("guardarMovimientos", { filas: filasMovimientos }).catch(err =>
+      console.error("No se pudo sincronizar los movimientos con Supabase:", err)
+    );
   }
-}
-
-/**
- * Valida que el archivo de ventas recién adjuntado no traiga movimientos con
- * fecha demasiado antigua respecto a lo ya registrado en Supabase para la
- * tienda seleccionada. Se tolera un margen de MARGEN_DIAS_MOVIMIENTOS días
- * (SAP puede sincronizar movimientos backdateados días después del análisis
- * en que se subieron), pero más allá de eso el archivo se rechaza: probablemente
- * es el archivo equivocado (otro período, otra tienda).
- * @param {Array<Object>} filas - filas ya parseadas del .MHT (parsearMHT)
- * @returns {{valido: boolean, mensaje?: string, avisoDias?: string}}
- */
-function validarFechasArchivoVentas(filas) {
-  // Sin historial previo para esta tienda (primera carga): no hay nada contra
-  // qué comparar la fecha mínima aceptable, pero sí se aprovecha el propio
-  // archivo para sugerir automáticamente cuántos meses de análisis usar.
-  if (!estado.ultimaFechaRegistrada) {
-    sugerirMesesAnalisisDesdeArchivo(filas);
-    return { valido: true };
-  }
-
-  let fechaMinEnArchivo = null;
-  let filasSinFechaValida = 0;
-  filas.forEach(f => {
-    const fecha = parsearFechaSAP(f["Fe.contabilización"]);
-    if (!fecha) { filasSinFechaValida++; return; }
-    if (!fechaMinEnArchivo || fecha < fechaMinEnArchivo) fechaMinEnArchivo = fecha;
-  });
-
-  if (!fechaMinEnArchivo) {
-    return {
-      valido: false,
-      mensaje: '<i class="fa-solid fa-triangle-exclamation"></i> No se encontró ninguna fecha válida en la columna "Fe.contabilización" del archivo.'
-    };
-  }
-
-  const fechaUltima = fechaISOaDate(estado.ultimaFechaRegistrada);
-  const fechaMinimaAceptable = sumarDias(fechaUltima, -MARGEN_DIAS_MOVIMIENTOS);
-
-  if (fechaMinEnArchivo < fechaMinimaAceptable) {
-    const fTxt = fechaMinEnArchivo.toLocaleDateString("es-VE");
-    const fLimiteTxt = fechaMinimaAceptable.toLocaleDateString("es-VE");
-    return {
-      valido: false,
-      mensaje: `<i class="fa-solid fa-triangle-exclamation"></i> El archivo trae movimientos desde el ${fTxt}, más de ${MARGEN_DIAS_MOVIMIENTOS} días antes de la última fecha registrada (${formatearFechaISOaVE(estado.ultimaFechaRegistrada)}). El límite aceptado es a partir del ${fLimiteTxt}. Verifica que sea el archivo correcto para esta tienda y período.`
-    };
-  }
-
-  const avisoDias = fechaMinEnArchivo < fechaUltima
-    ? ` Incluye días previos a la última fecha registrada (dentro del margen de ${MARGEN_DIAS_MOVIMIENTOS} días permitido para sincronizaciones tardías de SAP) — los que ya estén guardados no se duplicarán.`
-    : "";
-
-  return { valido: true, avisoDias };
-}
-
-/**
- * Consulta el rango de movimientos ya registrados en Supabase para la tienda
- * seleccionada y actualiza el mensaje informativo + el aviso de qué subir.
- * Se llama al renderizar el formulario y cada vez que cambia la tienda.
- */
-async function actualizarRangoMovimientos() {
-  const tiendaEl = document.getElementById("na-tienda");
-  const rangoInfoEl = document.getElementById("na-rango-info");
-  const rangoSubirEl = document.getElementById("na-rango-subir");
-  if (!tiendaEl || !rangoInfoEl) return;
-
-  const tienda = tiendaEl.value;
-  const centros = centrosDeTienda(tienda);
-
-  // Reset inmediato y optimista: apenas cambia la tienda, se limpia cualquier
-  // mensaje de rango/validación de la tienda anterior (no se espera a que
-  // termine la consulta a Supabase). Si había un archivo de ventas ya
-  // adjuntado, se marca como "revalidando" y se bloquea temporalmente hasta
-  // que se confirme el rango de la nueva tienda — evita que quede pegado un
-  // aviso (o una validación "aprobada") que ya no corresponde.
-  const validVentasEl = document.getElementById("validacion-ventas");
-  const inputVentasInicial = document.getElementById("na-ventas");
-  const hayArchivoVentas = inputVentasInicial && inputVentasInicial.files && inputVentasInicial.files[0];
-  if (hayArchivoVentas && validVentasEl) {
-    validVentasEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Revalidando el archivo para la nueva tienda...';
-    validVentasEl.style.color = 'var(--texto-claro)';
-    inputVentasInicial.dataset.valido = 'false';
-  }
-
-  // Revalida (si aplica) al final de esta función, sin importar por qué
-  // camino se salió (sin tienda, error de red, sin datos, o con datos) —
-  // así el aviso del archivo NUNCA se queda pegado con la tienda anterior.
-  const revalidarAlFinal = async () => {
-    if (hayArchivoVentas) {
-      await validarArchivoAdjunto(inputVentasInicial, validVentasEl, "ventas");
-    }
-  };
-
-  if (!tienda || centros.length === 0) {
-    rangoInfoEl.innerHTML = "";
-    if (rangoSubirEl) rangoSubirEl.textContent = "";
-    estado.ultimaFechaRegistrada = null;
-    await revalidarAlFinal();
-    return;
-  }
-
-  rangoInfoEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Consultando movimientos ya registrados...';
-  if (rangoSubirEl) rangoSubirEl.textContent = "";
-
-  const resp = await callBridge("rangoMovimientos", { centros });
-  // Si el usuario ya cambió de tienda mientras esta consulta estaba en vuelo,
-  // descarta el resultado (la revalidación de esa tienda vieja ya no aplica;
-  // la ejecución que sí corresponde a la tienda nueva se encargará de todo).
-  if (document.getElementById("na-tienda")?.value !== tienda) return;
-
-  const mesesAnalisisEl = document.getElementById("na-meses-analisis");
-
-  if (!resp.ok) {
-    rangoInfoEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> No se pudo consultar el rango de movimientos registrados: ' + (resp.error || "error desconocido");
-    estado.ultimaFechaRegistrada = null;
-    await revalidarAlFinal();
-    return;
-  }
-
-  if (!resp.fechaMin || !resp.fechaMax) {
-    rangoInfoEl.innerHTML = `<i class="fa-solid fa-circle-info"></i> Aún no hay movimientos registrados para <strong>${nombrePorId(tienda)}</strong>. Sube el archivo completo del período que quieras analizar.`;
-    if (rangoSubirEl) rangoSubirEl.textContent = "";
-    estado.ultimaFechaRegistrada = null;
-    // Sin historial: el valor de "meses de análisis" vuelve al mínimo por
-    // defecto; si el usuario ya adjuntó un archivo, la revalidación de abajo
-    // lo recalcula a partir del rango de fechas de ESE archivo.
-    if (mesesAnalisisEl && !hayArchivoVentas) mesesAnalisisEl.value = MESES_ANALISIS_DEFECTO;
-    await revalidarAlFinal();
-    return;
-  }
-
-  const fMin = formatearFechaISOaVE(resp.fechaMin);
-  const fMax = formatearFechaISOaVE(resp.fechaMax);
-  rangoInfoEl.innerHTML = `<i class="fa-solid fa-circle-info"></i> Para <strong>${nombrePorId(tienda)}</strong>, el rango de fechas de movimientos registrados es del <strong>${fMin}</strong> al <strong>${fMax}</strong>.`;
-  if (rangoSubirEl) {
-    const fechaLimite = formatearFechaISOaVE(formatearFechaISO(sumarDias(fechaISOaDate(resp.fechaMax), -MARGEN_DIAS_MOVIMIENTOS)));
-    rangoSubirEl.textContent = `Sube los movimientos del ${fMax} al día actual (puedes subir un archivo con una antigüedad máxima de movimientos del ${fechaLimite})`;
-  }
-  estado.ultimaFechaRegistrada = resp.fechaMax;
-
-  // Sugiere automáticamente cuántos meses de historial usar: la mayor
-  // cantidad disponible entre la fecha más antigua registrada y hoy, dentro
-  // de los límites permitidos (3-12). El usuario puede cambiarlo a mano después.
-  if (mesesAnalisisEl) {
-    const sugerido = clampMesesAnalisis(mesesEntreFechas(fechaISOaDate(resp.fechaMin), new Date()));
-    mesesAnalisisEl.value = sugerido;
-  }
-
-  // Si ya había un archivo de ventas adjuntado (ej. el usuario cambió de tienda
-  // después de subirlo), se re-valida contra el rango recién actualizado.
-  await revalidarAlFinal();
 }
 
 // ============================================================
@@ -405,8 +132,6 @@ function estadoInicial() {
     periodo: null,
     mesesCantidad: null,
     margenPct: null,
-    mesesAnalisis: null,
-    ultimaFechaRegistrada: null,
     analisisCompleto: null,
     analizando: false
   };
@@ -453,9 +178,6 @@ function render() {
         </div>
       ` : `<input type="hidden" id="na-tienda" value="${misTiendas[0] || ''}">`}
 
-      <!-- Rango de movimientos ya registrados (carga incremental) -->
-      <div id="na-rango-info" class="estado-texto" style="margin-top:12px; font-size:12.5px; color:var(--texto-claro)"></div>
-
       <!-- Archivo de ventas -->
       <div style="margin-top:16px">
         <label class="form-label" for="na-ventas">Archivo de ventas <span class="required">*</span></label>
@@ -468,7 +190,6 @@ function render() {
           <span class="file-status empty" id="file-status-ventas">Pendiente</span>
           <input type="file" id="na-ventas" accept=".mht,.MHT">
         </div>
-        <div id="na-rango-subir" style="font-size:12px; color:var(--ambar-oscuro); font-weight:600; margin-top:4px"></div>
         <div id="validacion-ventas" class="estado-texto" style="color:var(--verde-kpi); font-size:12px; margin-top:4px"></div>
       </div>
 
@@ -531,19 +252,6 @@ function render() {
         </div>
       </div>
 
-      <!-- Rango de historial de ventas a usar para el análisis -->
-      <div style="margin-top:16px">
-        <label class="form-label" for="na-meses-analisis">
-          Historial de ventas a usar para el análisis (meses)
-        </label>
-        <input type="number" id="na-meses-analisis" class="input-modern"
-               min="${MESES_ANALISIS_MIN}" max="${MESES_ANALISIS_MAX}" value="${MESES_ANALISIS_DEFECTO}">
-        <div style="font-size:11px; color:var(--texto-claro); margin-top:2px">
-          Entre ${MESES_ANALISIS_MIN} y ${MESES_ANALISIS_MAX} meses. Se usa el histórico ya guardado en la base de datos
-          (combinado con lo que subas ahora) para clasificar los materiales y calcular la venta promedio.
-        </div>
-      </div>
-
       <!-- Período -->
       <div class="form-row" style="margin-top:16px">
         <div>
@@ -562,8 +270,8 @@ function render() {
 
       <!-- Margen -->
       <div style="margin-top:16px">
-        <label class="form-label">Margen de seguridad: <span id="na-margen-valor" style="color:var(--ambar-oscuro); font-weight:700">20%</span></label>
-        <input type="range" id="na-margen" class="input-modern" min="10" max="100" step="5" value="20">
+        <label class="form-label">Margen de seguridad: <span id="na-margen-valor" style="color:var(--ambar-oscuro); font-weight:700">30%</span></label>
+        <input type="range" id="na-margen" class="input-modern" min="10" max="100" step="5" value="30">
         <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--texto-claro); margin-top:2px">
           <span>10%</span>
           <span>50%</span>
@@ -606,7 +314,27 @@ function render() {
           statusEl.innerHTML = '<i class="fa-solid fa-check"></i> Cargado';
           statusEl.className = 'file-status loaded';
           wrapper.classList.add('loaded');
-          await validarArchivoAdjunto(input, validEl, tipo);
+
+          if (validEl && tipo) {
+            try {
+              const texto = await input.files[0].text();
+              const filas = parsearMHT(texto);
+              let columnasRequeridas;
+              if (tipo === 'ventas') columnasRequeridas = COLUMNAS_VENTAS;
+              else if (tipo === 'stock') columnasRequeridas = COLUMNAS_STOCK;
+              else if (tipo === 'notas') columnasRequeridas = COLUMNAS_NOTAS_PENDIENTES;
+              else columnasRequeridas = [];
+              
+              const resultado = validarColumnasArchivo(filas, columnasRequeridas, tipo);
+              validEl.innerHTML = resultado.mensaje;
+              validEl.style.color = resultado.valido ? 'var(--verde-kpi)' : 'var(--rojo-alerta)';
+              input.dataset.valido = resultado.valido ? 'true' : 'false';
+            } catch (err) {
+              validEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Error al leer el archivo: ' + err.message;
+              validEl.style.color = 'var(--rojo-alerta)';
+              input.dataset.valido = 'false';
+            }
+          }
         } else {
           nameEl.textContent = 'Seleccionar archivo';
           statusEl.textContent = 'Pendiente';
@@ -645,87 +373,13 @@ function render() {
   document.getElementById("na-margen").addEventListener("input", (e) => {
     document.getElementById("na-margen-valor").textContent = e.target.value + "%";
   });
-  const mesesAnalisisEl = document.getElementById("na-meses-analisis");
-  if (mesesAnalisisEl) {
-    mesesAnalisisEl.addEventListener("change", () => {
-      const valor = Number(mesesAnalisisEl.value);
-      if (!valor || valor < MESES_ANALISIS_MIN) mesesAnalisisEl.value = MESES_ANALISIS_MIN;
-      else if (valor > MESES_ANALISIS_MAX) mesesAnalisisEl.value = MESES_ANALISIS_MAX;
-    });
-  }
   document.getElementById("btn-analizar").addEventListener("click", ejecutarAnalisis);
   document.getElementById("btn-limpiar-analisis").addEventListener("click", limpiarAnalisis);
-
-  // Rango de movimientos ya registrados: se consulta al mostrar el formulario
-  // y cada vez que el usuario cambia de tienda (solo aplica si puede elegir).
-  const tiendaSelectEl = document.getElementById("na-tienda");
-  if (tiendaSelectEl && tiendaSelectEl.tagName === "SELECT") {
-    tiendaSelectEl.addEventListener("change", actualizarRangoMovimientos);
-  }
-  actualizarRangoMovimientos();
 }
 
 // ============================================================
 //  VALIDACIÓN DE COLUMNAS
 // ============================================================
-/**
- * Lee, parsea y valida (columnas + fechas para ventas) el archivo recién
- * adjuntado en un <input type="file">, y refleja el resultado en validEl +
- * input.dataset.valido. Reutilizable tanto al adjuntar el archivo como al
- * re-validar (ej. si cambia la tienda seleccionada y ya había un archivo
- * de ventas cargado).
- */
-async function validarArchivoAdjunto(input, validEl, tipo) {
-  if (!validEl || !tipo || !input.files || !input.files[0]) return;
-  try {
-    const texto = await input.files[0].text();
-    const filas = parsearMHT(texto);
-    let columnasRequeridas;
-    if (tipo === 'ventas') columnasRequeridas = COLUMNAS_VENTAS;
-    else if (tipo === 'stock') columnasRequeridas = COLUMNAS_STOCK;
-    else if (tipo === 'notas') columnasRequeridas = COLUMNAS_NOTAS_PENDIENTES;
-    else columnasRequeridas = [];
-
-    const resultado = validarColumnasArchivo(filas, columnasRequeridas, tipo);
-    let resultadoFinal = resultado;
-
-    // Para los archivos de stock, si las columnas están bien, se valida además
-    // que todos los almacenes presentes estén en la lista permitida
-    // correspondiente (distinta para stock de tienda vs. stock de Kacosa,
-    // aunque ambos comparten tipo:'stock' — se distinguen por el id del input).
-    if (resultado.valido && tipo === 'stock') {
-      const esStockKacosa = input.id === 'na-stock-kacosa';
-      const almacenesPermitidos = esStockKacosa ? ALMACENES_PERMITIDOS_STOCK_KACOSA : ALMACENES_PERMITIDOS_STOCK_TIENDA;
-      const nombreOrigen = esStockKacosa ? 'Kacosa' : 'la tienda';
-      const resultadoAlmacenes = validarAlmacenesArchivo(filas, almacenesPermitidos, nombreOrigen);
-      if (!resultadoAlmacenes.valido) {
-        resultadoFinal = resultadoAlmacenes;
-      }
-    }
-
-    // Para el archivo de ventas, si las columnas están bien, se valida además
-    // que no traiga movimientos demasiado antiguos respecto a lo ya registrado
-    // en Supabase para esta tienda (con margen de MARGEN_DIAS_MOVIMIENTOS días
-    // — ver validarFechasArchivoVentas).
-    if (resultado.valido && tipo === 'ventas') {
-      const resultadoFechas = validarFechasArchivoVentas(filas);
-      if (!resultadoFechas.valido) {
-        resultadoFinal = resultadoFechas;
-      } else if (resultadoFechas.avisoDias) {
-        resultadoFinal = { valido: true, mensaje: resultado.mensaje + resultadoFechas.avisoDias };
-      }
-    }
-
-    validEl.innerHTML = resultadoFinal.mensaje;
-    validEl.style.color = resultadoFinal.valido ? 'var(--verde-kpi)' : 'var(--rojo-alerta)';
-    input.dataset.valido = resultadoFinal.valido ? 'true' : 'false';
-  } catch (err) {
-    validEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Error al leer el archivo: ' + err.message;
-    validEl.style.color = 'var(--rojo-alerta)';
-    input.dataset.valido = 'false';
-  }
-}
-
 function validarColumnasArchivo(filas, columnasRequeridas, tipo) {
   if (filas.length === 0) {
     return { valido: false, mensaje: '<i class="fa-solid fa-triangle-exclamation"></i> El archivo está vacío o no tiene datos', faltantes: columnasRequeridas };
@@ -743,37 +397,6 @@ function validarColumnasArchivo(filas, columnasRequeridas, tipo) {
     valido: false,
     mensaje: `<i class="fa-solid fa-triangle-exclamation"></i> El archivo de ${nombreTipo} no tiene las columnas correctas. Faltan: ${faltantes.join(', ')}`,
     faltantes: faltantes
-  };
-}
-
-/**
- * Valida que el archivo de stock (tienda o Kacosa) solo traiga almacenes de
- * la lista permitida correspondiente. Si aparece cualquier otro almacén, se
- * rechaza el archivo completo (no se filtra en silencio, para que el usuario
- * se dé cuenta de que subió el archivo equivocado).
- * @param {Array<Object>} filas - filas ya parseadas del .MHT (parsearMHT)
- * @param {Array<string>} almacenesPermitidos
- * @param {string} nombreOrigen - "la tienda" | "Kacosa" (para el mensaje)
- */
-function validarAlmacenesArchivo(filas, almacenesPermitidos, nombreOrigen) {
-  const noPermitidos = new Set();
-  filas.forEach(f => {
-    const almacen = String(f["Almacén"] || "").trim();
-    if (almacen && !almacenesPermitidos.includes(almacen)) noPermitidos.add(almacen);
-  });
-
-  if (noPermitidos.size === 0) return { valido: true };
-
-  let mensajePermitidos;
-  if (nombreOrigen === 'Kacosa') {
-    mensajePermitidos = 'solo se admiten para el stock de Kacosa los almacenes 1000, 1029, 3000 y 3029.';
-  } else {
-    mensajePermitidos = `solo se admiten para el stock de ${nombreOrigen} los almacenes del general y exhibición.`;
-  }
-
-  return {
-    valido: false,
-    mensaje: `<i class="fa-solid fa-triangle-exclamation"></i> Tu archivo tiene stock de almacenes no permitidos, ${mensajePermitidos} Almacén(es) no permitido(s) encontrado(s): ${Array.from(noPermitidos).join(', ')}.`
   };
 }
 
@@ -836,11 +459,9 @@ function limpiarAnalisis() {
   const mesesEl = document.getElementById("na-meses-cantidad");
   if (mesesEl) mesesEl.value = 2;
   const margenEl = document.getElementById("na-margen");
-  if (margenEl) margenEl.value = 20;
+  if (margenEl) margenEl.value = 30;
   const margenValorEl = document.getElementById("na-margen-valor");
-  if (margenValorEl) margenValorEl.textContent = "20%";
-  const mesesAnalisisEl = document.getElementById("na-meses-analisis");
-  if (mesesAnalisisEl) mesesAnalisisEl.value = MESES_ANALISIS_DEFECTO;
+  if (margenValorEl) margenValorEl.textContent = "30%";
 
   // Limpia resultados, duplicados y mensajes en pantalla
   const duplicadosEl = document.getElementById("na-duplicados");
@@ -865,11 +486,8 @@ function limpiarAnalisis() {
   estado.periodo = null;
   estado.mesesCantidad = null;
   estado.margenPct = null;
-  estado.mesesAnalisis = null;
   estado.analisisCompleto = null;
   estado.analizando = false;
-  // NOTA: estado.ultimaFechaRegistrada NO se limpia aquí — sigue siendo válida
-  // (es información de la base de datos, no del formulario) y se refresca sola.
 
   // Reactiva el formulario y el botón Analizar; oculta "Limpiar datos"
   bloquearFormulario(false);
@@ -880,10 +498,6 @@ function limpiarAnalisis() {
   }
   const btnLimpiar = document.getElementById("btn-limpiar-analisis");
   if (btnLimpiar) btnLimpiar.style.display = "none";
-
-  // Refresca el rango de movimientos (puede haber cambiado tras el análisis
-  // anterior, que ya guardó movimientos nuevos en Supabase).
-  actualizarRangoMovimientos();
 }
 
 async function ejecutarAnalisis() {
@@ -904,9 +518,6 @@ async function ejecutarAnalisis() {
   const periodo = document.getElementById("na-periodo").value;
   const mesesCantidad = Number(document.getElementById("na-meses-cantidad").value) || 1;
   const margenPct = Number(document.getElementById("na-margen").value);
-  let mesesAnalisis = Number(document.getElementById("na-meses-analisis")?.value) || MESES_ANALISIS_DEFECTO;
-  if (mesesAnalisis < MESES_ANALISIS_MIN) mesesAnalisis = MESES_ANALISIS_MIN;
-  if (mesesAnalisis > MESES_ANALISIS_MAX) mesesAnalisis = MESES_ANALISIS_MAX;
 
   // Validar archivos antes de empezar
   const validacion = verificarArchivosValidos();
@@ -972,66 +583,11 @@ async function ejecutarAnalisis() {
       cargarFactoresConversion(), // trae desde Supabase los factores por material y por UMB
       cargarCodigosExcluidos()    // trae desde Supabase la lista de códigos a ignorar
     ]);
+    const ventasProcesadas = procesarVentas(filasVentas, mapaUMBPorMaterial);
 
-    // Alimenta la tabla de Stock en Supabase con los datos crudos recién subidos.
-    // No bloquea el análisis si falla (siempre se reescribe completo, no es incremental).
-    sincronizarStock(filasStockTienda, filasStockKacosa);
-
-    // --- Carga incremental de movimientos (Supabase decide qué es realmente nuevo) ---
-    estadoTexto.textContent = "Guardando los movimientos nuevos en la base de datos...";
-    const filasMovimientosParaGuardar = prepararFilasMovimientos(filasVentas);
-    if (filasMovimientosParaGuardar.length > 0) {
-      const respMovimientos = await callBridge("guardarMovimientos", { filas: filasMovimientosParaGuardar });
-      if (!respMovimientos.ok) {
-        estadoTexto.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> No se pudieron guardar los movimientos: ' + respMovimientos.error;
-        btnAnalizar.disabled = false;
-        btnAnalizar.innerHTML = '<i class="fa-solid fa-bolt"></i> Analizar';
-        bloquearFormulario(false);
-        estado.analizando = false;
-        return;
-      }
-      estadoTexto.textContent = respMovimientos.mensaje || "Movimientos sincronizados.";
-    }
-
-    // --- Lee el histórico combinado (Supabase) para el rango de análisis elegido ---
-    // Esto es lo que reemplaza al archivo recién subido como fuente de la clasificación
-    // ABCD y del cálculo de "a pedir": ya no depende solo de lo que traiga el archivo
-    // (que ahora puede ser apenas unos días), sino de los "mesesAnalisis" meses de
-    // historial acumulados en la base de datos, que ya incluyen lo que se acaba de guardar.
-    //
-    // La ventana [fechaDesde, fechaHasta] se ancla a la fecha máxima REAL con datos
-    // (el mayor entre lo ya registrado en Supabase antes de este análisis y lo que
-    // trae el archivo recién subido) — NUNCA a new Date()/"hoy". Si se ancla al reloj
-    // del sistema, cada día que pasa sin subir un archivo nuevo desplaza la ventana
-    // hacia adelante sin ganar datos al final, y se pierden silenciosamente los días
-    // más antiguos del rango: mismo archivo, mismos "mesesAnalisis", pero Total_Ventas
-    // distinto (más bajo) solo porque cambió el día en que se corrió el análisis.
-    estadoTexto.textContent = `Leyendo histórico de ventas (${mesesAnalisis} mes(es))...`;
-    const fechaMaxArchivo = fechaMaximaEnFilas(filasVentas);
-    const fechaMaxRegistrada = estado.ultimaFechaRegistrada ? fechaISOaDate(estado.ultimaFechaRegistrada) : null;
-    const fechaAncla = [fechaMaxArchivo, fechaMaxRegistrada]
-      .filter(Boolean)
-      .reduce((max, f) => (!max || f > max ? f : max), null) || new Date();
-    const fechaHasta = formatearFechaISO(fechaAncla);
-    const fechaDesde = formatearFechaISO(sumarMeses(fechaAncla, -mesesAnalisis));
-    const respHistorico = await callBridge("leerMovimientosRango", {
-      centros: centrosValidos, fechaDesde, fechaHasta
-    });
-    if (!respHistorico.ok) {
-      estadoTexto.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> No se pudo leer el histórico de movimientos: ' + respHistorico.error;
-      btnAnalizar.disabled = false;
-      btnAnalizar.innerHTML = '<i class="fa-solid fa-bolt"></i> Analizar';
-      bloquearFormulario(false);
-      estado.analizando = false;
-      return;
-    }
-
-    // Respaldo: si por algún motivo el histórico de Supabase viniera vacío (fallo raro
-    // justo después de guardar, o base de datos recién migrada), se usa el archivo recién
-    // subido para no dejar el análisis sin datos.
-    const filasHistoricas = adaptarFilasMovimientosDB(respHistorico.filas);
-    const filasParaProcesar = filasHistoricas.length > 0 ? filasHistoricas : filasVentas;
-    const ventasProcesadas = procesarVentas(filasParaProcesar, mapaUMBPorMaterial);
+    // Alimenta las tablas de Stock y Movimientos en Supabase con los datos crudos
+    // de los archivos que se acaban de subir. No bloquea el análisis si falla.
+    sincronizarStockYMovimientos(filasVentas, filasStockTienda, filasStockKacosa);
 
     // Archivo opcional de notas pendientes por despacho
     let notasPendientes = null;
@@ -1093,7 +649,7 @@ async function ejecutarAnalisis() {
       ventasProcesadas, stockTienda, stockKacosa,
       notasPendientes: notasPendientes || null,
       clustersCandidatos: clusters, gruposCandidatos,
-      tiendaSeleccionada: tienda, periodo, mesesCantidad, margenPct, mesesAnalisis,
+      tiendaSeleccionada: tienda, periodo, mesesCantidad, margenPct,
       fechaAnalisis: new Date().toLocaleDateString("es-VE"),
       analisisCompleto: null
     };
@@ -1255,8 +811,7 @@ async function finalizarCalculo(gruposConfirmados) {
 
   const { resultadoConAnexos } = anexarAltaRotacionFaltante(
     resultado, estado.stockTienda, estado.stockKacosa, altaRotacion,
-    resultado[0]?.periodoVentas || "", resultado[0]?.periodoAbastecimiento || "", resultado[0]?.rangoSeguridadUsado || "",
-    resultado[0]?.rangoFechasTexto || "—"
+    resultado[0]?.periodoVentas || "", resultado[0]?.periodoAbastecimiento || "", resultado[0]?.rangoSeguridadUsado || ""
   );
   resultado = resultadoConAnexos;
 
@@ -1275,11 +830,6 @@ async function finalizarCalculo(gruposConfirmados) {
   const mesesUsadosRedondeado = Math.round(estado.ventasProcesadas.rangoFechas?.meses || 0);
   const semanasUsadasRedondeado = Math.round(estado.ventasProcesadas.rangoFechas?.semanas || 0);
 
-  // Rango de fechas EXACTO de los movimientos que realmente se usaron para calcular
-  // Total_Ventas (fechaMin/fechaMax reales de lo leído, ya recortado a mesesAnalisis) —
-  // no la ventana solicitada a Supabase, sino lo que de verdad había en esos días.
-  const rangoFechasTexto = resultado[0]?.rangoFechasTexto || "—";
-
   estado.analisisCompleto = {
     resultado: resultado,
     sugerencias: sugerencias,
@@ -1289,8 +839,7 @@ async function finalizarCalculo(gruposConfirmados) {
     periodo: estado.periodo,
     margenPct: estado.margenPct,
     mesesUsados: mesesUsadosRedondeado,
-    semanasUsadas: semanasUsadasRedondeado,
-    rangoFechasTexto
+    semanasUsadas: semanasUsadasRedondeado
   };
 
   window.KACOSA.ultimoAnalisis = {
@@ -1300,7 +849,6 @@ async function finalizarCalculo(gruposConfirmados) {
     margenPct: estado.margenPct,
     mesesUsados: mesesUsadosRedondeado,
     semanasUsadas: semanasUsadasRedondeado,
-    rangoFechasTexto,
     materiales: resultado,
     sugerencias
   };
@@ -1362,51 +910,24 @@ async function finalizarCalculo(gruposConfirmados) {
     let iconoNotif = undefined;
     let segundosNotif = 5;
 
-    // Agrupa por material (código): un mismo material puede aparecer varias veces
-    // si se vendió con más de una unidad distinta a su UMB (ej. una vez en "M" y
-    // otra en "PAQ") — se consolidan en una sola fila con todas sus unidades.
-    let materialesConAdvertencia = [];
     if (advertenciasFactor.length > 0) {
-      const porCodigo = new Map();
-      advertenciasFactor.forEach(a => {
-        if (!porCodigo.has(a.codigo)) {
-          porCodigo.set(a.codigo, {
-            codigo: a.codigo,
-            descripcion: a.descripcion || "sin descripción",
-            umb: a.umb || "",
-            unidades: new Set()
-          });
-        }
-        porCodigo.get(a.codigo).unidades.add(a.unidad);
+      const vistos = new Set();
+      const unicos = advertenciasFactor.filter(a => {
+        const clave = `${a.codigo}|${a.unidad}`;
+        if (vistos.has(clave)) return false;
+        vistos.add(clave);
+        return true;
       });
-      materialesConAdvertencia = Array.from(porCodigo.values())
-        .map(m => ({ ...m, unidades: Array.from(m.unidades) }))
-        .sort((a, b) => a.codigo.localeCompare(b.codigo));
-
-      // Se muestran TODOS (el modal ya tiene scroll interno) — un "y X más..." no
-      // le sirve de nada al usuario, que necesita saber exactamente cuáles son.
-      const listaHtml = materialesConAdvertencia
-        .map(m => `${m.codigo} (${m.descripcion}) — vendido en ${m.unidades.map(u => `"${u}"`).join(", ")}, UMB "${m.umb}"`)
+      const listaHtml = unicos.slice(0, 6)
+        .map(a => `${a.codigo} (${a.descripcion || "sin descripción"}) — vendido en "${a.unidad}", UMB "${a.umb}"`)
         .join("<br>");
-      mensajeNotif += `<br><br><strong><i class="fa-solid fa-triangle-exclamation"></i> Revisa factores_conversion / factores_conversion_umb:</strong> ${materialesConAdvertencia.length} material(es) con unidad de venta distinta a su UMB, sin factor configurado para convertir:<br>${listaHtml}` +
-        `<br><br><button type="button" id="btn-descargar-factores-faltantes" class="kn-boton-secundario"><i class="fa-solid fa-file-arrow-down"></i> Descargar en Excel</button>`;
+      const restantes = unicos.length - 6;
+      mensajeNotif += `<br><br><strong><i class="fa-solid fa-triangle-exclamation"></i> Revisa factores_conversion / factores_conversion_umb:</strong> ${unicos.length} material(es) con unidad de venta distinta a su UMB, sin factor configurado para convertir:<br>${listaHtml}${restantes > 0 ? `<br>y ${restantes} más...` : ""}`;
       iconoNotif = '<i class="fa-solid fa-triangle-exclamation"></i>';
       segundosNotif = 12;
     }
 
-    notificarExito(mensajeNotif, {
-      titulo: "Análisis completado",
-      icono: iconoNotif,
-      segundos: segundosNotif,
-      sinAutoCierre: materialesConAdvertencia.length > 0
-    });
-
-    if (materialesConAdvertencia.length > 0) {
-      const btnDescargar = document.getElementById("btn-descargar-factores-faltantes");
-      if (btnDescargar) {
-        btnDescargar.addEventListener("click", () => descargarFactoresFaltantes(materialesConAdvertencia));
-      }
-    }
+    notificarExito(mensajeNotif, { titulo: "Análisis completado", icono: iconoNotif, segundos: segundosNotif });
 
     document.dispatchEvent(new CustomEvent("kacosa:analisis-listo", { detail: window.KACOSA.ultimoAnalisis }));
 
@@ -1440,7 +961,7 @@ function mostrarResultados(resultado, sugerencias) {
 
   const infoPeriodo = window.KACOSA.ultimoAnalisis;
   const textoPeriodo = infoPeriodo
-    ? `Período usado: ${infoPeriodo.mesesUsados ?? '?'} meses (${infoPeriodo.semanasUsadas ?? '?'} semanas) — movimientos del ${infoPeriodo.rangoFechasTexto ?? '—'}`
+    ? `Período usado: ${infoPeriodo.mesesUsados ?? '?'} meses (${infoPeriodo.semanasUsadas ?? '?'} semanas)`
     : '';
 
   cont.innerHTML = `
@@ -1574,7 +1095,7 @@ function validarCentros(filasVentas, filasStockTienda, filasStockKacosa, centros
   return null;
 }
 
-function anexarAltaRotacionFaltante(resultado, stockTienda, stockKacosa, altaRotacion, periodoVentas, periodoAbastecimiento, rangoSeguridadUsado, rangoFechasTexto) {
+function anexarAltaRotacionFaltante(resultado, stockTienda, stockKacosa, altaRotacion, periodoVentas, periodoAbastecimiento, rangoSeguridadUsado) {
   const codigosEnResultado = new Set(resultado.map(m => m.codigo));
   const anexados = [];
 
@@ -1614,7 +1135,6 @@ function anexarAltaRotacionFaltante(resultado, stockTienda, stockKacosa, altaRot
       periodoVentas,
       periodoAbastecimiento,
       rangoSeguridadUsado,
-      rangoFechasTexto,
       porDespacho: 0,
       numeroDeNota: '',
       fechaDeNota: '',
@@ -1735,28 +1255,6 @@ async function enviarCorreo() {
   }
 }
 
-/**
- * Descarga en Excel la lista completa de materiales con advertencia de factor
- * de conversión faltante (vendidos en una unidad distinta a su UMB, sin factor
- * configurado). Columnas: Código, Descripción, Vendido en (todas las unidades
- * detectadas, separadas por coma), UMB.
- */
-function descargarFactoresFaltantes(materialesConAdvertencia) {
-  const datos = materialesConAdvertencia.map(m => ({
-    "Código": m.codigo,
-    "Descripción": m.descripcion,
-    "Vendido en": m.unidades.join(", "),
-    "UMB": m.umb
-  }));
-  const ws = XLSX.utils.json_to_sheet(datos);
-  ws["!cols"] = [{ wch: 14 }, { wch: 45 }, { wch: 18 }, { wch: 10 }];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Factores faltantes");
-  const nombreTienda = (estado.tiendaSeleccionada || "tienda").toString().replace(/[^a-zA-Z0-9_-]/g, "_");
-  const nombreFecha = (estado.fechaAnalisis || "").replace(/\//g, "-");
-  XLSX.writeFile(wb, `Factores_conversion_faltantes_${nombreTienda}_${nombreFecha}.xlsx`);
-}
-
 function construirWorkbookCompleto() {
   const { pedido, noPedido, pendienteStock, sugerencias } = estado.grupos;
   const wb = XLSX.utils.book_new();
@@ -1785,7 +1283,6 @@ function construirWorkbookCompleto() {
     ],
     [
       `Período de ventas analizado: ${pedido[0]?.periodoVentas || noPedido[0]?.periodoVentas || "—"}`,
-      `Rango de fechas de movimientos: ${pedido[0]?.rangoFechasTexto || noPedido[0]?.rangoFechasTexto || pendienteStock[0]?.rangoFechasTexto || "—"}`,
       `Horizonte de abastecimiento: ${pedido[0]?.periodoAbastecimiento || "—"}`,
       `Rango de seguridad usado: ${pedido[0]?.rangoSeguridadUsado || "—"}`,
       `Analista: ${window.KACOSA?.usuario?.nombre || window.KACOSA?.usuario?.email || "—"}`,
