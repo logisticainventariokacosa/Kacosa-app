@@ -46,6 +46,21 @@ const MESES_ANALISIS_DEFECTO = 3;
 // backdateados días después). Debe coincidir con MARGEN_DIAS_MOVIMIENTOS en Code.gs.
 const MARGEN_DIAS_MOVIMIENTOS = 30;
 
+// Almacenes permitidos para el archivo de "Stock de la tienda": solo
+// almacenes de general y exhibición. Cualquier otro almacén en el archivo
+// (ej. de otra tienda, o un almacén interno no relevante) hace que se
+// rechace el archivo completo — ver validarAlmacenesArchivo().
+const ALMACENES_PERMITIDOS_STOCK_TIENDA = [
+  "1200", "1203", "1300", "1303", "1400", "1403", "1500", "1503",
+  "1600", "1603", "1700", "1703", "1900", "1903",
+  "11A0", "11A3", "12A0", "12A3", "19A0", "19A3",
+  "2010", "2013", "2017", "2090", "2093",
+  "1020", "1023", "1000", "3000", "1029", "3029", "1001", "3001"
+];
+
+// Almacenes permitidos para el archivo de "Stock de Kacosa".
+const ALMACENES_PERMITIDOS_STOCK_KACOSA = ["1000", "1029", "3000", "3029"];
+
 /** Bloquea o desbloquea todos los campos del formulario (archivos, período, margen, tienda). */
 function bloquearFormulario(bloquear) {
   IDS_CAMPOS_FORMULARIO.forEach(id => {
@@ -655,6 +670,20 @@ async function validarArchivoAdjunto(input, validEl, tipo) {
     const resultado = validarColumnasArchivo(filas, columnasRequeridas, tipo);
     let resultadoFinal = resultado;
 
+    // Para los archivos de stock, si las columnas están bien, se valida además
+    // que todos los almacenes presentes estén en la lista permitida
+    // correspondiente (distinta para stock de tienda vs. stock de Kacosa,
+    // aunque ambos comparten tipo:'stock' — se distinguen por el id del input).
+    if (resultado.valido && tipo === 'stock') {
+      const esStockKacosa = input.id === 'na-stock-kacosa';
+      const almacenesPermitidos = esStockKacosa ? ALMACENES_PERMITIDOS_STOCK_KACOSA : ALMACENES_PERMITIDOS_STOCK_TIENDA;
+      const nombreOrigen = esStockKacosa ? 'Kacosa' : 'la tienda';
+      const resultadoAlmacenes = validarAlmacenesArchivo(filas, almacenesPermitidos, nombreOrigen);
+      if (!resultadoAlmacenes.valido) {
+        resultadoFinal = resultadoAlmacenes;
+      }
+    }
+
     // Para el archivo de ventas, si las columnas están bien, se valida además
     // que no traiga movimientos demasiado antiguos respecto a lo ya registrado
     // en Supabase para esta tienda (con margen de MARGEN_DIAS_MOVIMIENTOS días
@@ -695,6 +724,30 @@ function validarColumnasArchivo(filas, columnasRequeridas, tipo) {
     valido: false,
     mensaje: `<i class="fa-solid fa-triangle-exclamation"></i> El archivo de ${nombreTipo} no tiene las columnas correctas. Faltan: ${faltantes.join(', ')}`,
     faltantes: faltantes
+  };
+}
+
+/**
+ * Valida que el archivo de stock (tienda o Kacosa) solo traiga almacenes de
+ * la lista permitida correspondiente. Si aparece cualquier otro almacén, se
+ * rechaza el archivo completo (no se filtra en silencio, para que el usuario
+ * se dé cuenta de que subió el archivo equivocado).
+ * @param {Array<Object>} filas - filas ya parseadas del .MHT (parsearMHT)
+ * @param {Array<string>} almacenesPermitidos
+ * @param {string} nombreOrigen - "la tienda" | "Kacosa" (para el mensaje)
+ */
+function validarAlmacenesArchivo(filas, almacenesPermitidos, nombreOrigen) {
+  const noPermitidos = new Set();
+  filas.forEach(f => {
+    const almacen = String(f["Almacén"] || "").trim();
+    if (almacen && !almacenesPermitidos.includes(almacen)) noPermitidos.add(almacen);
+  });
+
+  if (noPermitidos.size === 0) return { valido: true };
+
+  return {
+    valido: false,
+    mensaje: `<i class="fa-solid fa-triangle-exclamation"></i> Tu archivo tiene stock de almacenes no permitidos, solo se admiten para el stock de ${nombreOrigen} los almacenes del general y exhibición. Almacén(es) no permitido(s) encontrado(s): ${Array.from(noPermitidos).join(', ')}.`
   };
 }
 
