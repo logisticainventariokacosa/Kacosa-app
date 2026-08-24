@@ -1312,7 +1312,13 @@ tbody tr:hover {
 }
 
 /* --- Notificación --- */
+/* color-scheme: light le dice al navegador que esta tarjeta siempre es de tema
+   claro, para que NO la reescriba si el usuario tiene activado un "modo oscuro
+   forzado" del navegador/sistema (Chrome/Edge "Oscurecer contenido web",
+   Windows con tema oscuro, etc.) — sin esto, esos modos invierten colores de
+   forma inconsistente entre elementos y pueden dejar botones o texto invisibles. */
 #kacosa-notificacion {
+  color-scheme: light;
   position: fixed;
   inset: 0;
   background: rgba(15, 26, 46, 0.55);
@@ -1328,6 +1334,7 @@ tbody tr:hover {
 #kacosa-notificacion.visible { opacity: 1; visibility: visible; }
 
 .kn-tarjeta {
+  color-scheme: light;
   background: #fff;
   border-radius: 16px;
   padding: 28px 26px 22px;
@@ -1351,8 +1358,8 @@ tbody tr:hover {
   width: 30px;
   height: 30px;
   border: none;
-  background: var(--fondo);
-  color: var(--texto-secundario);
+  background: #EEF1F6; /* color fijo, mismo motivo que .kn-mensaje/.kn-boton-secundario */
+  color: #5E6A7A;
   border-radius: 50%;
   font-size: 14px;
   cursor: pointer;
@@ -1361,7 +1368,7 @@ tbody tr:hover {
   justify-content: center;
   transition: background 0.15s ease, color 0.15s ease;
 }
-.kn-cerrar:hover { background: var(--rojo-alerta); color: #fff; }
+.kn-cerrar:hover { background: #D64550; color: #fff; }
 
 .kn-icono {
   font-size: 42px;
@@ -1373,13 +1380,13 @@ tbody tr:hover {
   font-family: 'Space Grotesk', sans-serif;
   font-size: 18px;
   font-weight: 700;
-  color: var(--texto-titulo);
+  color: #0F1A2E; /* color fijo, mismo motivo que .kn-mensaje */
   margin-bottom: 6px;
   flex-shrink: 0;
 }
 .kn-mensaje {
   font-size: 13px;
-  color: var(--texto-secundario);
+  color: #33404A; /* color fijo (no variable de tema) para garantizar buen contraste sobre el fondo blanco de la tarjeta, sin importar el modo del navegador/SO */
   line-height: 1.5;
   margin-bottom: 16px;
   text-align: left;
@@ -1427,16 +1434,16 @@ tbody tr:hover {
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  background: transparent;
-  color: var(--azul-base);
-  border: 1.5px solid var(--azul-base);
+  background: #EAF1FB; /* fondo sólido claro fijo (no transparente ni variable de tema) para que siempre se distinga de la tarjeta, sin importar el modo del navegador/SO */
+  color: #0F1A2E;
+  border: 1.5px solid #0F1A2E;
   border-radius: 8px;
   font-weight: 700;
   font-size: 12.5px;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
-.kn-boton-secundario:hover { background: var(--azul-base); color: #fff; }
+.kn-boton-secundario:hover { background: #0F1A2E; color: #fff; }
 /* --- Sección de usuario al final del sidebar (sin espacio debajo) --- */
 .sidebar {
   display: flex;
