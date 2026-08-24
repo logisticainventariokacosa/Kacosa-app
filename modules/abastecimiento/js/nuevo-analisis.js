@@ -270,7 +270,7 @@ function render() {
 
       <!-- Margen -->
       <div style="margin-top:16px">
-        <label class="form-label">Margen de seguridad: <span id="na-margen-valor" style="color:var(--ambar-oscuro); font-weight:700">30%</span></label>
+        <label class="form-label">Margen de seguridad: <span id="na-margen-valor" style="color:var(--ambar-oscuro); font-weight:700">20%</span></label>
         <input type="range" id="na-margen" class="input-modern" min="10" max="100" step="5" value="20">
         <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--texto-claro); margin-top:2px">
           <span>10%</span>
@@ -908,7 +908,7 @@ async function finalizarCalculo(gruposConfirmados) {
     const advertenciasFactor = estado.ventasProcesadas.advertenciasFactor || [];
     let mensajeNotif = `Se procesaron ${resultado.length} material(es) — ${totalAPedirNotif} unidades a pedir. El análisis quedó guardado correctamente.`;
     let iconoNotif = undefined;
-    let segundosNotif = 5;
+    let opcionesExtra = { segundos: 5 };
 
     if (advertenciasFactor.length > 0) {
       const vistos = new Set();
@@ -918,16 +918,26 @@ async function finalizarCalculo(gruposConfirmados) {
         vistos.add(clave);
         return true;
       });
-      const listaHtml = unicos.slice(0, 6)
+      // Se listan TODOS (no solo los primeros N): el aviso ya no se cierra solo
+      // y el mensaje es scrolleable, así que no hace falta truncar ni recortar
+      // con "y N más...".
+      const listaHtml = unicos
         .map(a => `${a.codigo} (${a.descripcion || "sin descripción"}) — vendido en "${a.unidad}", UMB "${a.umb}"`)
         .join("<br>");
-      const restantes = unicos.length - 6;
-      mensajeNotif += `<br><br><strong><i class="fa-solid fa-triangle-exclamation"></i> Revisa factores_conversion / factores_conversion_umb:</strong> ${unicos.length} material(es) con unidad de venta distinta a su UMB, sin factor configurado para convertir:<br>${listaHtml}${restantes > 0 ? `<br>y ${restantes} más...` : ""}`;
+      mensajeNotif += `<br><br><strong><i class="fa-solid fa-triangle-exclamation"></i> Revisa factores_conversion / factores_conversion_umb:</strong> ${unicos.length} material(es) con unidad de venta distinta a su UMB, sin factor configurado para convertir:<br>${listaHtml}`;
       iconoNotif = '<i class="fa-solid fa-triangle-exclamation"></i>';
-      segundosNotif = 12;
+      // Este aviso no se cierra solo (el usuario necesita revisar la lista con
+      // calma) y ofrece descargar el detalle completo en Excel.
+      opcionesExtra = {
+        autoCerrar: false,
+        descargar: {
+          texto: "Descargar Excel",
+          onClick: () => descargarAdvertenciasFactorExcel(unicos, estado.fechaAnalisis)
+        }
+      };
     }
 
-    notificarExito(mensajeNotif, { titulo: "Análisis completado", icono: iconoNotif, segundos: segundosNotif });
+    notificarExito(mensajeNotif, { titulo: "Análisis completado", icono: iconoNotif, ...opcionesExtra });
 
     document.dispatchEvent(new CustomEvent("kacosa:analisis-listo", { detail: window.KACOSA.ultimoAnalisis }));
 
@@ -942,6 +952,35 @@ async function finalizarCalculo(gruposConfirmados) {
   }
 
   await intentarGuardarYMostrar();
+}
+
+/**
+ * Descarga en un .xlsx la lista completa de materiales con unidad de venta
+ * distinta a su UMB y sin factor de conversión configurado (el aviso que
+ * muestra finalizarCalculo() al terminar el análisis). Columnas: Material,
+ * Descripcion, Unidad_Venta, UMB.
+ * @param {Array<{codigo, descripcion, unidad, umb}>} unicos
+ * @param {string} fechaAnalisis - para nombrar el archivo, ej. "24/08/2026"
+ */
+function descargarAdvertenciasFactorExcel(unicos, fechaAnalisis) {
+  const filas = unicos.map(a => ({
+    material: a.codigo,
+    descripcion: a.descripcion || "",
+    unidad_venta: a.unidad,
+    umb: a.umb
+  }));
+  const columnas = [
+    { key: "material", label: "Material", ancho: 16 },
+    { key: "descripcion", label: "Descripcion", ancho: 42 },
+    { key: "unidad_venta", label: "Unidad_Venta", ancho: 14 },
+    { key: "umb", label: "UMB", ancho: 10 }
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, construirHojaEstilizada(filas, columnas), "Sin factor conversion");
+
+  const base = (fechaAnalisis || "").replace(/\//g, "-") || "analisis";
+  XLSX.writeFile(wb, `Materiales_sin_factor_conversion_${base}.xlsx`);
 }
 
 // ============================================================
