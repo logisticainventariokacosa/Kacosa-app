@@ -1312,13 +1312,7 @@ tbody tr:hover {
 }
 
 /* --- Notificación --- */
-/* color-scheme: light le dice al navegador que esta tarjeta siempre es de tema
-   claro, para que NO la reescriba si el usuario tiene activado un "modo oscuro
-   forzado" del navegador/sistema (Chrome/Edge "Oscurecer contenido web",
-   Windows con tema oscuro, etc.) — sin esto, esos modos invierten colores de
-   forma inconsistente entre elementos y pueden dejar botones o texto invisibles. */
 #kacosa-notificacion {
-  color-scheme: light;
   position: fixed;
   inset: 0;
   background: rgba(15, 26, 46, 0.55);
@@ -1334,8 +1328,7 @@ tbody tr:hover {
 #kacosa-notificacion.visible { opacity: 1; visibility: visible; }
 
 .kn-tarjeta {
-  color-scheme: light;
-  background: #fff;
+  background: #fff; /* en modo oscuro se sobreescribe a var(--blanco) desde app.html (html.kacosa-dark .kn-tarjeta) */
   border-radius: 16px;
   padding: 28px 26px 22px;
   width: min(92vw, 420px);
@@ -1358,8 +1351,8 @@ tbody tr:hover {
   width: 30px;
   height: 30px;
   border: none;
-  background: #EEF1F6; /* color fijo, mismo motivo que .kn-mensaje/.kn-boton-secundario */
-  color: #5E6A7A;
+  background: var(--fondo);
+  color: var(--texto-secundario);
   border-radius: 50%;
   font-size: 14px;
   cursor: pointer;
@@ -1368,7 +1361,7 @@ tbody tr:hover {
   justify-content: center;
   transition: background 0.15s ease, color 0.15s ease;
 }
-.kn-cerrar:hover { background: #D64550; color: #fff; }
+.kn-cerrar:hover { background: var(--rojo-alerta); color: #fff; }
 
 .kn-icono {
   font-size: 42px;
@@ -1380,13 +1373,13 @@ tbody tr:hover {
   font-family: 'Space Grotesk', sans-serif;
   font-size: 18px;
   font-weight: 700;
-  color: #0F1A2E; /* color fijo, mismo motivo que .kn-mensaje */
+  color: var(--texto-titulo); /* ya se adapta correctamente en modo oscuro (redefinida en app.html) */
   margin-bottom: 6px;
   flex-shrink: 0;
 }
 .kn-mensaje {
   font-size: 13px;
-  color: #33404A; /* color fijo (no variable de tema) para garantizar buen contraste sobre el fondo blanco de la tarjeta, sin importar el modo del navegador/SO */
+  color: var(--texto-secundario); /* ya se adapta correctamente en modo oscuro (redefinida en app.html) */
   line-height: 1.5;
   margin-bottom: 16px;
   text-align: left;
@@ -1429,21 +1422,28 @@ tbody tr:hover {
 }
 .kn-boton:hover { background: var(--azul-base-alto); }
 
+/* Botón secundario (ej. "Descargar en Excel" dentro del modal). Usa
+   var(--texto-titulo) en vez de var(--azul-base) porque esa variable SÍ está
+   redefinida para modo oscuro en app.html (--azul-base se queda fija, ya que
+   también se usa como fondo de botones/insignias en toda la app y no se puede
+   invertir sin romper esos otros usos). El fondo tintado (no transparente)
+   asegura que el botón siempre se distinga de la tarjeta en ambos modos;
+   los valores exactos para modo oscuro se ajustan en app.html. */
 .kn-boton-secundario {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  background: #EAF1FB; /* fondo sólido claro fijo (no transparente ni variable de tema) para que siempre se distinga de la tarjeta, sin importar el modo del navegador/SO */
-  color: #0F1A2E;
-  border: 1.5px solid #0F1A2E;
+  background: rgba(15, 26, 46, 0.06);
+  color: var(--texto-titulo);
+  border: 1.5px solid var(--texto-titulo);
   border-radius: 8px;
   font-weight: 700;
   font-size: 12.5px;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
-.kn-boton-secundario:hover { background: #0F1A2E; color: #fff; }
+.kn-boton-secundario:hover { background: var(--texto-titulo); color: var(--fondo); }
 /* --- Sección de usuario al final del sidebar (sin espacio debajo) --- */
 .sidebar {
   display: flex;
