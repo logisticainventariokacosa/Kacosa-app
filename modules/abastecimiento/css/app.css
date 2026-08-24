@@ -1421,6 +1421,22 @@ tbody tr:hover {
   flex-shrink: 0;
 }
 .kn-boton:hover { background: var(--azul-base-alto); }
+
+.kn-boton-secundario {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: transparent;
+  color: var(--azul-base);
+  border: 1.5px solid var(--azul-base);
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.kn-boton-secundario:hover { background: var(--azul-base); color: #fff; }
 /* --- Sección de usuario al final del sidebar (sin espacio debajo) --- */
 .sidebar {
   display: flex;
