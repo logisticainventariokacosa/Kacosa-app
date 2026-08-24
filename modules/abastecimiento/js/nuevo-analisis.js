@@ -459,9 +459,9 @@ function limpiarAnalisis() {
   const mesesEl = document.getElementById("na-meses-cantidad");
   if (mesesEl) mesesEl.value = 2;
   const margenEl = document.getElementById("na-margen");
-  if (margenEl) margenEl.value = 30;
+  if (margenEl) margenEl.value = 20;
   const margenValorEl = document.getElementById("na-margen-valor");
-  if (margenValorEl) margenValorEl.textContent = "30%";
+  if (margenValorEl) margenValorEl.textContent = "20%";
 
   // Limpia resultados, duplicados y mensajes en pantalla
   const duplicadosEl = document.getElementById("na-duplicados");
