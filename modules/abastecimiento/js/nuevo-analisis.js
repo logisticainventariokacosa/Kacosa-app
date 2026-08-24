@@ -313,7 +313,10 @@ async function actualizarRangoMovimientos() {
   const fMin = formatearFechaISOaVE(resp.fechaMin);
   const fMax = formatearFechaISOaVE(resp.fechaMax);
   rangoInfoEl.innerHTML = `<i class="fa-solid fa-circle-info"></i> Para <strong>${nombrePorId(tienda)}</strong>, el rango de fechas de movimientos registrados es del <strong>${fMin}</strong> al <strong>${fMax}</strong>.`;
-  if (rangoSubirEl) rangoSubirEl.textContent = `Sube los movimientos del ${fMax} al día actual`;
+  if (rangoSubirEl) {
+    const fechaLimite = formatearFechaISOaVE(formatearFechaISO(sumarDias(fechaISOaDate(resp.fechaMax), -MARGEN_DIAS_MOVIMIENTOS)));
+    rangoSubirEl.textContent = `Sube los movimientos del ${fMax} al día actual (puedes subir un archivo con una antigüedad máxima de movimientos del ${fechaLimite})`;
+  }
   estado.ultimaFechaRegistrada = resp.fechaMax;
 
   // Sugiere automáticamente cuántos meses de historial usar: la mayor
@@ -525,8 +528,8 @@ function render() {
 
       <!-- Margen -->
       <div style="margin-top:16px">
-        <label class="form-label">Margen de seguridad: <span id="na-margen-valor" style="color:var(--ambar-oscuro); font-weight:700">30%</span></label>
-        <input type="range" id="na-margen" class="input-modern" min="10" max="100" step="5" value="30">
+        <label class="form-label">Margen de seguridad: <span id="na-margen-valor" style="color:var(--ambar-oscuro); font-weight:700">20%</span></label>
+        <input type="range" id="na-margen" class="input-modern" min="10" max="100" step="5" value="20">
         <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--texto-claro); margin-top:2px">
           <span>10%</span>
           <span>50%</span>
@@ -754,9 +757,9 @@ function limpiarAnalisis() {
   const mesesEl = document.getElementById("na-meses-cantidad");
   if (mesesEl) mesesEl.value = 2;
   const margenEl = document.getElementById("na-margen");
-  if (margenEl) margenEl.value = 30;
+  if (margenEl) margenEl.value = 20;
   const margenValorEl = document.getElementById("na-margen-valor");
-  if (margenValorEl) margenValorEl.textContent = "30%";
+  if (margenValorEl) margenValorEl.textContent = "20%";
   const mesesAnalisisEl = document.getElementById("na-meses-analisis");
   if (mesesAnalisisEl) mesesAnalisisEl.value = MESES_ANALISIS_DEFECTO;
 
