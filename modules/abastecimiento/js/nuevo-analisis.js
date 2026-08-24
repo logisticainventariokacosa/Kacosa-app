@@ -146,6 +146,41 @@ function sumarMeses(fecha, meses) {
   return copia;
 }
 
+/** Cantidad de meses (redondeados, mínimo 1) entre dos fechas. */
+function mesesEntreFechas(fechaInicio, fechaFin) {
+  const msPorDia = 24 * 60 * 60 * 1000;
+  const dias = Math.round((fechaFin - fechaInicio) / msPorDia);
+  return Math.max(1, Math.round(dias / 30));
+}
+
+/** Ajusta un número de meses a los límites permitidos para el análisis (3-12). */
+function clampMesesAnalisis(meses) {
+  if (meses < MESES_ANALISIS_MIN) return MESES_ANALISIS_MIN;
+  if (meses > MESES_ANALISIS_MAX) return MESES_ANALISIS_MAX;
+  return meses;
+}
+
+/**
+ * Primera carga para una tienda (sin historial en Supabase todavía): sugiere
+ * automáticamente cuántos meses de análisis usar, a partir del propio rango
+ * de fechas que trae el archivo recién adjuntado (min a máx), dentro de los
+ * límites permitidos (3-12). El usuario puede cambiarlo a mano después.
+ */
+function sugerirMesesAnalisisDesdeArchivo(filas) {
+  let fechaMin = null, fechaMax = null;
+  filas.forEach(f => {
+    const fecha = parsearFechaSAP(f["Fe.contabilización"]);
+    if (!fecha) return;
+    if (!fechaMin || fecha < fechaMin) fechaMin = fecha;
+    if (!fechaMax || fecha > fechaMax) fechaMax = fecha;
+  });
+  if (!fechaMin || !fechaMax) return;
+  const mesesAnalisisEl = document.getElementById("na-meses-analisis");
+  if (mesesAnalisisEl) {
+    mesesAnalisisEl.value = clampMesesAnalisis(mesesEntreFechas(fechaMin, fechaMax));
+  }
+}
+
 /**
  * Valida que el archivo de ventas recién adjuntado no traiga movimientos con
  * fecha demasiado antigua respecto a lo ya registrado en Supabase para la
@@ -158,8 +193,12 @@ function sumarMeses(fecha, meses) {
  */
 function validarFechasArchivoVentas(filas) {
   // Sin historial previo para esta tienda (primera carga): no hay nada contra
-  // qué comparar, se acepta cualquier fecha.
-  if (!estado.ultimaFechaRegistrada) return { valido: true };
+  // qué comparar la fecha mínima aceptable, pero sí se aprovecha el propio
+  // archivo para sugerir automáticamente cuántos meses de análisis usar.
+  if (!estado.ultimaFechaRegistrada) {
+    sugerirMesesAnalisisDesdeArchivo(filas);
+    return { valido: true };
+  }
 
   let fechaMinEnArchivo = null;
   let filasSinFechaValida = 0;
@@ -208,10 +247,36 @@ async function actualizarRangoMovimientos() {
 
   const tienda = tiendaEl.value;
   const centros = centrosDeTienda(tienda);
+
+  // Reset inmediato y optimista: apenas cambia la tienda, se limpia cualquier
+  // mensaje de rango/validación de la tienda anterior (no se espera a que
+  // termine la consulta a Supabase). Si había un archivo de ventas ya
+  // adjuntado, se marca como "revalidando" y se bloquea temporalmente hasta
+  // que se confirme el rango de la nueva tienda — evita que quede pegado un
+  // aviso (o una validación "aprobada") que ya no corresponde.
+  const validVentasEl = document.getElementById("validacion-ventas");
+  const inputVentasInicial = document.getElementById("na-ventas");
+  const hayArchivoVentas = inputVentasInicial && inputVentasInicial.files && inputVentasInicial.files[0];
+  if (hayArchivoVentas && validVentasEl) {
+    validVentasEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Revalidando el archivo para la nueva tienda...';
+    validVentasEl.style.color = 'var(--texto-claro)';
+    inputVentasInicial.dataset.valido = 'false';
+  }
+
+  // Revalida (si aplica) al final de esta función, sin importar por qué
+  // camino se salió (sin tienda, error de red, sin datos, o con datos) —
+  // así el aviso del archivo NUNCA se queda pegado con la tienda anterior.
+  const revalidarAlFinal = async () => {
+    if (hayArchivoVentas) {
+      await validarArchivoAdjunto(inputVentasInicial, validVentasEl, "ventas");
+    }
+  };
+
   if (!tienda || centros.length === 0) {
     rangoInfoEl.innerHTML = "";
     if (rangoSubirEl) rangoSubirEl.textContent = "";
     estado.ultimaFechaRegistrada = null;
+    await revalidarAlFinal();
     return;
   }
 
@@ -220,12 +285,16 @@ async function actualizarRangoMovimientos() {
 
   const resp = await callBridge("rangoMovimientos", { centros });
   // Si el usuario ya cambió de tienda mientras esta consulta estaba en vuelo,
-  // descarta el resultado (evita pisar el mensaje de la tienda actual).
+  // descarta el resultado (la revalidación de esa tienda vieja ya no aplica;
+  // la ejecución que sí corresponde a la tienda nueva se encargará de todo).
   if (document.getElementById("na-tienda")?.value !== tienda) return;
+
+  const mesesAnalisisEl = document.getElementById("na-meses-analisis");
 
   if (!resp.ok) {
     rangoInfoEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> No se pudo consultar el rango de movimientos registrados: ' + (resp.error || "error desconocido");
     estado.ultimaFechaRegistrada = null;
+    await revalidarAlFinal();
     return;
   }
 
@@ -233,6 +302,11 @@ async function actualizarRangoMovimientos() {
     rangoInfoEl.innerHTML = `<i class="fa-solid fa-circle-info"></i> Aún no hay movimientos registrados para <strong>${nombrePorId(tienda)}</strong>. Sube el archivo completo del período que quieras analizar.`;
     if (rangoSubirEl) rangoSubirEl.textContent = "";
     estado.ultimaFechaRegistrada = null;
+    // Sin historial: el valor de "meses de análisis" vuelve al mínimo por
+    // defecto; si el usuario ya adjuntó un archivo, la revalidación de abajo
+    // lo recalcula a partir del rango de fechas de ESE archivo.
+    if (mesesAnalisisEl && !hayArchivoVentas) mesesAnalisisEl.value = MESES_ANALISIS_DEFECTO;
+    await revalidarAlFinal();
     return;
   }
 
@@ -242,12 +316,17 @@ async function actualizarRangoMovimientos() {
   if (rangoSubirEl) rangoSubirEl.textContent = `Sube los movimientos del ${fMax} al día actual`;
   estado.ultimaFechaRegistrada = resp.fechaMax;
 
+  // Sugiere automáticamente cuántos meses de historial usar: la mayor
+  // cantidad disponible entre la fecha más antigua registrada y hoy, dentro
+  // de los límites permitidos (3-12). El usuario puede cambiarlo a mano después.
+  if (mesesAnalisisEl) {
+    const sugerido = clampMesesAnalisis(mesesEntreFechas(fechaISOaDate(resp.fechaMin), new Date()));
+    mesesAnalisisEl.value = sugerido;
+  }
+
   // Si ya había un archivo de ventas adjuntado (ej. el usuario cambió de tienda
   // después de subirlo), se re-valida contra el rango recién actualizado.
-  const inputVentas = document.getElementById("na-ventas");
-  if (inputVentas && inputVentas.files && inputVentas.files[0]) {
-    validarArchivoAdjunto(inputVentas, document.getElementById("validacion-ventas"), "ventas");
-  }
+  await revalidarAlFinal();
 }
 
 // ============================================================
@@ -1198,7 +1277,12 @@ async function finalizarCalculo(gruposConfirmados) {
       segundosNotif = 12;
     }
 
-    notificarExito(mensajeNotif, { titulo: "Análisis completado", icono: iconoNotif, segundos: segundosNotif });
+    notificarExito(mensajeNotif, {
+      titulo: "Análisis completado",
+      icono: iconoNotif,
+      segundos: segundosNotif,
+      sinAutoCierre: advertenciasFactor.length > 0
+    });
 
     document.dispatchEvent(new CustomEvent("kacosa:analisis-listo", { detail: window.KACOSA.ultimoAnalisis }));
 
