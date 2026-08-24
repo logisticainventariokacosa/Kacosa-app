@@ -745,9 +745,16 @@ function validarAlmacenesArchivo(filas, almacenesPermitidos, nombreOrigen) {
 
   if (noPermitidos.size === 0) return { valido: true };
 
+  let mensajePermitidos;
+  if (nombreOrigen === 'Kacosa') {
+    mensajePermitidos = 'solo se admiten para el stock de Kacosa los almacenes 1000, 1029, 3000 y 3029.';
+  } else {
+    mensajePermitidos = `solo se admiten para el stock de ${nombreOrigen} los almacenes del general y exhibición.`;
+  }
+
   return {
     valido: false,
-    mensaje: `<i class="fa-solid fa-triangle-exclamation"></i> Tu archivo tiene stock de almacenes no permitidos, solo se admiten para el stock de ${nombreOrigen} los almacenes del general y exhibición. Almacén(es) no permitido(s) encontrado(s): ${Array.from(noPermitidos).join(', ')}.`
+    mensaje: `<i class="fa-solid fa-triangle-exclamation"></i> Tu archivo tiene stock de almacenes no permitidos, ${mensajePermitidos} Almacén(es) no permitido(s) encontrado(s): ${Array.from(noPermitidos).join(', ')}.`
   };
 }
 
