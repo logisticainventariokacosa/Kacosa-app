@@ -52,15 +52,6 @@ export function calcularAbastecimiento({ ventasProcesadas, stockTienda, stockKac
 
   const rangoSeguridadUsado = `${margenPct || 0} %`;
 
-  // Rango de fechas EXACTO de los movimientos realmente usados en el análisis
-  // (fechaMin/fechaMax reales dentro de lo leído de Supabase, no la ventana
-  // solicitada) — se muestra al usuario y en el Excel para que quede claro
-  // qué días de venta respaldan el Total_Ventas de este análisis.
-  const formatearFecha = (d) => (d ? d.toLocaleDateString("es-VE") : "—");
-  const rangoFechasTexto = (rangoFechas.inicio && rangoFechas.fin)
-    ? `${formatearFecha(rangoFechas.inicio)} al ${formatearFecha(rangoFechas.fin)}`
-    : "—";
-
   const resultado = [];
 
   Object.values(porMaterial).forEach(v => {
@@ -138,8 +129,7 @@ export function calcularAbastecimiento({ ventasProcesadas, stockTienda, stockKac
       empaque,
       periodoVentas,
       periodoAbastecimiento,
-      rangoSeguridadUsado,
-      rangoFechasTexto
+      rangoSeguridadUsado
     });
   });
 
