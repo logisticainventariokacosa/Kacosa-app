@@ -1263,19 +1263,34 @@ async function finalizarCalculo(gruposConfirmados) {
     let iconoNotif = undefined;
     let segundosNotif = 5;
 
+    // Agrupa por material (código): un mismo material puede aparecer varias veces
+    // si se vendió con más de una unidad distinta a su UMB (ej. una vez en "M" y
+    // otra en "PAQ") — se consolidan en una sola fila con todas sus unidades.
+    let materialesConAdvertencia = [];
     if (advertenciasFactor.length > 0) {
-      const vistos = new Set();
-      const unicos = advertenciasFactor.filter(a => {
-        const clave = `${a.codigo}|${a.unidad}`;
-        if (vistos.has(clave)) return false;
-        vistos.add(clave);
-        return true;
+      const porCodigo = new Map();
+      advertenciasFactor.forEach(a => {
+        if (!porCodigo.has(a.codigo)) {
+          porCodigo.set(a.codigo, {
+            codigo: a.codigo,
+            descripcion: a.descripcion || "sin descripción",
+            umb: a.umb || "",
+            unidades: new Set()
+          });
+        }
+        porCodigo.get(a.codigo).unidades.add(a.unidad);
       });
-      const listaHtml = unicos.slice(0, 6)
-        .map(a => `${a.codigo} (${a.descripcion || "sin descripción"}) — vendido en "${a.unidad}", UMB "${a.umb}"`)
+      materialesConAdvertencia = Array.from(porCodigo.values())
+        .map(m => ({ ...m, unidades: Array.from(m.unidades) }))
+        .sort((a, b) => a.codigo.localeCompare(b.codigo));
+
+      // Se muestran TODOS (el modal ya tiene scroll interno) — un "y X más..." no
+      // le sirve de nada al usuario, que necesita saber exactamente cuáles son.
+      const listaHtml = materialesConAdvertencia
+        .map(m => `${m.codigo} (${m.descripcion}) — vendido en ${m.unidades.map(u => `"${u}"`).join(", ")}, UMB "${m.umb}"`)
         .join("<br>");
-      const restantes = unicos.length - 6;
-      mensajeNotif += `<br><br><strong><i class="fa-solid fa-triangle-exclamation"></i> Revisa factores_conversion / factores_conversion_umb:</strong> ${unicos.length} material(es) con unidad de venta distinta a su UMB, sin factor configurado para convertir:<br>${listaHtml}${restantes > 0 ? `<br>y ${restantes} más...` : ""}`;
+      mensajeNotif += `<br><br><strong><i class="fa-solid fa-triangle-exclamation"></i> Revisa factores_conversion / factores_conversion_umb:</strong> ${materialesConAdvertencia.length} material(es) con unidad de venta distinta a su UMB, sin factor configurado para convertir:<br>${listaHtml}` +
+        `<br><br><button type="button" id="btn-descargar-factores-faltantes" class="kn-boton-secundario"><i class="fa-solid fa-file-arrow-down"></i> Descargar en Excel</button>`;
       iconoNotif = '<i class="fa-solid fa-triangle-exclamation"></i>';
       segundosNotif = 12;
     }
@@ -1284,8 +1299,15 @@ async function finalizarCalculo(gruposConfirmados) {
       titulo: "Análisis completado",
       icono: iconoNotif,
       segundos: segundosNotif,
-      sinAutoCierre: advertenciasFactor.length > 0
+      sinAutoCierre: materialesConAdvertencia.length > 0
     });
+
+    if (materialesConAdvertencia.length > 0) {
+      const btnDescargar = document.getElementById("btn-descargar-factores-faltantes");
+      if (btnDescargar) {
+        btnDescargar.addEventListener("click", () => descargarFactoresFaltantes(materialesConAdvertencia));
+      }
+    }
 
     document.dispatchEvent(new CustomEvent("kacosa:analisis-listo", { detail: window.KACOSA.ultimoAnalisis }));
 
@@ -1611,6 +1633,28 @@ async function enviarCorreo() {
       btn.innerHTML = '<i class="fa-solid fa-envelope"></i> Enviar por correo';
     }
   }
+}
+
+/**
+ * Descarga en Excel la lista completa de materiales con advertencia de factor
+ * de conversión faltante (vendidos en una unidad distinta a su UMB, sin factor
+ * configurado). Columnas: Código, Descripción, Vendido en (todas las unidades
+ * detectadas, separadas por coma), UMB.
+ */
+function descargarFactoresFaltantes(materialesConAdvertencia) {
+  const datos = materialesConAdvertencia.map(m => ({
+    "Código": m.codigo,
+    "Descripción": m.descripcion,
+    "Vendido en": m.unidades.join(", "),
+    "UMB": m.umb
+  }));
+  const ws = XLSX.utils.json_to_sheet(datos);
+  ws["!cols"] = [{ wch: 14 }, { wch: 45 }, { wch: 18 }, { wch: 10 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Factores faltantes");
+  const nombreTienda = (estado.tiendaSeleccionada || "tienda").toString().replace(/[^a-zA-Z0-9_-]/g, "_");
+  const nombreFecha = (estado.fechaAnalisis || "").replace(/\//g, "-");
+  XLSX.writeFile(wb, `Factores_conversion_faltantes_${nombreTienda}_${nombreFecha}.xlsx`);
 }
 
 function construirWorkbookCompleto() {
