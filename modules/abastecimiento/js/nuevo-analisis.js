@@ -271,7 +271,7 @@ function render() {
       <!-- Margen -->
       <div style="margin-top:16px">
         <label class="form-label">Margen de seguridad: <span id="na-margen-valor" style="color:var(--ambar-oscuro); font-weight:700">30%</span></label>
-        <input type="range" id="na-margen" class="input-modern" min="10" max="100" step="5" value="30">
+        <input type="range" id="na-margen" class="input-modern" min="10" max="100" step="5" value="20">
         <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--texto-claro); margin-top:2px">
           <span>10%</span>
           <span>50%</span>
