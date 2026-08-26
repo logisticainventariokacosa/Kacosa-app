@@ -25,11 +25,11 @@ const cacheFilasStock = {};
 // Configuración de cada input de archivo (se usa al construir el formulario
 // y también para limpiarlo por completo con "Limpiar datos").
 const CONFIG_ARCHIVOS = [
-  { id: 'na-ventas', nameId: 'file-name-ventas', statusId: 'file-status-ventas', wrapperId: 'file-wrapper-ventas', validId: 'validacion-ventas', tipo: 'ventas', opcional: false },
-  { id: 'na-stock-tienda', nameId: 'file-name-stock-tienda', statusId: 'file-status-stock-tienda', wrapperId: 'file-wrapper-stock-tienda', validId: 'validacion-stock-tienda', tipo: 'stock', opcional: false },
-  { id: 'na-stock-kacosa', nameId: 'file-name-stock-kacosa', statusId: 'file-status-stock-kacosa', wrapperId: 'file-wrapper-stock-kacosa', validId: 'validacion-stock-kacosa', tipo: 'stock', opcional: false },
-  { id: 'na-notas-pendientes', nameId: 'file-name-notas-pendientes', statusId: 'file-status-notas-pendientes', wrapperId: 'file-wrapper-notas-pendientes', validId: 'validacion-notas-pendientes', tipo: 'notas', opcional: true },
-  { id: 'na-pendientes-sync', nameId: 'file-name-pendientes-sync', statusId: 'file-status-pendientes-sync', wrapperId: 'file-wrapper-pendientes-sync', validId: null, tipo: null, opcional: true }
+  { id: 'na-ventas', nameId: 'file-name-ventas', statusId: 'file-status-ventas', wrapperId: 'file-wrapper-ventas', validId: 'validacion-ventas', clearId: 'file-clear-ventas', tipo: 'ventas', opcional: false },
+  { id: 'na-stock-tienda', nameId: 'file-name-stock-tienda', statusId: 'file-status-stock-tienda', wrapperId: 'file-wrapper-stock-tienda', validId: 'validacion-stock-tienda', clearId: 'file-clear-stock-tienda', tipo: 'stock', opcional: false },
+  { id: 'na-stock-kacosa', nameId: 'file-name-stock-kacosa', statusId: 'file-status-stock-kacosa', wrapperId: 'file-wrapper-stock-kacosa', validId: 'validacion-stock-kacosa', clearId: 'file-clear-stock-kacosa', tipo: 'stock', opcional: false },
+  { id: 'na-notas-pendientes', nameId: 'file-name-notas-pendientes', statusId: 'file-status-notas-pendientes', wrapperId: 'file-wrapper-notas-pendientes', validId: 'validacion-notas-pendientes', clearId: 'file-clear-notas-pendientes', tipo: 'notas', opcional: true },
+  { id: 'na-pendientes-sync', nameId: 'file-name-pendientes-sync', statusId: 'file-status-pendientes-sync', wrapperId: 'file-wrapper-pendientes-sync', validId: null, clearId: 'file-clear-pendientes-sync', tipo: null, opcional: true }
 ];
 
 // IDs de todos los campos del formulario que deben bloquearse mientras se procesa
@@ -354,6 +354,7 @@ function render() {
             <div class="file-hint">.MHT de SAP · Ventas</div>
           </div>
           <span class="file-status empty" id="file-status-ventas">Pendiente</span>
+          <button type="button" class="file-clear-btn" id="file-clear-ventas" title="Quitar archivo" style="display:none"><i class="fa-solid fa-xmark"></i></button>
           <input type="file" id="na-ventas" accept=".mht,.MHT">
         </div>
         <div id="validacion-ventas" class="estado-texto" style="color:var(--verde-kpi); font-size:12px; margin-top:4px"></div>
@@ -369,6 +370,7 @@ function render() {
             <div class="file-hint">.MHT de SAP · Stock tienda</div>
           </div>
           <span class="file-status empty" id="file-status-stock-tienda">Pendiente</span>
+          <button type="button" class="file-clear-btn" id="file-clear-stock-tienda" title="Quitar archivo" style="display:none"><i class="fa-solid fa-xmark"></i></button>
           <input type="file" id="na-stock-tienda" accept=".mht,.MHT">
         </div>
         <div id="validacion-stock-tienda" class="estado-texto" style="color:var(--verde-kpi); font-size:12px; margin-top:4px"></div>
@@ -384,6 +386,7 @@ function render() {
             <div class="file-hint">.MHT de SAP · Stock Kacosa</div>
           </div>
           <span class="file-status empty" id="file-status-stock-kacosa">Pendiente</span>
+          <button type="button" class="file-clear-btn" id="file-clear-stock-kacosa" title="Quitar archivo" style="display:none"><i class="fa-solid fa-xmark"></i></button>
           <input type="file" id="na-stock-kacosa" accept=".mht,.MHT">
         </div>
         <div id="validacion-stock-kacosa" class="estado-texto" style="color:var(--verde-kpi); font-size:12px; margin-top:4px"></div>
@@ -399,6 +402,7 @@ function render() {
             <div class="file-hint">.MHT de SAP · Notas pendientes por despacho</div>
           </div>
           <span class="file-status empty" id="file-status-notas-pendientes">Sin usar</span>
+          <button type="button" class="file-clear-btn" id="file-clear-notas-pendientes" title="Quitar archivo" style="display:none"><i class="fa-solid fa-xmark"></i></button>
           <input type="file" id="na-notas-pendientes" accept=".mht,.MHT">
         </div>
         <div id="validacion-notas-pendientes" class="estado-texto" style="color:var(--verde-kpi); font-size:12px; margin-top:4px"></div>
@@ -414,6 +418,7 @@ function render() {
             <div class="file-hint">.xlsx propio · Columnas: Material, Cantidad_por_sincronizar</div>
           </div>
           <span class="file-status empty" id="file-status-pendientes-sync">Sin usar</span>
+          <button type="button" class="file-clear-btn" id="file-clear-pendientes-sync" title="Quitar archivo" style="display:none"><i class="fa-solid fa-xmark"></i></button>
           <input type="file" id="na-pendientes-sync" accept=".xlsx,.xls">
         </div>
       </div>
@@ -466,12 +471,37 @@ function render() {
   // ============================================================
   const fileInputs = CONFIG_ARCHIVOS;
 
-  fileInputs.forEach(({ id, nameId, statusId, wrapperId, validId, tipo }) => {
+  fileInputs.forEach(({ id, nameId, statusId, wrapperId, validId, clearId, tipo, opcional }) => {
     const input = document.getElementById(id);
     const nameEl = document.getElementById(nameId);
     const statusEl = document.getElementById(statusId);
     const wrapper = document.getElementById(wrapperId);
     const validEl = validId ? document.getElementById(validId) : null;
+    const clearBtn = clearId ? document.getElementById(clearId) : null;
+    const textoVacio = opcional ? 'Sin usar' : 'Pendiente';
+
+    /** Deja el recuadro como si nunca se hubiera elegido un archivo. */
+    const vaciarRecuadro = () => {
+      input.value = '';
+      nameEl.textContent = 'Seleccionar archivo';
+      statusEl.textContent = textoVacio;
+      statusEl.className = 'file-status empty';
+      wrapper.classList.remove('loaded');
+      if (validEl) {
+        validEl.innerHTML = '';
+        input.dataset.valido = 'false';
+      }
+      if (clearBtn) clearBtn.style.display = 'none';
+      delete cacheFilasStock[id];
+    };
+
+    if (clearBtn) {
+      clearBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation(); // no debe abrir el selector de archivos del wrapper
+        vaciarRecuadro();
+      });
+    }
 
     if (input) {
       input.addEventListener('change', async () => {
@@ -480,6 +510,7 @@ function render() {
           statusEl.innerHTML = '<i class="fa-solid fa-check"></i> Cargado';
           statusEl.className = 'file-status loaded';
           wrapper.classList.add('loaded');
+          if (clearBtn) clearBtn.style.display = 'flex';
 
           if (validEl && tipo) {
             try {
@@ -518,15 +549,7 @@ function render() {
             }
           }
         } else {
-          nameEl.textContent = 'Seleccionar archivo';
-          statusEl.textContent = 'Pendiente';
-          statusEl.className = 'file-status empty';
-          wrapper.classList.remove('loaded');
-          if (validEl) {
-            validEl.innerHTML = '';
-            input.dataset.valido = 'false';
-          }
-          delete cacheFilasStock[id];
+          vaciarRecuadro();
         }
       });
 
@@ -639,12 +662,13 @@ function verificarArchivosValidos() {
  * Se usa al hacer clic en "Limpiar datos" (solo visible tras completar un análisis).
  */
 function limpiarAnalisis() {
-  CONFIG_ARCHIVOS.forEach(({ id, nameId, statusId, wrapperId, validId, opcional }) => {
+  CONFIG_ARCHIVOS.forEach(({ id, nameId, statusId, wrapperId, validId, clearId, opcional }) => {
     const input = document.getElementById(id);
     const nameEl = document.getElementById(nameId);
     const statusEl = document.getElementById(statusId);
     const wrapper = document.getElementById(wrapperId);
     const validEl = validId ? document.getElementById(validId) : null;
+    const clearBtn = clearId ? document.getElementById(clearId) : null;
 
     if (input) {
       input.value = "";
@@ -657,6 +681,8 @@ function limpiarAnalisis() {
     }
     if (wrapper) wrapper.classList.remove("loaded");
     if (validEl) validEl.innerHTML = "";
+    if (clearBtn) clearBtn.style.display = "none";
+    delete cacheFilasStock[id];
   });
 
   // Restaura período y margen a sus valores por defecto
