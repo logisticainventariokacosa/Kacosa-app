@@ -18,9 +18,21 @@
 // Si no se encuentra en ninguna de las dos, se usa 1 (sin conversión).
 import { callBridge } from "./bridge.js";
 
-let cache = null;    // Map "codigo|unidad" -> factor (por material)
-let cacheUMB = null; // Map "umb|unidad" -> factor (genérico por UMB)
+let cache = null;    // Map "codigo|UNIDAD" -> factor (por material)
+let cacheUMB = null; // Map "UMB|UNIDAD" -> factor (genérico por UMB)
 let cargaEnCurso = null;
+
+/**
+ * Normaliza una unidad de medida para compararla o usarla como llave de caché:
+ * sin espacios sobrantes y en mayúsculas. Evita falsos positivos en la
+ * detección de "unidad distinta a la UMB" cuando en realidad es la MISMA
+ * unidad pero escrita distinto entre el archivo de ventas, el de stock, o lo
+ * cargado en Supabase (ej. "Un" vs "UN ", "un" vs "UN").
+ */
+function normalizarUnidad(u) {
+  return String(u || "").trim().toUpperCase();
+}
+export { normalizarUnidad };
 
 /**
  * Carga (o recarga) ambas tablas de factores de conversión desde Supabase y las
@@ -42,7 +54,7 @@ export async function cargarFactoresConversion() {
       const mapa = new Map();
       if (respMaterial.ok) {
         (respMaterial.factores || []).forEach(f => {
-          mapa.set(`${f.material}|${f.unidadVenta}`, Number(f.factor) || 1);
+          mapa.set(`${f.material}|${normalizarUnidad(f.unidadVenta)}`, Number(f.factor) || 1);
         });
       } else {
         console.error("No se pudieron cargar los factores de conversión por material:", respMaterial.error);
@@ -52,7 +64,7 @@ export async function cargarFactoresConversion() {
       const mapaUMB = new Map();
       if (respUMB.ok) {
         (respUMB.factoresUMB || []).forEach(f => {
-          mapaUMB.set(`${f.umb}|${f.unidadVenta}`, Number(f.factor) || 1);
+          mapaUMB.set(`${normalizarUnidad(f.umb)}|${normalizarUnidad(f.unidadVenta)}`, Number(f.factor) || 1);
         });
       } else {
         console.error("No se pudieron cargar los factores de conversión por UMB:", respUMB.error);
@@ -82,11 +94,12 @@ export async function cargarFactoresConversion() {
  *   si no se pasa, se omite el paso 2 (fallback genérico por UMB)
  */
 export function obtenerFactor(codigoMaterial, unidadVenta, umbMaterial) {
-  if (cache && cache.has(`${codigoMaterial}|${unidadVenta}`)) {
-    return cache.get(`${codigoMaterial}|${unidadVenta}`);
+  const unidad = normalizarUnidad(unidadVenta);
+  if (cache && cache.has(`${codigoMaterial}|${unidad}`)) {
+    return cache.get(`${codigoMaterial}|${unidad}`);
   }
-  if (umbMaterial && cacheUMB && cacheUMB.has(`${umbMaterial}|${unidadVenta}`)) {
-    return cacheUMB.get(`${umbMaterial}|${unidadVenta}`);
+  if (umbMaterial && cacheUMB && cacheUMB.has(`${normalizarUnidad(umbMaterial)}|${unidad}`)) {
+    return cacheUMB.get(`${normalizarUnidad(umbMaterial)}|${unidad}`);
   }
   return 1;
 }
@@ -99,7 +112,8 @@ export function obtenerFactor(codigoMaterial, unidadVenta, umbMaterial) {
  * en el 1 por defecto sin que nadie lo sepa).
  */
 export function tieneFactor(codigoMaterial, unidadVenta, umbMaterial) {
-  if (cache && cache.has(`${codigoMaterial}|${unidadVenta}`)) return true;
-  if (umbMaterial && cacheUMB && cacheUMB.has(`${umbMaterial}|${unidadVenta}`)) return true;
+  const unidad = normalizarUnidad(unidadVenta);
+  if (cache && cache.has(`${codigoMaterial}|${unidad}`)) return true;
+  if (umbMaterial && cacheUMB && cacheUMB.has(`${normalizarUnidad(umbMaterial)}|${unidad}`)) return true;
   return false;
 }
