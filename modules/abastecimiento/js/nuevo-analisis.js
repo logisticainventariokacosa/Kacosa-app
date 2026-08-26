@@ -113,6 +113,43 @@ const COLUMNAS_NOTAS_PENDIENTES = [
 ];
 
 // ============================================================
+//  ALMACENES PERMITIDOS (columna "Almacén" de los archivos de stock)
+// ============================================================
+// Independiente del Centro: dentro de cada centro de tienda, SAP maneja el
+// almacén "general" (stock normal) y el de "exhibición" (vitrina/showroom).
+// Esta es la lista completa de esos pares para TODAS las tiendas.
+const ALMACENES_TIENDA_PERMITIDOS = [
+  "1200", "1203", "1300", "1303", "1400", "1403", "1500", "1503", "1600", "1603",
+  "1700", "1703", "1900", "1903", "11A0", "11A3", "12A0", "12A3", "19A0", "19A3",
+  "2010", "2013", "2017", "2090", "2093", "1020", "1023", "1000", "3000", "1029",
+  "3029", "1001", "3001"
+];
+
+// Kacosa (casa matriz) solo maneja estos 4 almacenes.
+const ALMACENES_KACOSA_PERMITIDOS = ["1000", "1029", "3000", "3029"];
+
+/**
+ * Revisa que la columna "Almacén" de los archivos de stock (tienda y Kacosa)
+ * solo contenga los códigos permitidos. Devuelve un mensaje de error (string)
+ * si encuentra alguno no permitido, o null si todo está bien.
+ */
+function validarAlmacenes(filasStockTienda, filasStockKacosa) {
+  const tieneAlmacenNoPermitido = (filas, permitidos) =>
+    filas.some(f => {
+      const almacen = String(f["Almacén"] || "").trim();
+      return almacen !== "" && !permitidos.includes(almacen);
+    });
+
+  if (tieneAlmacenNoPermitido(filasStockTienda, ALMACENES_TIENDA_PERMITIDOS)) {
+    return "Tu archivo tiene stock de almacenes no permitidos, solo se admiten para el stock de la tienda los almacenes del general y exhibición";
+  }
+  if (tieneAlmacenNoPermitido(filasStockKacosa, ALMACENES_KACOSA_PERMITIDOS)) {
+    return "Tu archivo tiene stock de almacenes no permitidos, solo se admiten para el stock de Kacosa los almacenes 1000, 1029, 3000 y 3029";
+  }
+  return null;
+}
+
+// ============================================================
 //  ESTADO PERSISTENTE
 // ============================================================
 function estadoInicial() {
@@ -557,6 +594,17 @@ async function ejecutarAnalisis() {
     const errorValidacion = validarCentros(filasVentas, filasStockTienda, filasStockKacosa, centrosValidos);
     if (errorValidacion) {
       estadoTexto.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' + errorValidacion;
+      btnAnalizar.disabled = false;
+      btnAnalizar.innerHTML = '<i class="fa-solid fa-bolt"></i> Analizar';
+      bloquearFormulario(false);
+      estado.analizando = false;
+      return;
+    }
+
+    estadoTexto.textContent = "Validando almacenes de los archivos de stock...";
+    const errorAlmacenes = validarAlmacenes(filasStockTienda, filasStockKacosa);
+    if (errorAlmacenes) {
+      estadoTexto.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' + errorAlmacenes;
       btnAnalizar.disabled = false;
       btnAnalizar.innerHTML = '<i class="fa-solid fa-bolt"></i> Analizar';
       bloquearFormulario(false);
