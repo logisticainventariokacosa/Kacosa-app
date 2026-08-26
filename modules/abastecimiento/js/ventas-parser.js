@@ -1,6 +1,6 @@
 // js/ventas-parser.js
 import { aNumero } from "./mht-parser.js";
-import { obtenerFactor, tieneFactor } from "./factores-conversion.js";
+import { obtenerFactor, tieneFactor, normalizarUnidad } from "./factores-conversion.js";
 import { esCodigoExcluido } from "./exclusiones.js";
 
 // Clases de movimiento relevantes según SAP
@@ -83,7 +83,7 @@ export function procesarVentas(filas, mapaUMBPorMaterial = {}) {
       const factor = obtenerFactor(m.codigo, unidad, umbMaterial);
       ventaNetaUnidadBase += sumaSigned / factor;
 
-      const difiereDeLaUMB = umbMaterial && unidad !== umbMaterial;
+      const difiereDeLaUMB = umbMaterial && normalizarUnidad(unidad) !== normalizarUnidad(umbMaterial);
       if (difiereDeLaUMB && !tieneFactor(m.codigo, unidad, umbMaterial)) {
         advertenciasFactor.push({ codigo: m.codigo, descripcion: m.descripcion, unidad, umb: umbMaterial });
       }
