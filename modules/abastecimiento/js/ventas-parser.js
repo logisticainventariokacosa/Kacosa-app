@@ -154,3 +154,28 @@ function diasEntre(a, b) {
 function redondear(n) {
   return Math.round(n * 100) / 100;
 }
+
+/**
+ * Calcula solo el rango de fechas (inicio, fin, meses cubiertos) de un archivo
+ * de ventas ya parseado, SIN agrupar por material. Se usa para validar el
+ * rango de fechas ANTES de procesar todo el archivo (ver validarRangoVentas en
+ * nuevo-analisis.js): así se falla rápido si el archivo no cumple con el
+ * mínimo/máximo de meses exigido, sin gastar tiempo en el resto del análisis.
+ * @param {Array<Object>} filas - salida de parsearMHT()
+ * @returns {{inicio: Date|null, fin: Date|null, meses: number}}
+ */
+export function calcularRangoFechasVentas(filas) {
+  let fechaMin = null;
+  let fechaMax = null;
+
+  filas.forEach(f => {
+    const fecha = parsearFechaSAP(f["Fe.contabilización"]);
+    if (fecha) {
+      if (!fechaMin || fecha < fechaMin) fechaMin = fecha;
+      if (!fechaMax || fecha > fechaMax) fechaMax = fecha;
+    }
+  });
+
+  const diasTotales = fechaMin && fechaMax ? Math.max(1, diasEntre(fechaMin, fechaMax)) : 0;
+  return { inicio: fechaMin, fin: fechaMax, meses: diasTotales / 30.44 };
+}
