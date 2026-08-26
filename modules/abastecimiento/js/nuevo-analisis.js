@@ -17,6 +17,11 @@ import { leerXLSXGenerico, procesarPendientesSync, restarPendientesSync } from "
 
 const CENTROS_KACOSA = ["1000", "3000"];
 
+// Filas ya parseadas de los archivos de stock (tienda/Kacosa), guardadas para
+// poder re-validar Centro/Almacén sin releer el archivo si el usuario cambia
+// la tienda DESPUÉS de haber subido los archivos.
+const cacheFilasStock = {};
+
 // Configuración de cada input de archivo (se usa al construir el formulario
 // y también para limpiarlo por completo con "Limpiar datos").
 const CONFIG_ARCHIVOS = [
@@ -173,6 +178,57 @@ function validarAlmacenes(filasStockTienda, filasStockKacosa, centrosTienda) {
     return `Tu archivo tiene stock de almacenes no permitidos, solo se admiten para el stock de Kacosa los almacenes ${almacenesKacosaPermitidos.join(", ")}`;
   }
   return null;
+}
+
+/** Centros de la tienda actualmente seleccionada en el formulario (o [] si aún no se ha elegido). */
+function obtenerCentrosTiendaSeleccionada() {
+  const tiendaEl = document.getElementById("na-tienda");
+  return tiendaEl && tiendaEl.value ? centrosDeTienda(tiendaEl.value) : [];
+}
+
+/**
+ * Validación INMEDIATA de un archivo de stock recién cargado (antes de hacer
+ * clic en "Analizar"): revisa que su Centro y sus Almacenes correspondan a la
+ * tienda seleccionada (o a Kacosa, si esArchivoDeKacosa=true). Devuelve:
+ *   - null: todavía no se puede validar (no se ha elegido tienda)
+ *   - { valido:false, mensaje }: el archivo no corresponde, con el motivo
+ *   - { valido:true }: todo en orden
+ * Esto es un chequeo adicional a favor de la experiencia del usuario — la
+ * validación real y definitiva sigue ocurriendo también al analizar
+ * (validarCentros / validarAlmacenes), como red de seguridad.
+ */
+function validarCentroYAlmacenStock(filas, esArchivoDeKacosa) {
+  const centrosPermitidos = esArchivoDeKacosa ? CENTROS_KACOSA : obtenerCentrosTiendaSeleccionada();
+  if (centrosPermitidos.length === 0) return null; // aún no hay tienda elegida
+
+  const centrosEnArchivo = new Set(filas.map(f => String(f["Centro"] || "").trim()).filter(Boolean));
+  if (centrosEnArchivo.size === 0) {
+    return { valido: false, mensaje: '<i class="fa-solid fa-triangle-exclamation"></i> El archivo no tiene datos de Centro reconocibles.' };
+  }
+
+  const centrosInvalidos = [...centrosEnArchivo].filter(c => !centrosPermitidos.includes(c));
+  if (centrosInvalidos.length > 0) {
+    const nombreDestino = esArchivoDeKacosa ? "Kacosa" : "la tienda seleccionada";
+    return {
+      valido: false,
+      mensaje: `<i class="fa-solid fa-triangle-exclamation"></i> Este archivo es del centro ${[...centrosEnArchivo].join(", ")}, pero no corresponde a ${nombreDestino} (${centrosPermitidos.join(" o ")}). Verifica que subiste el archivo correcto.`
+    };
+  }
+
+  const almacenesPermitidos = almacenesPermitidosParaCentros(centrosPermitidos);
+  const almacenesInvalidos = new Set();
+  filas.forEach(f => {
+    const almacen = String(f["Almacén"] || "").trim();
+    if (almacen && !almacenesPermitidos.includes(almacen)) almacenesInvalidos.add(almacen);
+  });
+  if (almacenesInvalidos.size > 0) {
+    const mensajeBase = esArchivoDeKacosa
+      ? `Tu archivo tiene stock de almacenes no permitidos, solo se admiten para el stock de Kacosa los almacenes ${almacenesPermitidos.join(", ")}`
+      : `Tu archivo tiene stock de almacenes no permitidos, solo se admiten para el stock de la tienda los almacenes del general y exhibición (${almacenesPermitidos.join(", ")})`;
+    return { valido: false, mensaje: '<i class="fa-solid fa-triangle-exclamation"></i> ' + mensajeBase };
+  }
+
+  return { valido: true };
 }
 
 // ============================================================
@@ -435,10 +491,26 @@ function render() {
               else if (tipo === 'notas') columnasRequeridas = COLUMNAS_NOTAS_PENDIENTES;
               else columnasRequeridas = [];
               
+              if (tipo === 'stock') cacheFilasStock[id] = filas;
+
               const resultado = validarColumnasArchivo(filas, columnasRequeridas, tipo);
-              validEl.innerHTML = resultado.mensaje;
-              validEl.style.color = resultado.valido ? 'var(--verde-kpi)' : 'var(--rojo-alerta)';
-              input.dataset.valido = resultado.valido ? 'true' : 'false';
+              let mensajeFinal = resultado.mensaje;
+              let validoFinal = resultado.valido;
+
+              // Si las columnas están OK y es un archivo de stock, se valida también
+              // de inmediato que el Centro/Almacén correspondan a la tienda elegida
+              // (o a Kacosa), en vez de esperar hasta el clic en "Analizar".
+              if (validoFinal && (id === 'na-stock-tienda' || id === 'na-stock-kacosa')) {
+                const chequeo = validarCentroYAlmacenStock(filas, id === 'na-stock-kacosa');
+                if (chequeo && !chequeo.valido) {
+                  mensajeFinal = chequeo.mensaje;
+                  validoFinal = false;
+                }
+              }
+
+              validEl.innerHTML = mensajeFinal;
+              validEl.style.color = validoFinal ? 'var(--verde-kpi)' : 'var(--rojo-alerta)';
+              input.dataset.valido = validoFinal ? 'true' : 'false';
             } catch (err) {
               validEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Error al leer el archivo: ' + err.message;
               validEl.style.color = 'var(--rojo-alerta)';
@@ -454,6 +526,7 @@ function render() {
             validEl.innerHTML = '';
             input.dataset.valido = 'false';
           }
+          delete cacheFilasStock[id];
         }
       });
 
@@ -483,6 +556,31 @@ function render() {
   document.getElementById("na-margen").addEventListener("input", (e) => {
     document.getElementById("na-margen-valor").textContent = e.target.value + "%";
   });
+
+  // Si el usuario cambia de tienda DESPUÉS de haber subido el stock de la
+  // tienda, hay que re-validar ese archivo contra la nueva tienda (el stock
+  // de Kacosa no depende de la tienda, así que no hace falta re-chequearlo).
+  const tiendaEl = document.getElementById("na-tienda");
+  if (tiendaEl && tiendaEl.tagName === "SELECT") {
+    tiendaEl.addEventListener("change", () => {
+      const filas = cacheFilasStock["na-stock-tienda"];
+      const validEl = document.getElementById("validacion-stock-tienda");
+      const inputStockTienda = document.getElementById("na-stock-tienda");
+      if (!filas || !validEl || !inputStockTienda) return;
+
+      const chequeo = validarCentroYAlmacenStock(filas, false);
+      if (chequeo && !chequeo.valido) {
+        validEl.innerHTML = chequeo.mensaje;
+        validEl.style.color = 'var(--rojo-alerta)';
+        inputStockTienda.dataset.valido = 'false';
+      } else {
+        validEl.innerHTML = `<i class="fa-solid fa-circle-check"></i> Archivo válido: contiene todas las columnas requeridas (${COLUMNAS_STOCK.length})`;
+        validEl.style.color = 'var(--verde-kpi)';
+        inputStockTienda.dataset.valido = 'true';
+      }
+    });
+  }
+
   document.getElementById("btn-analizar").addEventListener("click", ejecutarAnalisis);
   document.getElementById("btn-limpiar-analisis").addEventListener("click", limpiarAnalisis);
 }
