@@ -1,6 +1,6 @@
 // js/nuevo-analisis.js
 import { parsearMHT, aNumero } from "./mht-parser.js";
-import { procesarVentas } from "./ventas-parser.js";
+import { procesarVentas, calcularRangoFechasVentas } from "./ventas-parser.js";
 import { cargarFactoresConversion } from "./factores-conversion.js";
 import { cargarCodigosExcluidos } from "./exclusiones.js";
 import { agruparStock, procesarNotasPendientes } from "./stock-parser.js";
@@ -115,38 +115,106 @@ const COLUMNAS_NOTAS_PENDIENTES = [
 // ============================================================
 //  ALMACENES PERMITIDOS (columna "Almacén" de los archivos de stock)
 // ============================================================
-// Independiente del Centro: dentro de cada centro de tienda, SAP maneja el
-// almacén "general" (stock normal) y el de "exhibición" (vitrina/showroom).
-// Esta es la lista completa de esos pares para TODAS las tiendas.
-const ALMACENES_TIENDA_PERMITIDOS = [
-  "1200", "1203", "1300", "1303", "1400", "1403", "1500", "1503", "1600", "1603",
-  "1700", "1703", "1900", "1903", "11A0", "11A3", "12A0", "12A3", "19A0", "19A3",
-  "2010", "2013", "2017", "2090", "2093", "1020", "1023", "1000", "3000", "1029",
-  "3029", "1001", "3001"
-];
+// Dentro de cada Centro SAP, el almacén puede ser el "general" (stock normal)
+// o el de "exhibición" (vitrina/showroom) — a veces hay un tercero. Van
+// atados al Centro: el archivo de stock de una tienda solo puede traer los
+// almacenes DE ESA tienda, no los de cualquier otra (antes se validaba contra
+// una lista global de todas las tiendas juntas, lo que dejaba colar, por
+// ejemplo, el stock de Kacosa como si fuera el de una tienda cualquiera).
+const ALMACENES_POR_CENTRO = {
+  "1200": ["1200", "1203"],
+  "1300": ["1300", "1303"],
+  "1400": ["1400", "1403"],
+  "1500": ["1500", "1503"],
+  "1600": ["1600", "1603"],
+  "1700": ["1700", "1703"],
+  "1900": ["1900", "1903"],
+  "11A0": ["11A0", "11A3"],
+  "12A0": ["12A0", "12A3"],
+  "19A0": ["19A0", "19A3"],
+  "2010": ["2010", "2013", "2017"],
+  "2090": ["2090", "2093"],
+  "1020": ["1020", "1023"],
+  // Kacosa (casa matriz): 1000/1029 = general, 1001 = exhibición (centro 1000);
+  // 3000/3029 = general, 3001 = exhibición (centro 3000).
+  "1000": ["1000", "1029", "1001"],
+  "3000": ["3000", "3029", "3001"]
+};
 
-// Kacosa (casa matriz) solo maneja estos 4 almacenes.
-const ALMACENES_KACOSA_PERMITIDOS = ["1000", "1029", "3000", "3029"];
+/** Une los almacenes permitidos de una lista de centros (una tienda puede tener más de uno, ej. Kacosa). */
+function almacenesPermitidosParaCentros(centros) {
+  const set = new Set();
+  centros.forEach(c => (ALMACENES_POR_CENTRO[c] || []).forEach(a => set.add(a)));
+  return [...set];
+}
 
 /**
  * Revisa que la columna "Almacén" de los archivos de stock (tienda y Kacosa)
- * solo contenga los códigos permitidos. Devuelve un mensaje de error (string)
- * si encuentra alguno no permitido, o null si todo está bien.
+ * solo contenga los códigos que corresponden a los centros de la tienda
+ * seleccionada (y, para el stock de Kacosa, a los centros 1000/3000).
+ * Devuelve un mensaje de error (string) si encuentra alguno no permitido, o
+ * null si todo está bien.
+ * @param {string[]} centrosTienda - centros de la tienda seleccionada (centrosDeTienda(tienda))
  */
-function validarAlmacenes(filasStockTienda, filasStockKacosa) {
+function validarAlmacenes(filasStockTienda, filasStockKacosa, centrosTienda) {
+  const almacenesTiendaPermitidos = almacenesPermitidosParaCentros(centrosTienda);
+  const almacenesKacosaPermitidos = almacenesPermitidosParaCentros(CENTROS_KACOSA);
+
   const tieneAlmacenNoPermitido = (filas, permitidos) =>
     filas.some(f => {
       const almacen = String(f["Almacén"] || "").trim();
       return almacen !== "" && !permitidos.includes(almacen);
     });
 
-  if (tieneAlmacenNoPermitido(filasStockTienda, ALMACENES_TIENDA_PERMITIDOS)) {
-    return "Tu archivo tiene stock de almacenes no permitidos, solo se admiten para el stock de la tienda los almacenes del general y exhibición";
+  if (tieneAlmacenNoPermitido(filasStockTienda, almacenesTiendaPermitidos)) {
+    return `Tu archivo tiene stock de almacenes no permitidos, solo se admiten para el stock de la tienda los almacenes del general y exhibición (${almacenesTiendaPermitidos.join(", ")})`;
   }
-  if (tieneAlmacenNoPermitido(filasStockKacosa, ALMACENES_KACOSA_PERMITIDOS)) {
-    return "Tu archivo tiene stock de almacenes no permitidos, solo se admiten para el stock de Kacosa los almacenes 1000, 1029, 3000 y 3029";
+  if (tieneAlmacenNoPermitido(filasStockKacosa, almacenesKacosaPermitidos)) {
+    return `Tu archivo tiene stock de almacenes no permitidos, solo se admiten para el stock de Kacosa los almacenes ${almacenesKacosaPermitidos.join(", ")}`;
   }
   return null;
+}
+
+// ============================================================
+//  RANGO DE FECHAS PERMITIDO PARA EL ARCHIVO DE VENTAS
+// ============================================================
+const MESES_VENTAS_MINIMO = 3;
+const MESES_VENTAS_MAXIMO = 12;
+
+/** Formatea una fecha JS como DD/MM/AAAA para mostrarla en mensajes de validación. */
+function formatearFechaCorta(fecha) {
+  if (!fecha) return "";
+  return String(fecha.getDate()).padStart(2, "0") + "/" +
+         String(fecha.getMonth() + 1).padStart(2, "0") + "/" +
+         fecha.getFullYear();
+}
+
+/**
+ * Revisa que el archivo de ventas cubra entre MESES_VENTAS_MINIMO y
+ * MESES_VENTAS_MAXIMO meses de historial (según las fechas de contabilización
+ * de sus filas). Devuelve un mensaje de error (string) si el rango es muy
+ * corto o muy largo, o null si está dentro de lo permitido.
+ */
+function validarRangoVentas(filasVentas) {
+  const { inicio, fin, meses } = calcularRangoFechasVentas(filasVentas);
+
+  if (!inicio || !fin) {
+    return "No se pudieron leer fechas válidas en el archivo de ventas (columna Fe.contabilización).";
+  }
+
+  const rangoTexto = `del ${formatearFechaCorta(inicio)} al ${formatearFechaCorta(fin)}`;
+
+  if (meses < MESES_VENTAS_MINIMO) {
+    return `Tu archivo de ventas cubre muy poco tiempo (${rangoTexto}, ≈${redondearUnDecimal(meses)} mes(es)). Se necesita un mínimo de ${MESES_VENTAS_MINIMO} meses de historial para que el análisis sea confiable.`;
+  }
+  if (meses > MESES_VENTAS_MAXIMO) {
+    return `Tu archivo de ventas cubre demasiado tiempo (${rangoTexto}, ≈${redondearUnDecimal(meses)} meses). Se admite un máximo de ${MESES_VENTAS_MAXIMO} meses de historial por análisis.`;
+  }
+  return null;
+}
+
+function redondearUnDecimal(n) {
+  return Math.round(n * 10) / 10;
 }
 
 // ============================================================
@@ -214,6 +282,11 @@ function render() {
           </div>
         </div>
       ` : `<input type="hidden" id="na-tienda" value="${misTiendas[0] || ''}">`}
+
+      <div class="estado-texto" style="display:flex; align-items:flex-start; gap:8px; margin-top:10px; padding:10px 12px; background:var(--ambar-claro); border-radius:8px; color:var(--ambar-oscuro); font-size:12.5px; line-height:1.5">
+        <i class="fa-solid fa-circle-info" style="margin-top:2px; flex-shrink:0"></i>
+        <span>El archivo de ventas debe cubrir <strong>entre 3 y 12 meses</strong> de historial. Si el rango es menor o mayor a eso, no se podrá completar el análisis.</span>
+      </div>
 
       <!-- Archivo de ventas -->
       <div style="margin-top:16px">
@@ -584,6 +657,17 @@ async function ejecutarAnalisis() {
     estadoTexto.textContent = "Leyendo archivo de ventas...";
     const filasVentas = parsearMHT(await archivoVentas.text());
 
+    estadoTexto.textContent = "Validando el rango de fechas del archivo de ventas...";
+    const errorRangoVentas = validarRangoVentas(filasVentas);
+    if (errorRangoVentas) {
+      estadoTexto.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' + errorRangoVentas;
+      btnAnalizar.disabled = false;
+      btnAnalizar.innerHTML = '<i class="fa-solid fa-bolt"></i> Analizar';
+      bloquearFormulario(false);
+      estado.analizando = false;
+      return;
+    }
+
     estadoTexto.textContent = "Leyendo stock de la tienda...";
     const filasStockTienda = parsearMHT(await archivoStockTienda.text());
 
@@ -602,7 +686,7 @@ async function ejecutarAnalisis() {
     }
 
     estadoTexto.textContent = "Validando almacenes de los archivos de stock...";
-    const errorAlmacenes = validarAlmacenes(filasStockTienda, filasStockKacosa);
+    const errorAlmacenes = validarAlmacenes(filasStockTienda, filasStockKacosa, centrosValidos);
     if (errorAlmacenes) {
       estadoTexto.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' + errorAlmacenes;
       btnAnalizar.disabled = false;
