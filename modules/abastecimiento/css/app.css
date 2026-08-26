@@ -623,6 +623,34 @@ textarea.input-modern {
   height: 100%;
 }
 
+/* Botón "quitar archivo": solo aparece cuando el recuadro ya tiene un archivo
+   cargado (ver JS). Va por encima del <input type="file"> invisible que cubre
+   todo el recuadro, para poder recibir el clic sin abrir el explorador de
+   archivos. */
+.file-clear-btn {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--borde);
+  color: var(--texto-claro);
+  font-size: 11px;
+  cursor: pointer;
+  transition: var(--transicion);
+}
+
+.file-clear-btn:hover {
+  background: var(--rojo-claro);
+  color: var(--rojo-alerta);
+}
+
 /* --- Selector de tienda --- */
 .tienda-selector {
   display: flex;
