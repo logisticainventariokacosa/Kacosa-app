@@ -760,6 +760,50 @@ tbody tr:hover {
   background: var(--fondo);
 }
 
+/* Fila excluida manualmente del pedido (ver botón de excluir/deshacer más abajo):
+   se ve apagada mientras sigue en la tabla, para dejar claro que no entrará
+   en el correo ni en el Excel, sin borrarla de la vista. */
+tbody tr.fila-excluida {
+  opacity: 0.45;
+  filter: grayscale(35%);
+}
+tbody tr.fila-excluida:hover {
+  opacity: 0.6;
+}
+
+.btn-fila-excluir,
+.btn-fila-restaurar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: var(--radio-peq);
+  border: 1.5px solid var(--borde);
+  background: var(--blanco);
+  color: var(--texto-secundario);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transicion);
+  white-space: nowrap;
+}
+
+.btn-fila-excluir:hover {
+  background: var(--rojo-claro);
+  border-color: var(--rojo-alerta);
+  color: var(--rojo-alerta);
+}
+
+.btn-fila-restaurar {
+  background: var(--verde-claro);
+  border-color: var(--verde-kpi);
+  color: var(--verde-kpi);
+}
+.btn-fila-restaurar:hover {
+  background: var(--verde-kpi);
+  color: #fff;
+}
+
 /* --- Paginación --- */
 .btn-pagina {
   transition: var(--transicion);
