@@ -78,13 +78,6 @@
       background: rgba(148, 163, 184, 0.18) !important;
       color: var(--texto-secundario) !important;
     }
-    /* Botón secundario dentro de la tarjeta de notificación (ej. "Descargar en
-       Excel" del aviso de factores de conversión faltantes): el tinte de fondo
-       está pensado para tarjeta clara; en modo oscuro se ajusta a un tinte claro
-       translúcido para que siga distinguiéndose del fondo oscuro de la tarjeta. */
-    html.kacosa-dark .kn-boton-secundario {
-      background: rgba(248, 250, 252, 0.08) !important;
-    }
   </style>
 
 
@@ -132,6 +125,9 @@
       </button>
       <button type="button" class="nav-item" data-vista="vista-alertas-kacosa">
         <span class="icono"><i class="fa-solid fa-triangle-exclamation"></i></span> Alertas Kacosa
+      </button>
+      <button type="button" class="nav-item" data-vista="vista-consultas">
+        <span class="icono"><i class="fa-solid fa-magnifying-glass-chart"></i></span> Consultas
       </button>
     </nav>
 
@@ -192,6 +188,15 @@
           <p class="vista-sub">Cargando módulo...</p>
         </div>
       </section>
+
+      <!-- VISTA: CONSULTAS -->
+      <section class="vista" id="vista-consultas">
+        <h2>Consultas</h2>
+        <p class="vista-sub">Consulta los análisis guardados por centro(s), material(es) y rango de fecha — estilo transacción SAP</p>
+        <div id="consultas-contenido">
+          <p class="vista-sub">Cargando módulo...</p>
+        </div>
+      </section>
     </div>
 
     <!-- FOOTER -->
@@ -211,6 +216,7 @@
   <script type="module" src="js/nav.js?v=6"></script>
   <script type="module" src="js/dashboard.js?v=2"></script>
   <script type="module" src="js/alertas-kacosa.js?v=1"></script>
+  <script type="module" src="js/consultas.js?v=1"></script>
   <script type="module" src="js/nuevo-analisis.js?v=2"></script>
   <script type="module" src="js/chat.js?v=1"></script>
   <script type="module" src="js/footer-reloj.js?v=1"></script>
