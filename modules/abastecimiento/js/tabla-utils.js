@@ -1,17 +1,32 @@
 // js/tabla-utils.js
 // Utilidades para crear tablas con paginación, ordenamiento y búsqueda
 
-export function crearTablaPaginada(container, columnas, itemsPorPagina = 50) {
+export function crearTablaPaginada(container, columnas, itemsPorPagina = 50, opciones = {}) {
   let datos = [];
   let paginaActual = 1;
   let totalPaginas = 0;
   let ordenActual = { columna: null, direccion: 'asc' };
   let datosFiltrados = [];
+  let paginaDatosActual = [];
+
+  // --- Extensiones opcionales (no rompen a quien llame sin pasar 'opciones') ---
+  // claveFila(item, indiceAbsoluto): identificador estable de la fila (default: su índice).
+  const claveFila = typeof opciones.claveFila === 'function' ? opciones.claveFila : (item, idx) => idx;
+  // filaClaseFn(item): clase CSS extra para el <tr> (ej. para pintarlo opaco).
+  const filaClaseFn = typeof opciones.filaClaseFn === 'function' ? opciones.filaClaseFn : () => '';
+  // onAccionFila(clave, item, accion, tr): se dispara al hacer clic en cualquier
+  // elemento con data-fila-accion="..." dentro de una fila.
+  const onAccionFila = typeof opciones.onAccionFila === 'function' ? opciones.onAccionFila : null;
 
   function renderizar(datosEntrada) {
     datos = datosEntrada || [];
     datosFiltrados = [...datos];
     paginaActual = 1;
+    renderizarTabla();
+  }
+
+  /** Vuelve a pintar la tabla con los mismos datos/página/orden actuales (no resetea nada). Útil tras una acción por fila (ej. excluir/restaurar) que no cambia qué filas hay, solo cómo se ven. */
+  function refrescar() {
     renderizarTabla();
   }
 
@@ -25,6 +40,7 @@ export function crearTablaPaginada(container, columnas, itemsPorPagina = 50) {
     const inicio = (paginaActual - 1) * itemsPorPagina;
     const fin = Math.min(inicio + itemsPorPagina, datosOrdenados.length);
     const paginaDatos = datosOrdenados.slice(inicio, fin);
+    paginaDatosActual = paginaDatos;
 
     let html = `
       <div class="table-responsive">
@@ -45,9 +61,15 @@ export function crearTablaPaginada(container, columnas, itemsPorPagina = 50) {
     if (paginaDatos.length === 0) {
       html += `<tr><td colspan="${columnas.length}" style="text-align:center; padding:30px; color:var(--texto-claro)">No hay datos para mostrar</td></tr>`;
     } else {
-      paginaDatos.forEach(item => {
-        html += `<tr>`;
+      paginaDatos.forEach((item, idxEnPagina) => {
+        const clave = claveFila(item, inicio + idxEnPagina);
+        const claseFila = filaClaseFn(item) || '';
+        html += `<tr class="${claseFila}" data-clave="${String(clave).replace(/"/g, '&quot;')}">`;
         columnas.forEach(col => {
+          if (typeof col.render === 'function') {
+            html += `<td>${col.render(item)}</td>`;
+            return;
+          }
           let valor = item[col.key] !== undefined ? item[col.key] : '';
           // Formatear valores especiales
           if (col.key === 'clase') {
@@ -136,6 +158,22 @@ export function crearTablaPaginada(container, columnas, itemsPorPagina = 50) {
         renderizarTabla();
       });
     });
+
+    // Acciones por fila (ej. botón de excluir/restaurar dentro de una celda con render personalizado)
+    if (onAccionFila) {
+      container.querySelectorAll('[data-fila-accion]').forEach(el => {
+        el.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const tr = el.closest('tr');
+          if (!tr || !tr.parentNode) return;
+          const idxEnPagina = [...tr.parentNode.children].indexOf(tr);
+          const item = paginaDatosActual[idxEnPagina];
+          if (!item) return;
+          onAccionFila(tr.dataset.clave, item, el.dataset.filaAccion, tr);
+        });
+      });
+    }
   }
 
   function ordenarDatos(datosArr) {
@@ -164,5 +202,5 @@ export function crearTablaPaginada(container, columnas, itemsPorPagina = 50) {
     });
   }
 
-  return { renderizar };
+  return { renderizar, refrescar };
 }
