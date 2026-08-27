@@ -1,8 +1,9 @@
 // js/pendientes-sync-parser.js
 // Este archivo lo arma manualmente el usuario en Excel real (.xlsx), a diferencia
 // de los otros que son exportaciones .MHT de SAP. Por eso se lee con SheetJS
-// directamente. Columnas relevantes: "Material" y "Cantidad_por_sincronizar"
-// (puede tener otras columnas de más, se ignoran).
+// directamente. Debe contener EXACTAMENTE las columnas "Material" y
+// "Cantidad_por_sincronizar" — ni de más ni de menos (la validación de columnas
+// exactas vive en nuevo-analisis.js, ver validarColumnasExactas()).
 
 /** Lee un archivo .xlsx real y devuelve un array de objetos usando la primera fila como encabezados. */
 export async function leerXLSXGenerico(file) {
