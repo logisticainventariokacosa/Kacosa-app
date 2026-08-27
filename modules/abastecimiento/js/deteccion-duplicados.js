@@ -11,6 +11,16 @@ function normalizar(texto) {
     .trim();
 }
 
+/** Igual que normalizar(), pero CONSERVA la "/" (para detectar patrones como "C/Rejilla" o "S/Rejilla"). */
+function normalizarConservandoBarra(texto) {
+  return String(texto || "")
+    .toUpperCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9/ ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Extrae todos los números de un texto, en orden, unidos como firma (ej. "370-440V CBB65-R" -> "370|440|65"). */
 function firmaNumerica(texto) {
   const numeros = String(texto).match(/\d+([.,]\d+)?/g) || [];
@@ -52,6 +62,60 @@ function colorDetectado(textoNormalizado) {
   return COLORES_CONOCIDOS.find(c => textoNormalizado.includes(c)) || null;
 }
 
+// Categorías donde el color SIEMPRE distingue el material, aunque el resto de
+// la descripción sea idéntico: pinturas, congeladores y equipos de línea
+// blanca. Para el resto de categorías (tornillería, motores, filtros, etc.),
+// el color casi siempre es un detalle incidental y NO debe bloquear la fusión
+// por sí solo — por eso ahí se sigue usando la regla más laxa (ver más abajo:
+// solo bloquea si AMBAS descripciones mencionan colores conocidos y distintos).
+// Para ampliar esta lista basta con agregar la palabra que aparece en la
+// descripción del material (en mayúsculas, sin tildes).
+const CATEGORIAS_COLOR_ESTRICTO = [
+  "PINTURA", "ESMALTE",
+  "CONGELADOR", "FREEZER",
+  "NEVERA", "REFRIGERADOR", "REFRIGERADORA",
+  "LAVADORA", "SECADORA", "LAVASECADORA",
+  "COCINA", "HORNO", "LAVAVAJILLAS", "MICROONDAS",
+  "CAMPANA EXTRACTORA", "AIRE ACONDICIONADO", "SPLIT", "SPRAY", "BATIDORA"
+];
+
+/** true si la descripción normalizada pertenece a una categoría donde el color siempre distingue el material. */
+function esCategoriaColorEstricto(textoNormalizado) {
+  return CATEGORIAS_COLOR_ESTRICTO.some(k => textoNormalizado.includes(k));
+}
+
+/**
+ * Extrae, de un texto normalizado CON barra conservada, las palabras que
+ * aparecen como "C/palabra" (con) o "S/palabra" (sin) — ej. de
+ * "EXTRACTOR 12 PULGADAS S/REGILLA" saca sin:{REGILLA}. Sirve para detectar
+ * variantes "con X" vs "sin X" del mismo producto, que son SKUs distintos.
+ */
+function extraerConSin(textoConBarra) {
+  const con = new Set();
+  const sin = new Set();
+  const regex = /\b([CS])\/([A-Z0-9]+)/g;
+  let match;
+  while ((match = regex.exec(textoConBarra)) !== null) {
+    if (match[1] === "C") con.add(match[2]);
+    else sin.add(match[2]);
+  }
+  return { con, sin };
+}
+
+/**
+ * true si dos descripciones (normalizadas CON barra) usan "C/palabra" en una y
+ * "S/palabra" en la otra para la MISMA palabra — ej. una dice "C/Rejilla" y la
+ * otra "S/Rejilla": son variantes distintas (una trae la pieza, la otra no),
+ * aunque el resto del texto sea idéntico.
+ */
+function difierenPorConSin(textoConBarraA, textoConBarraB) {
+  const a = extraerConSin(textoConBarraA);
+  const b = extraerConSin(textoConBarraB);
+  for (const palabra of a.con) if (b.sin.has(palabra)) return true;
+  for (const palabra of a.sin) if (b.con.has(palabra)) return true;
+  return false;
+}
+
 // Reglas de palabra distintiva por categoría: aunque el resto de la descripción
 // sea muy parecido, si UNA de las dos menciona la palabra clave y la otra no
 // (dentro de la misma categoría/prefijo), son variantes distintas, no duplicados.
@@ -81,6 +145,7 @@ export function detectarCandidatosLocal(materiales) {
   const normalizados = materiales.map(m => ({
     ...m,
     norm: normalizar(m.descripcion),
+    normBarra: normalizarConservandoBarra(m.descripcion),
     firma: firmaNumerica(m.descripcion)
   }));
 
@@ -108,10 +173,23 @@ export function detectarCandidatosLocal(materiales) {
         // sea el resto del texto. Esto evita fusionar variantes distintas de un mismo producto.
         if (grupo[i].firma !== grupo[j].firma) continue;
 
-        // Guardia de color: colores distintos = SKUs distintos.
+        // Guardia de color: colores distintos = SKUs distintos. En pinturas,
+        // congeladores y línea blanca la regla es estricta (alcanza con que
+        // UNA mencione un color y la otra no, o mencionen colores distintos);
+        // en el resto de categorías solo bloquea si AMBAS mencionan colores
+        // conocidos y son distintos (un color incidental no debe romper la fusión).
         const colorI = colorDetectado(grupo[i].norm);
         const colorJ = colorDetectado(grupo[j].norm);
-        if (colorI && colorJ && colorI !== colorJ) continue;
+        const requiereColorExacto = esCategoriaColorEstricto(grupo[i].norm) || esCategoriaColorEstricto(grupo[j].norm);
+        if (requiereColorExacto) {
+          if (colorI !== colorJ) continue;
+        } else if (colorI && colorJ && colorI !== colorJ) {
+          continue;
+        }
+
+        // Guardia con/sin: "C/Rejilla" vs "S/Rejilla" (o cualquier "C/palabra"
+        // vs "S/palabra" para la misma palabra) son variantes distintas.
+        if (difierenPorConSin(grupo[i].normBarra, grupo[j].normBarra)) continue;
 
         // Guardia de palabra distintiva (ej. "Sold" en filtros secadores, "C/Pr" en
         // motores de ventilador): si una la menciona y la otra no, son variantes distintas.
