@@ -821,6 +821,38 @@ tbody tr:hover {
   transform: translateY(-2px);
 }
 
+/* Botón "Detener"/"Cancelar" de un análisis en curso: mismo tamaño y forma que
+   los demás botones de acción, pero con un tinte rojo sutil (los mismos tonos
+   que ya usa el resto de la app para alertas/errores) en vez del ámbar o el
+   blanco de los botones primario/secundario, para que se note que corta el
+   proceso sin gritar ni desentonar. Los tokens --rojo-claro/--rojo-alerta ya
+   están ajustados para modo oscuro, así que no hace falta ninguna regla
+   aparte para ese tema. */
+.btn-sutil-peligro {
+  padding: 12px 20px;
+  background: var(--rojo-claro);
+  color: var(--rojo-alerta);
+  border: 1.5px solid transparent;
+  border-radius: var(--radio-peq);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: var(--transicion);
+  font-family: 'Inter', sans-serif;
+}
+
+.btn-sutil-peligro:hover {
+  background: var(--rojo-alerta);
+  color: #fff;
+  transform: translateY(-2px);
+}
+
+.btn-sutil-peligro:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .btn-group {
   display: flex;
   gap: 12px;
@@ -829,7 +861,8 @@ tbody tr:hover {
 }
 
 .btn-group .btn-primario,
-.btn-group .btn-secundario {
+.btn-group .btn-secundario,
+.btn-group .btn-sutil-peligro {
   flex: 0 1 auto;
   min-width: 140px;
   margin-top: 0;
@@ -888,7 +921,8 @@ tbody tr:hover {
   }
   
   .btn-group .btn-primario,
-  .btn-group .btn-secundario {
+  .btn-group .btn-secundario,
+  .btn-group .btn-sutil-peligro {
     flex: 1;
     min-width: 100%;
   }
