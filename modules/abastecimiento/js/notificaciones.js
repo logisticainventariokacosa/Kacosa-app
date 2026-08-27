@@ -85,3 +85,56 @@ export function cerrarNotificacion() {
     temporizadorActivo = null;
   }
 }
+
+/**
+ * Modal de confirmación (Sí/Cancelar) reutilizable, con el mismo look que
+ * notificarExito(). Devuelve una Promise<boolean>: true si el usuario confirma,
+ * false si cancela o cierra el modal (con "Cancelar" o tocando afuera).
+ *
+ * @param {string} mensaje - texto principal (admite HTML)
+ * @param {Object} opciones
+ *   - titulo: string (default "Confirmar")
+ *   - icono: string HTML del icono (default un signo de interrogación)
+ *   - textoConfirmar: string (default "Sí, continuar")
+ *   - textoCancelar: string (default "Cancelar")
+ */
+export function confirmarAccion(mensaje, opciones = {}) {
+  return new Promise((resolve) => {
+    const titulo = opciones.titulo || "Confirmar";
+    const icono = opciones.icono || '<i class="fa-solid fa-circle-question"></i>';
+    const textoConfirmar = opciones.textoConfirmar || "Sí, continuar";
+    const textoCancelar = opciones.textoCancelar || "Cancelar";
+
+    const overlay = document.createElement("div");
+    overlay.id = "kacosa-confirmacion";
+    overlay.innerHTML = `
+      <div class="kn-tarjeta">
+        <div class="kn-icono" style="color:var(--ambar-oscuro)">${icono}</div>
+        <div class="kn-titulo">${titulo}</div>
+        <div class="kn-mensaje">${mensaje}</div>
+        <button type="button" class="kn-boton kn-boton-advertencia" id="kc-btn-confirmar">${textoConfirmar}</button>
+        <button type="button" class="kn-boton kn-boton-cancelar" id="kc-btn-cancelar">${textoCancelar}</button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add("visible"));
+
+    const cerrar = (resultado) => {
+      overlay.classList.remove("visible");
+      setTimeout(() => overlay.remove(), 200);
+      resolve(resultado);
+    };
+
+    overlay.querySelector("#kc-btn-confirmar").addEventListener("click", (e) => {
+      e.stopPropagation();
+      cerrar(true);
+    });
+    overlay.querySelector("#kc-btn-cancelar").addEventListener("click", (e) => {
+      e.stopPropagation();
+      cerrar(false);
+    });
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) cerrar(false); // clic afuera = igual que cancelar
+    });
+  });
+}
