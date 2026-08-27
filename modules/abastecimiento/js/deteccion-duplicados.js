@@ -54,7 +54,7 @@ const UMBRAL_SIMILITUD = 0.75;
 const COLORES_CONOCIDOS = [
   "BLANCO", "NEGRO", "GRIS", "AZUL", "ROJO", "VERDE", "AMARILLO",
   "MARRON", "BEIGE", "CREMA", "PLATA", "DORADO", "BRONCE", "MARFIL",
-  "NARANJA", "MORADO", "VIOLETA"
+  "NARANJA", "MORADO", "VIOLETA", "PLATEADO",
 ];
 
 /** Devuelve el primer color conocido mencionado en el texto normalizado, o null si no hay ninguno. */
