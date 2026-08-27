@@ -304,7 +304,12 @@ function estadoInicial() {
     // empezar y lo compara contra este después de cada espera asíncrona: si
     // ya no coincide (el usuario le dio a "Detener"/"Cancelar"), se corta en
     // seco sin seguir tocando la pantalla que el botón ya dejó lista.
-    analisisId: 0
+    analisisId: 0,
+    // Códigos que el usuario decidió excluir manualmente del pedido en la
+    // pantalla de resultados (con el botón de "quitar" fila por fila). Solo
+    // afecta lo que se descarga/envía por correo — el análisis guardado en la
+    // base de datos no cambia. Se reinicia con cada análisis nuevo.
+    excluidos: new Set()
   };
 }
 let estado = estadoInicial();
@@ -801,6 +806,7 @@ function limpiarAnalisis() {
   estado.resultadoFinal = null;
   estado.fechaAnalisis = null;
   estado.grupos = null;
+  estado.excluidos = new Set();
   estado.sinRotacion = null;
   estado.sugerencias = null;
   estado.periodo = null;
@@ -848,6 +854,7 @@ function detenerAnalisisEnCurso() {
   estado.resultadoFinal = null;
   estado.fechaAnalisis = null;
   estado.grupos = null;
+  estado.excluidos = new Set();
   estado.sinRotacion = null;
   estado.sugerencias = null;
   estado.analisisCompleto = null;
@@ -1439,10 +1446,17 @@ function descargarAdvertenciasFactorExcel(unicos, fechaAnalisis) {
 // ============================================================
 //  MOSTRAR RESULTADOS
 // ============================================================
+/** Lista de "pedido" sin los materiales que el usuario excluyó manualmente en pantalla. */
+function obtenerPedidoActivo() {
+  const excluidos = estado.excluidos || new Set();
+  return (estado.grupos?.pedido || []).filter(m => !excluidos.has(m.codigo));
+}
+
 function mostrarResultados(resultado, sugerencias) {
   const cont = document.getElementById("na-resultados");
   const grupos = clasificarEnCuatroGrupos(resultado, sugerencias);
   estado.grupos = grupos;
+  estado.excluidos = new Set(); // análisis nuevo: nadie excluido todavía
 
   const totalAPedir = grupos.pedido.reduce((acc, m) => acc + (m.aPedir || 0), 0);
   const porClase = { A: 0, B: 0, C: 0, D: 0 };
@@ -1464,12 +1478,12 @@ function mostrarResultados(resultado, sugerencias) {
         <div class="kpi-card verde">
           <div class="kpi-icono"><i class="fa-solid fa-box-open"></i></div>
           <div class="label">Materiales a pedir</div>
-          <div class="valor">${grupos.pedido.length}</div>
+          <div class="valor" id="kpi-materiales-a-pedir">${grupos.pedido.length}</div>
         </div>
         <div class="kpi-card ambar">
           <div class="kpi-icono"><i class="fa-solid fa-cart-shopping"></i></div>
           <div class="label">Total unidades a pedir</div>
-          <div class="valor">${totalAPedir}</div>
+          <div class="valor" id="kpi-total-unidades">${totalAPedir}</div>
         </div>
         <div class="kpi-card rojo">
           <div class="kpi-icono"><i class="fa-solid fa-triangle-exclamation"></i></div>
@@ -1493,6 +1507,9 @@ function mostrarResultados(resultado, sugerencias) {
           </div>
         </div>
       </div>
+      <p class="vista-sub" id="na-excluidos-aviso" style="display:none; margin-top:-8px; margin-bottom:10px; color:var(--ambar-oscuro)">
+        <i class="fa-solid fa-circle-info"></i> <span id="na-excluidos-texto"></span>
+      </p>
       <div id="na-tabla-container"></div>
 
       <p class="vista-sub" style="margin-top:16px">
@@ -1526,12 +1543,53 @@ function mostrarResultados(resultado, sugerencias) {
     { key: 'aPedir', label: 'A pedir', numeric: true },
     { key: 'porDespacho', label: 'Por despacho', numeric: true },
     { key: 'numeroDeNota', label: 'Número de nota' },
-    { key: 'fechaDeNota', label: 'Fecha de nota' }
+    { key: 'fechaDeNota', label: 'Fecha de nota' },
+    {
+      key: 'accionExcluir',
+      label: '',
+      render: (item) => {
+        const excluido = estado.excluidos.has(item.codigo);
+        return excluido
+          ? `<button type="button" class="btn-fila-restaurar" data-fila-accion="restaurar" title="Volver a incluir este material en el pedido"><i class="fa-solid fa-rotate-left"></i> Deshacer</button>`
+          : `<button type="button" class="btn-fila-excluir" data-fila-accion="excluir" title="Quitar del pedido (no se incluirá en el correo ni en el Excel)"><i class="fa-solid fa-ban"></i></button>`;
+      }
+    }
   ];
 
   const container = document.getElementById('na-tabla-container');
-  const { renderizar } = crearTablaPaginada(container, columnas, 50);
+  const tabla = crearTablaPaginada(container, columnas, 50, {
+    claveFila: (item) => item.codigo,
+    filaClaseFn: (item) => estado.excluidos.has(item.codigo) ? 'fila-excluida' : '',
+    onAccionFila: (clave, item, accion) => {
+      if (accion === 'excluir') estado.excluidos.add(item.codigo);
+      else if (accion === 'restaurar') estado.excluidos.delete(item.codigo);
+      actualizarKpisPedido();
+      tabla.refrescar();
+    }
+  });
+  const { renderizar } = tabla;
   renderizar(grupos.pedido);
+
+  function actualizarKpisPedido() {
+    const activos = obtenerPedidoActivo();
+    const totalActivo = activos.reduce((acc, m) => acc + (m.aPedir || 0), 0);
+    const kpiMateriales = document.getElementById('kpi-materiales-a-pedir');
+    const kpiTotal = document.getElementById('kpi-total-unidades');
+    if (kpiMateriales) kpiMateriales.textContent = activos.length;
+    if (kpiTotal) kpiTotal.textContent = totalActivo;
+
+    const cantidadExcluidos = estado.excluidos.size;
+    const aviso = document.getElementById('na-excluidos-aviso');
+    const avisoTexto = document.getElementById('na-excluidos-texto');
+    if (aviso && avisoTexto) {
+      if (cantidadExcluidos > 0) {
+        avisoTexto.textContent = `${cantidadExcluidos} material(es) excluido(s) manualmente: no se incluirán en el correo ni en el Excel a descargar.`;
+        aviso.style.display = 'flex';
+      } else {
+        aviso.style.display = 'none';
+      }
+    }
+  }
 
   document.getElementById('na-buscar').addEventListener('input', (e) => {
     const termino = e.target.value.toLowerCase().trim();
@@ -1708,7 +1766,7 @@ async function enviarCorreo() {
       base64: XLSX.write(wb, { type: "base64", bookType: "xlsx" })
     }];
 
-    const totalAPedir = estado.grupos.pedido.reduce((acc, m) => acc + (m.aPedir || 0), 0);
+    const totalAPedir = obtenerPedidoActivo().reduce((acc, m) => acc + (m.aPedir || 0), 0);
 
     estadoAcciones.textContent = "Enviando correo...";
     const resp = await callBridge("sendReport", {
@@ -1748,7 +1806,8 @@ async function enviarCorreo() {
 }
 
 function construirWorkbookCompleto() {
-  const { pedido, noPedido, pendienteStock, sugerencias } = estado.grupos;
+  const pedido = obtenerPedidoActivo();
+  const { noPedido, pendienteStock, sugerencias } = estado.grupos;
   const wb = XLSX.utils.book_new();
 
   const totalAPedir = pedido.reduce((acc, m) => acc + (m.aPedir || 0), 0);
