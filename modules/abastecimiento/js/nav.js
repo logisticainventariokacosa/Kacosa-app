@@ -71,11 +71,15 @@ onAuthStateChanged(auth, async (user) => {
   // Actualizar información del usuario en el sidebar
   actualizarUsuarioSidebar();
 
-  // "Alertas Kacosa" es solo para perfiles con acceso a TODAS las tiendas
-  // (es decir, todos los roles permitidos excepto "gerente")
+  // "Alertas Kacosa" y "Consultas" son solo para perfiles con acceso a TODAS
+  // las tiendas (es decir, todos los roles permitidos excepto "gerente")
   const btnAlertas = document.querySelector('[data-vista="vista-alertas-kacosa"]');
   if (btnAlertas && !tiendas.includes("TODAS")) {
     btnAlertas.style.display = "none";
+  }
+  const btnConsultas = document.querySelector('[data-vista="vista-consultas"]');
+  if (btnConsultas && !tiendas.includes("TODAS")) {
+    btnConsultas.style.display = "none";
   }
 
   // Aviso si un gerente no tiene tienda asignada (no debería pasar, pero evita confusión)
