@@ -298,7 +298,13 @@ function estadoInicial() {
     mesesCantidad: null,
     margenPct: null,
     analisisCompleto: null,
-    analizando: false
+    analizando: false,
+    // Contador que se incrementa cada vez que arranca un análisis nuevo o se
+    // cancela uno en curso. ejecutarAnalisis() guarda su propio número al
+    // empezar y lo compara contra este después de cada espera asíncrona: si
+    // ya no coincide (el usuario le dio a "Detener"/"Cancelar"), se corta en
+    // seco sin seguir tocando la pantalla que el botón ya dejó lista.
+    analisisId: 0
   };
 }
 let estado = estadoInicial();
@@ -455,10 +461,13 @@ function render() {
         </div>
       </div>
 
-      <!-- Botón Analizar + Limpiar datos -->
+      <!-- Botón Analizar + Detener + Limpiar datos -->
       <div class="btn-group" style="margin-top:20px">
         <button id="btn-analizar" class="btn-primario" style="min-width:200px">
           <i class="fa-solid fa-bolt"></i> Analizar
+        </button>
+        <button id="btn-detener-analisis" class="btn-sutil-peligro" style="display:none; min-width:140px">
+          <i class="fa-solid fa-circle-stop"></i> Detener
         </button>
         <button id="btn-limpiar-analisis" class="btn-secundario" style="display:none; min-width:180px">
           <i class="fa-solid fa-broom"></i> Limpiar datos
@@ -625,6 +634,7 @@ function render() {
 
   document.getElementById("btn-analizar").addEventListener("click", ejecutarAnalisis);
   document.getElementById("btn-limpiar-analisis").addEventListener("click", limpiarAnalisis);
+  document.getElementById("btn-detener-analisis").addEventListener("click", detenerAnalisisEnCurso);
 }
 
 // ============================================================
@@ -810,6 +820,59 @@ function limpiarAnalisis() {
   if (btnLimpiar) btnLimpiar.style.display = "none";
 }
 
+/**
+ * Detiene un análisis en curso o descarta la revisión de duplicados sin
+ * confirmar ninguno, dejando el formulario exactamente como estaba antes de
+ * pulsar "Analizar": los mismos archivos siguen cargados (y válidos), el
+ * mismo período/margen elegidos, y nada quedó calculado ni guardado.
+ *
+ * La usa tanto el botón "Detener" (visible mientras se leen/validan los
+ * archivos) como el botón "Cancelar" que aparece junto a "Confirmar y
+ * calcular" (visible mientras se revisan los duplicados detectados). A
+ * partir de que arranca el guardado en la base de datos (dentro de
+ * finalizarCalculo/intentarGuardarYMostrar) ya no hay botón de cancelar: ese
+ * tramo no ofrece ninguno de los dos.
+ */
+function detenerAnalisisEnCurso() {
+  // Invalida cualquier tramo de ejecutarAnalisis que siga pendiente en un
+  // await: al retomar, comparará su número contra este y saldrá sin tocar
+  // la pantalla que este botón ya dejó lista.
+  estado.analisisId = (estado.analisisId || 0) + 1;
+
+  estado.ventasProcesadas = null;
+  estado.stockTienda = null;
+  estado.stockKacosa = null;
+  estado.notasPendientes = null;
+  estado.clustersCandidatos = [];
+  estado.gruposCandidatos = [];
+  estado.resultadoFinal = null;
+  estado.fechaAnalisis = null;
+  estado.grupos = null;
+  estado.sinRotacion = null;
+  estado.sugerencias = null;
+  estado.analisisCompleto = null;
+  estado.analizando = false;
+
+  const duplicadosEl = document.getElementById("na-duplicados");
+  if (duplicadosEl) duplicadosEl.innerHTML = "";
+  const resultadosEl = document.getElementById("na-resultados");
+  if (resultadosEl) resultadosEl.innerHTML = "";
+
+  bloquearFormulario(false);
+
+  const btnAnalizar = document.getElementById("btn-analizar");
+  if (btnAnalizar) btnAnalizar.innerHTML = '<i class="fa-solid fa-bolt"></i> Analizar';
+  actualizarBotonAnalizar(); // vuelve a habilitarlo si los archivos cargados siguen siendo válidos
+
+  const btnDetener = document.getElementById("btn-detener-analisis");
+  if (btnDetener) btnDetener.style.display = "none";
+
+  const estadoTexto = document.getElementById("na-estado");
+  if (estadoTexto) {
+    estadoTexto.innerHTML = '<i class="fa-solid fa-circle-stop"></i> Análisis detenido. Los archivos cargados se conservan; ajusta lo que necesites y vuelve a pulsar "Analizar".';
+  }
+}
+
 async function ejecutarAnalisis() {
   if (estado.analizando) {
     document.getElementById("na-estado").innerHTML = '<i class="fa-solid fa-hourglass-half"></i> Ya hay un análisis en progreso. Espera a que termine.';
@@ -867,15 +930,25 @@ async function ejecutarAnalisis() {
     }
   }
 
+  // Número de este análisis: se compara contra estado.analisisId después de
+  // cada espera asíncrona para detectar si el usuario pulsó "Detener" o
+  // "Cancelar" mientras tanto y, de ser así, cortar en seco sin seguir
+  // tocando la pantalla (que esos botones ya dejaron lista).
+  const miAnalisisId = ++estado.analisisId;
+  const fueCancelado = () => estado.analisisId !== miAnalisisId;
+
   try {
     estado.analizando = true;
     const btnAnalizar = document.getElementById("btn-analizar");
     btnAnalizar.disabled = true;
     btnAnalizar.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analizando...';
     bloquearFormulario(true);
+    const btnDetener = document.getElementById("btn-detener-analisis");
+    if (btnDetener) { btnDetener.style.display = ""; btnDetener.disabled = false; }
 
     estadoTexto.textContent = "Leyendo archivo de ventas...";
     const filasVentas = parsearMHT(await archivoVentas.text());
+    if (fueCancelado()) return;
 
     estadoTexto.textContent = "Validando el rango de fechas del archivo de ventas...";
     const errorRangoVentas = validarRangoVentas(filasVentas);
@@ -885,14 +958,17 @@ async function ejecutarAnalisis() {
       btnAnalizar.innerHTML = '<i class="fa-solid fa-bolt"></i> Analizar';
       bloquearFormulario(false);
       estado.analizando = false;
+      if (btnDetener) btnDetener.style.display = "none";
       return;
     }
 
     estadoTexto.textContent = "Leyendo stock de la tienda...";
     const filasStockTienda = parsearMHT(await archivoStockTienda.text());
+    if (fueCancelado()) return;
 
     estadoTexto.textContent = "Leyendo stock de Kacosa...";
     const filasStockKacosa = parsearMHT(await archivoStockKacosa.text());
+    if (fueCancelado()) return;
 
     estadoTexto.textContent = "Validando centros de los archivos...";
     const errorValidacion = validarCentros(filasVentas, filasStockTienda, filasStockKacosa, centrosValidos);
@@ -902,6 +978,7 @@ async function ejecutarAnalisis() {
       btnAnalizar.innerHTML = '<i class="fa-solid fa-bolt"></i> Analizar';
       bloquearFormulario(false);
       estado.analizando = false;
+      if (btnDetener) btnDetener.style.display = "none";
       return;
     }
 
@@ -913,6 +990,7 @@ async function ejecutarAnalisis() {
       btnAnalizar.innerHTML = '<i class="fa-solid fa-bolt"></i> Analizar';
       bloquearFormulario(false);
       estado.analizando = false;
+      if (btnDetener) btnDetener.style.display = "none";
       return;
     }
 
@@ -935,6 +1013,7 @@ async function ejecutarAnalisis() {
       cargarFactoresConversion(), // trae desde Supabase los factores por material y por UMB
       cargarCodigosExcluidos()    // trae desde Supabase la lista de códigos a ignorar
     ]);
+    if (fueCancelado()) return;
     const ventasProcesadas = procesarVentas(filasVentas, mapaUMBPorMaterial);
 
     // Alimenta las tablas de Stock y Movimientos en Supabase con los datos crudos
@@ -946,6 +1025,7 @@ async function ejecutarAnalisis() {
     if (archivoNotasPendientes) {
       estadoTexto.textContent = "Validando archivo de notas pendientes por despacho...";
       const filasNotas = parsearMHT(await archivoNotasPendientes.text());
+      if (fueCancelado()) return;
       
       // Validar que el archivo de notas contenga el centro correcto
       const errorNotas = validarCentroNotasPendientes(filasNotas, centrosValidos);
@@ -955,6 +1035,7 @@ async function ejecutarAnalisis() {
         btnAnalizar.innerHTML = '<i class="fa-solid fa-bolt"></i> Analizar';
         bloquearFormulario(false);
         estado.analizando = false;
+        if (btnDetener) btnDetener.style.display = "none";
         return;
       }
       
@@ -972,6 +1053,7 @@ async function ejecutarAnalisis() {
     if (archivoPendientesSync) {
       estadoTexto.textContent = "Aplicando pendientes por sincronizar...";
       const filasPendientes = await leerXLSXGenerico(archivoPendientesSync);
+      if (fueCancelado()) return;
       const mapaPendientes = procesarPendientesSync(filasPendientes);
       const afectados = restarPendientesSync(stockTienda, mapaPendientes);
       if (afectados > 0) {
@@ -981,9 +1063,11 @@ async function ejecutarAnalisis() {
 
     estadoTexto.textContent = "Cargando lista de paquetes...";
     await cargarPaquetes();
+    if (fueCancelado()) return;
 
     estadoTexto.textContent = "Cargando ubicaciones de materiales en Kacosa...";
     await cargarUbicaciones();
+    if (fueCancelado()) return;
 
     estadoTexto.textContent = "Buscando posibles códigos duplicados...";
     const materialesParaComparar = Object.values(ventasProcesadas.porMaterial)
@@ -1006,6 +1090,12 @@ async function ejecutarAnalisis() {
       analisisCompleto: null
     };
 
+    // A partir de aquí ya no se puede cancelar: si hay duplicados, la revisión
+    // tiene su propio botón "Cancelar" (junto a "Confirmar y calcular"); si no
+    // los hay, se entra directo a finalizarCalculo(), que ya no ofrece forma
+    // de detenerse porque desemboca en el guardado en la base de datos.
+    if (btnDetener) btnDetener.style.display = "none";
+
     if (gruposCandidatos.length > 0) {
       estadoTexto.textContent = `Se detectaron ${gruposCandidatos.length} posible(s) duplicado(s). Revísalos abajo.`;
       mostrarDuplicados(gruposCandidatos);
@@ -1022,6 +1112,8 @@ async function ejecutarAnalisis() {
     btnAnalizar.innerHTML = '<i class="fa-solid fa-bolt"></i> Analizar';
     bloquearFormulario(false);
     estado.analizando = false;
+    const btnDetenerErr = document.getElementById("btn-detener-analisis");
+    if (btnDetenerErr) btnDetenerErr.style.display = "none";
   }
 }
 
@@ -1074,9 +1166,14 @@ function mostrarDuplicados(grupos) {
           </span>
         </label>
       `).join("")}
-      <button id="btn-confirmar-duplicados" class="btn-primario" style="margin-top:16px; max-width:260px">
-        Confirmar y calcular
-      </button>
+      <div class="btn-group" style="margin-top:16px">
+        <button id="btn-confirmar-duplicados" class="btn-primario" style="max-width:260px">
+          Confirmar y calcular
+        </button>
+        <button id="btn-cancelar-duplicados" class="btn-sutil-peligro" style="min-width:140px">
+          <i class="fa-solid fa-circle-stop"></i> Cancelar
+        </button>
+      </div>
     </div>
   `;
 
@@ -1085,8 +1182,12 @@ function mostrarDuplicados(grupos) {
     document.querySelectorAll(".chk-grupo-dup:checked").forEach(chk => {
       gruposConfirmados.push(grupos[Number(chk.dataset.idx)]);
     });
+    // A partir de este clic ya no se puede cancelar: arranca el cálculo final
+    // y el guardado en la base de datos.
     finalizarCalculo(gruposConfirmados);
   });
+
+  document.getElementById("btn-cancelar-duplicados").addEventListener("click", detenerAnalisisEnCurso);
 
   // Aviso + scroll automático: el usuario puede no estar viendo esta parte de
   // la pantalla cuando termina el análisis, así que se le avisa explícitamente
