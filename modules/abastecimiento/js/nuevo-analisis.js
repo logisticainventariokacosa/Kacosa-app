@@ -11,7 +11,7 @@ import { detectarCandidatosLocal, fusionarDuplicados } from "./deteccion-duplica
 import { TIENDAS, nombrePorId, centrosDeTienda } from "./tiendas.js";
 import { callBridge } from "./bridge.js";
 import { crearTablaPaginada } from "./tabla-utils.js";
-import { notificarExito } from "./notificaciones.js";
+import { notificarExito, confirmarAccion } from "./notificaciones.js";
 import { construirHojaEstilizada, construirHojaResumen } from "./excel-estilos.js";
 import { leerXLSXGenerico, procesarPendientesSync, restarPendientesSync } from "./pendientes-sync-parser.js";
 
@@ -29,7 +29,7 @@ const CONFIG_ARCHIVOS = [
   { id: 'na-stock-tienda', nameId: 'file-name-stock-tienda', statusId: 'file-status-stock-tienda', wrapperId: 'file-wrapper-stock-tienda', validId: 'validacion-stock-tienda', clearId: 'file-clear-stock-tienda', tipo: 'stock', opcional: false },
   { id: 'na-stock-kacosa', nameId: 'file-name-stock-kacosa', statusId: 'file-status-stock-kacosa', wrapperId: 'file-wrapper-stock-kacosa', validId: 'validacion-stock-kacosa', clearId: 'file-clear-stock-kacosa', tipo: 'stock', opcional: false },
   { id: 'na-notas-pendientes', nameId: 'file-name-notas-pendientes', statusId: 'file-status-notas-pendientes', wrapperId: 'file-wrapper-notas-pendientes', validId: 'validacion-notas-pendientes', clearId: 'file-clear-notas-pendientes', tipo: 'notas', opcional: true },
-  { id: 'na-pendientes-sync', nameId: 'file-name-pendientes-sync', statusId: 'file-status-pendientes-sync', wrapperId: 'file-wrapper-pendientes-sync', validId: null, clearId: 'file-clear-pendientes-sync', tipo: null, opcional: true }
+  { id: 'na-pendientes-sync', nameId: 'file-name-pendientes-sync', statusId: 'file-status-pendientes-sync', wrapperId: 'file-wrapper-pendientes-sync', validId: 'validacion-pendientes-sync', clearId: 'file-clear-pendientes-sync', tipo: 'xlsx', opcional: true }
 ];
 
 // IDs de todos los campos del formulario que deben bloquearse mientras se procesa
@@ -116,6 +116,10 @@ const COLUMNAS_STOCK = [
 const COLUMNAS_NOTAS_PENDIENTES = [
   "Material", "Texto breve", "Centro Receptor", "Entrega", "Fec. Entrega", "Cant Entrega"
 ];
+
+// El de pendientes por sincronizar lo arma el usuario a mano en Excel: debe
+// tener EXACTAMENTE estas dos columnas, ni de más ni de menos.
+const COLUMNAS_PENDIENTES_SYNC = ["Material", "Cantidad_por_sincronizar"];
 
 // ============================================================
 //  ALMACENES PERMITIDOS (columna "Almacén" de los archivos de stock)
@@ -421,6 +425,7 @@ function render() {
           <button type="button" class="file-clear-btn" id="file-clear-pendientes-sync" title="Quitar archivo" style="display:none"><i class="fa-solid fa-xmark"></i></button>
           <input type="file" id="na-pendientes-sync" accept=".xlsx,.xls">
         </div>
+        <div id="validacion-pendientes-sync" class="estado-texto" style="color:var(--verde-kpi); font-size:12px; margin-top:4px"></div>
       </div>
 
       <!-- Período -->
@@ -500,6 +505,7 @@ function render() {
         e.preventDefault();
         e.stopPropagation(); // no debe abrir el selector de archivos del wrapper
         vaciarRecuadro();
+        actualizarBotonAnalizar();
       });
     }
 
@@ -514,17 +520,26 @@ function render() {
 
           if (validEl && tipo) {
             try {
-              const texto = await input.files[0].text();
-              const filas = parsearMHT(texto);
-              let columnasRequeridas;
-              if (tipo === 'ventas') columnasRequeridas = COLUMNAS_VENTAS;
-              else if (tipo === 'stock') columnasRequeridas = COLUMNAS_STOCK;
-              else if (tipo === 'notas') columnasRequeridas = COLUMNAS_NOTAS_PENDIENTES;
-              else columnasRequeridas = [];
-              
+              // El archivo de pendientes por sincronizar es un .xlsx real (no un
+              // .MHT de SAP) y exige columnas EXACTAS, ni de más ni de menos.
+              const filas = tipo === 'xlsx'
+                ? await leerXLSXGenerico(input.files[0])
+                : parsearMHT(await input.files[0].text());
+
               if (tipo === 'stock') cacheFilasStock[id] = filas;
 
-              const resultado = validarColumnasArchivo(filas, columnasRequeridas, tipo);
+              let resultado;
+              if (tipo === 'xlsx') {
+                resultado = validarColumnasExactas(filas, COLUMNAS_PENDIENTES_SYNC);
+              } else {
+                let columnasRequeridas;
+                if (tipo === 'ventas') columnasRequeridas = COLUMNAS_VENTAS;
+                else if (tipo === 'stock') columnasRequeridas = COLUMNAS_STOCK;
+                else if (tipo === 'notas') columnasRequeridas = COLUMNAS_NOTAS_PENDIENTES;
+                else columnasRequeridas = [];
+                resultado = validarColumnasArchivo(filas, columnasRequeridas, tipo);
+              }
+
               let mensajeFinal = resultado.mensaje;
               let validoFinal = resultado.valido;
 
@@ -551,6 +566,7 @@ function render() {
         } else {
           vaciarRecuadro();
         }
+        actualizarBotonAnalizar();
       });
 
       if (wrapper) {
@@ -601,8 +617,11 @@ function render() {
         validEl.style.color = 'var(--verde-kpi)';
         inputStockTienda.dataset.valido = 'true';
       }
+      actualizarBotonAnalizar();
     });
   }
+
+  actualizarBotonAnalizar(); // estado inicial: sin archivos cargados, debe empezar deshabilitado
 
   document.getElementById("btn-analizar").addEventListener("click", ejecutarAnalisis);
   document.getElementById("btn-limpiar-analisis").addEventListener("click", limpiarAnalisis);
@@ -631,17 +650,50 @@ function validarColumnasArchivo(filas, columnasRequeridas, tipo) {
   };
 }
 
+/**
+ * Igual que validarColumnasArchivo, pero exige columnas EXACTAS: ni faltan ni
+ * sobran. Se usa para el archivo de "pendientes por sincronizar" (lo arma el
+ * usuario a mano en Excel, así que es fácil que se cuele una columna de más
+ * o un nombre distinto).
+ */
+function validarColumnasExactas(filas, columnasExactas) {
+  if (filas.length === 0) {
+    return { valido: false, mensaje: '<i class="fa-solid fa-triangle-exclamation"></i> El archivo está vacío o no tiene datos' };
+  }
+
+  const columnasExistentes = Object.keys(filas[0]);
+  const faltantes = columnasExactas.filter(c => !columnasExistentes.includes(c));
+  const sobrantes = columnasExistentes.filter(c => !columnasExactas.includes(c));
+
+  if (faltantes.length === 0 && sobrantes.length === 0) {
+    return { valido: true, mensaje: `<i class="fa-solid fa-circle-check"></i> Archivo válido: contiene exactamente las columnas requeridas (${columnasExactas.join(', ')})` };
+  }
+
+  const partes = [];
+  if (faltantes.length > 0) partes.push(`le falta(n): ${faltantes.join(', ')}`);
+  if (sobrantes.length > 0) partes.push(`tiene de más (no debe traerlas): ${sobrantes.join(', ')}`);
+
+  return {
+    valido: false,
+    mensaje: `<i class="fa-solid fa-triangle-exclamation"></i> Este archivo debe contener EXACTAMENTE las columnas ${columnasExactas.join(' y ')} — ${partes.join('; ')}.`
+  };
+}
+
 // ============================================================
 //  VERIFICACIÓN DE ARCHIVOS VÁLIDOS
 // ============================================================
 function verificarArchivosValidos() {
-  const archivos = [
+  const requeridos = [
     { id: 'na-ventas', nombre: 'ventas' },
     { id: 'na-stock-tienda', nombre: 'stock de tienda' },
     { id: 'na-stock-kacosa', nombre: 'stock de Kacosa' }
   ];
+  const opcionales = [
+    { id: 'na-notas-pendientes', nombre: 'notas pendientes por despacho' },
+    { id: 'na-pendientes-sync', nombre: 'materiales pendientes por sincronizar' }
+  ];
 
-  for (const arch of archivos) {
+  for (const arch of requeridos) {
     const input = document.getElementById(arch.id);
     if (!input || !input.files || input.files.length === 0) {
       return { ok: false, error: `Falta el archivo de ${arch.nombre}` };
@@ -650,7 +702,31 @@ function verificarArchivosValidos() {
       return { ok: false, error: `El archivo de ${arch.nombre} no es válido. Verifica que tenga las columnas correctas.` };
     }
   }
+
+  // Los opcionales solo se exigen válidos SI el usuario cargó algo en ellos;
+  // si no se usaron, no bloquean el análisis.
+  for (const arch of opcionales) {
+    const input = document.getElementById(arch.id);
+    if (input && input.files && input.files.length > 0 && input.dataset.valido !== 'true') {
+      return { ok: false, error: `El archivo de ${arch.nombre} no es válido. Verifica que tenga las columnas correctas.` };
+    }
+  }
+
   return { ok: true };
+}
+
+/**
+ * Habilita o deshabilita el botón "Analizar" según si, en este momento, todos
+ * los archivos cargados (obligatorios + opcionales que se hayan usado) son
+ * válidos. Se llama cada vez que cambia algo relevante: se sube/quita un
+ * archivo, o cambia la tienda seleccionada. No toca el botón mientras ya hay
+ * un análisis en curso (eso lo maneja ejecutarAnalisis por su cuenta).
+ */
+function actualizarBotonAnalizar() {
+  if (estado.analizando) return;
+  const btnAnalizar = document.getElementById("btn-analizar");
+  if (!btnAnalizar) return;
+  btnAnalizar.disabled = !verificarArchivosValidos().ok;
 }
 
 // ============================================================
@@ -727,9 +803,9 @@ function limpiarAnalisis() {
   bloquearFormulario(false);
   const btnAnalizar = document.getElementById("btn-analizar");
   if (btnAnalizar) {
-    btnAnalizar.disabled = false;
     btnAnalizar.innerHTML = '<i class="fa-solid fa-bolt"></i> Analizar';
   }
+  actualizarBotonAnalizar(); // debe quedar deshabilitado: ya no hay archivos cargados
   const btnLimpiar = document.getElementById("btn-limpiar-analisis");
   if (btnLimpiar) btnLimpiar.style.display = "none";
 }
@@ -769,6 +845,26 @@ async function ejecutarAnalisis() {
   if (centrosValidos.length === 0) {
     estadoTexto.textContent = "No se encontró el centro SAP para esa tienda.";
     return;
+  }
+
+  const MARGEN_UMBRAL_CONFIRMACION = 30;
+  if (margenPct > MARGEN_UMBRAL_CONFIRMACION) {
+    const btnAnalizarPrevio = document.getElementById("btn-analizar");
+    if (btnAnalizarPrevio) btnAnalizarPrevio.disabled = true; // evita doble clic mientras decide
+    const continuar = await confirmarAccion(
+      `Elegiste un margen de seguridad de <strong>${margenPct}%</strong>, por encima del ${MARGEN_UMBRAL_CONFIRMACION}% habitual. Un margen tan alto puede inflar bastante las cantidades a pedir.<br><br>¿Quieres continuar de todas formas?`,
+      {
+        titulo: "Margen de seguridad alto",
+        icono: '<i class="fa-solid fa-triangle-exclamation"></i>',
+        textoConfirmar: `Sí, usar ${margenPct}%`,
+        textoCancelar: "Cancelar y ajustar"
+      }
+    );
+    if (!continuar) {
+      estadoTexto.textContent = "Análisis cancelado. Ajusta el margen de seguridad si lo deseas.";
+      actualizarBotonAnalizar();
+      return;
+    }
   }
 
   try {
