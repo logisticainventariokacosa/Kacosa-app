@@ -1456,6 +1456,27 @@ tbody tr:hover {
 }
 .kn-boton-secundario:hover { background: #178a5c; }
 
+/* Botón de advertencia (ej. "Sí, continuar" en confirmarAccion): tono ámbar
+   para que se note que la acción requiere pensarlo dos veces, sin llegar a
+   ser un color de error. */
+.kn-boton-advertencia {
+  background: var(--ambar);
+  margin-bottom: 10px;
+}
+.kn-boton-advertencia:hover { background: var(--ambar-oscuro); }
+
+/* Botón neutro para "Cancelar": contorno en vez de relleno, para que quede
+   claro que NO es la acción principal. */
+.kn-boton-cancelar {
+  background: transparent;
+  border: 1.5px solid var(--borde);
+  color: var(--texto-secundario);
+}
+.kn-boton-cancelar:hover {
+  background: var(--fondo);
+  color: var(--texto-principal);
+}
+
 @media (max-width: 600px) {
   .kn-tarjeta-larga { max-width: 100%; padding: 22px 18px 18px; }
   .kn-tarjeta-larga .kn-mensaje { max-height: min(40vh, 280px); font-size: 12.5px; }
