@@ -32,14 +32,14 @@ function render() {
 
   cont.innerHTML = `
     <div class="card">
-      <h3 style="margin-top:0; font-size:15px; color:var(--azul-base)">Filtros</h3>
+      <h3 style="margin-top:0; font-size:15px; color:var(--texto-titulo)">Filtros</h3>
       <p class="vista-sub" style="margin-top:-4px">Especifica al menos un filtro (tienda/centro, material, o rango de fecha) antes de consultar.</p>
 
       <div style="display:grid; grid-template-columns:1fr; gap:18px; margin-top:10px">
         <div>
           <div style="display:flex; justify-content:space-between; align-items:center">
             <label class="form-label" style="margin-bottom:0">Tienda(s) / Centro(s)</label>
-            <button type="button" id="btn-toggle-todas-tiendas" style="background:none; border:none; color:var(--azul-base); font-size:12px; font-weight:600; cursor:pointer; text-decoration:underline">Marcar/desmarcar todas</button>
+            <button type="button" id="btn-toggle-todas-tiendas" style="background:none; border:none; color:var(--texto-titulo); font-size:12px; font-weight:600; cursor:pointer; text-decoration:underline">Marcar/desmarcar todas</button>
           </div>
           <div id="lista-tiendas-consulta" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(160px,1fr)); gap:2px; max-height:180px; overflow-y:auto; border:1.5px solid var(--borde); border-radius:var(--radio-peq); padding:10px; margin-top:6px">
             ${checkboxesTiendas}
