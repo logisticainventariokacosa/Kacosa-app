@@ -76,7 +76,7 @@ const CATEGORIAS_COLOR_ESTRICTO = [
   "NEVERA", "REFRIGERADOR", "REFRIGERADORA",
   "LAVADORA", "SECADORA", "LAVASECADORA",
   "COCINA", "HORNO", "LAVAVAJILLAS", "MICROONDAS",
-  "CAMPANA EXTRACTORA", "AIRE ACONDICIONADO", "SPLIT", "SPRAY", "BATIDORA"
+  "CAMPANA EXTRACTORA", "AIRE ACONDICIONADO", "SPLIT", "SPRAY", "BATIDORA", "PINTU",
 ];
 
 /** true si la descripción normalizada pertenece a una categoría donde el color siempre distingue el material. */
