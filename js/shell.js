@@ -89,6 +89,14 @@ const MODULES = [
         // "gerente" no ve Alertas Kacosa en la app original (solo roles con
         // visibilidad de TODAS las tiendas), se respeta la misma regla aquí.
         roles: ROLES_ABASTECIMIENTO.filter(r => r !== "gerente")
+      },
+      {
+        id: "consultas-abastecimiento",
+        label: "Consultas",
+        icon: "fa-magnifying-glass",
+        src: "modules/abastecimiento/app.html#vista=vista-consultas",
+        // Igual que Alertas Kacosa: todos los roles de Abastecimiento menos "gerente".
+        roles: ROLES_ABASTECIMIENTO.filter(r => r !== "gerente")
       }
     ]
   },
