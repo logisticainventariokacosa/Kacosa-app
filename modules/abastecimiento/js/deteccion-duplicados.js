@@ -84,6 +84,50 @@ function esCategoriaColorEstricto(textoNormalizado) {
   return CATEGORIAS_COLOR_ESTRICTO.some(k => textoNormalizado.includes(k));
 }
 
+// Categorías que el usuario pidió tratar SIEMPRE como materiales distintos,
+// sin importar qué tan parecida sea el resto de la descripción: la marca
+// Exceline (línea de protectores/accesorios que se confundían entre sí, ej.
+// "Protector d/Nevera Exceline GSM-NP120" vs "...GSM-N120") y pinturas (donde
+// además de color, la presentación —Galón vs Cuñete, etc.— cambia el SKU).
+// Estos nunca se agrupan automáticamente, ni siquiera si el resto del texto
+// es idéntico letra por letra.
+const CATEGORIAS_NUNCA_AGRUPAR = ["EXCELINE", "PINTURA", "PINTU"];
+
+/** true si la descripción normalizada pertenece a una categoría que nunca debe fusionarse automáticamente. */
+function esCategoriaNuncaAgrupar(textoNormalizado) {
+  return CATEGORIAS_NUNCA_AGRUPAR.some(k => textoNormalizado.includes(k));
+}
+
+/**
+ * Extrae, de un texto normalizado (sin barra), el conjunto de "códigos"
+ * alfanuméricos: palabras/tokens que mezclan letras y números (ej. "NP120",
+ * "GSM65", "R410A"). Sirve para notar diferencias finas entre descripciones
+ * que la guardia numérica (que ignora letras) no detecta — ej. "GSM-NP120"
+ * vs "GSM-N120": ambas tienen el número "120", pero son códigos distintos
+ * (NP120 ≠ N120) porque una letra extra cambia el modelo/SKU.
+ */
+function codigosAlfanumericos(textoNormalizado) {
+  const tokens = textoNormalizado.split(" ");
+  return new Set(tokens.filter(t => /[A-Z]/.test(t) && /[0-9]/.test(t)));
+}
+
+/**
+ * true si dos descripciones normalizadas mencionan códigos alfanuméricos
+ * (letra+número pegados, ej. modelos "NP120"/"N120") y esos conjuntos de
+ * códigos NO son exactamente iguales. Es una guardia general para "ver
+ * diferencias en las descripciones" más allá de solo números sueltos o
+ * colores: si ambas tienen códigos de este tipo pero no coinciden, se
+ * consideran variantes distintas, no duplicados.
+ */
+function difierenPorCodigoAlfanumerico(normA, normB) {
+  const codigosA = codigosAlfanumericos(normA);
+  const codigosB = codigosAlfanumericos(normB);
+  if (codigosA.size === 0 || codigosB.size === 0) return false;
+  if (codigosA.size !== codigosB.size) return true;
+  for (const c of codigosA) if (!codigosB.has(c)) return true;
+  return false;
+}
+
 /**
  * Extrae, de un texto normalizado CON barra conservada, las palabras que
  * aparecen como "C/palabra" (con) o "S/palabra" (sin) — ej. de
@@ -168,10 +212,19 @@ export function detectarCandidatosLocal(materiales) {
     for (let i = 0; i < grupo.length; i++) {
       for (let j = i + 1; j < grupo.length; j++) {
         if (grupo[i].codigo === grupo[j].codigo) continue;
+
+        // Guardia de categoría nunca-agrupar: Exceline y pinturas nunca se
+        // consideran duplicados entre sí, sin importar la similitud del texto.
+        if (esCategoriaNuncaAgrupar(grupo[i].norm) || esCategoriaNuncaAgrupar(grupo[j].norm)) continue;
+
         // Guardia numérica: si los números de la descripción difieren (ej. "40mfd" vs "50mfd",
         // o "110V" vs "220V"), NUNCA se consideran duplicados, sin importar qué tan parecido
         // sea el resto del texto. Esto evita fusionar variantes distintas de un mismo producto.
         if (grupo[i].firma !== grupo[j].firma) continue;
+
+        // Guardia de código alfanumérico: modelos como "NP120" vs "N120" comparten
+        // el mismo número (120) pero son SKUs distintos por la letra de más/menos.
+        if (difierenPorCodigoAlfanumerico(grupo[i].norm, grupo[j].norm)) continue;
 
         // Guardia de color: colores distintos = SKUs distintos. En pinturas,
         // congeladores y línea blanca la regla es estricta (alcanza con que
