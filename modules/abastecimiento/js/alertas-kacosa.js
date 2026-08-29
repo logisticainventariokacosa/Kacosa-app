@@ -713,7 +713,18 @@ function mostrarDistribucion(alerta) {
   const total = Object.values(distribucion).reduce((a, b) => a + b, 0);
   const maximo = Math.max(...Object.values(distribucion), 1);
 
-  const coloresBarras = ['#1B2A41', '#E8A03D', '#2F8F6E', '#4A6FA5', '#C4432B', '#8B6BAE', '#2596BE'];
+  // En modo oscuro, --azul-base (navy de marca) NO se redefine (ver overrides
+  // en app.html: se usa tal cual como fondo de botones), así que un texto con
+  // color:var(--azul-base) queda casi invisible sobre el fondo oscuro del
+  // modal (var(--blanco) en oscuro es #1a1d23). Por eso título y total usan
+  // var(--texto-titulo), que SÍ está pensada para adaptarse a ambos temas
+  // (mismo patrón que .modal-titulo en app.html). Igual, la primera barra
+  // (#1B2A41) es un navy casi idéntico al fondo oscuro del modal y se perdía
+  // por completo — se usa una paleta distinta para modo oscuro.
+  const esOscuro = document.documentElement.classList.contains('kacosa-dark');
+  const coloresBarras = esOscuro
+    ? ['#5B7FBD', '#E8A03D', '#3EB08A', '#6E93D4', '#E0685A', '#A387CC', '#4FB3D9']
+    : ['#1B2A41', '#E8A03D', '#2F8F6E', '#4A6FA5', '#C4432B', '#8B6BAE', '#2596BE'];
 
   const modal = document.createElement('div');
   modal.style.cssText = `
@@ -726,10 +737,10 @@ function mostrarDistribucion(alerta) {
 
   modal.innerHTML = `
     <div style="background:var(--blanco); border-radius:var(--radio); max-width:520px; width:100%; max-height:90vh; overflow-y:auto; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,0.3)">
-      <h3 style="margin:0 0 12px; color:var(--azul-base)"><i class="fa-solid fa-chart-column"></i> Distribución sugerida por tienda</h3>
+      <h3 style="margin:0 0 12px; color:var(--texto-titulo)"><i class="fa-solid fa-chart-column"></i> Distribución sugerida por tienda</h3>
       <p style="font-size:13px; color:var(--texto-secundario); margin-bottom:18px">
         <strong>${alerta.codigo}</strong> — ${alerta.descripcion}<br>
-        Total a distribuir: <strong style="color:var(--azul-base)">${alerta.proyeccionCompra}</strong> ${alerta.umb || 'unidades'} (empaque de ${alerta.empaque})
+        Total a distribuir: <strong style="color:var(--texto-titulo)">${alerta.proyeccionCompra}</strong> ${alerta.umb || 'unidades'} (empaque de ${alerta.empaque})
       </p>
       <div style="display:flex; flex-direction:column; gap:12px">
         ${filasOrdenadas.map(([tienda, cantidad], idx) => {
@@ -749,7 +760,7 @@ function mostrarDistribucion(alerta) {
           `;
         }).join('')}
       </div>
-      <div style="display:flex; justify-content:space-between; padding:12px 0 0; margin-top:14px; font-weight:700; border-top:2px solid var(--azul-base)">
+      <div style="display:flex; justify-content:space-between; padding:12px 0 0; margin-top:14px; font-weight:700; border-top:2px solid var(--borde-focus); color:var(--texto-principal)">
         <span>TOTAL</span>
         <span>${total}</span>
       </div>
