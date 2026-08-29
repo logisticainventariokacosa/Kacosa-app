@@ -14,6 +14,11 @@ let cargaEnCurso = null;
  * caché en memoria para el resto de la sesión. Llamarla ANTES de cualquier
  * flujo que use esCodigoExcluido() (Nuevo Análisis, Alertas Kacosa), ya que
  * esCodigoExcluido() es síncrona y necesita la caché ya cargada.
+ *
+ * IMPORTANTE: si falla la carga, esta función LANZA un error en vez de seguir
+ * con una lista vacía. Un fallo silencioso aquí dejaba pasar códigos que
+ * deberían estar excluidos (descontinuados, de prueba, etc.) sin que nadie se
+ * enterara — mismo problema de fondo que tenía cargarFactoresConversion().
  */
 export async function cargarCodigosExcluidos() {
   if (cargaEnCurso) return cargaEnCurso;
@@ -21,13 +26,13 @@ export async function cargarCodigosExcluidos() {
   cargaEnCurso = (async () => {
     try {
       const resp = await callBridge("leerCodigosExcluidos", {});
-      cache = new Set((resp.ok ? resp.codigos : []).map(c => String(c).trim()));
       if (!resp.ok) {
-        console.error("No se pudieron cargar los códigos excluidos:", resp.error);
+        throw new Error("No se pudieron cargar los códigos excluidos: " + (resp.error || "error desconocido"));
       }
+      cache = new Set((resp.codigos || []).map(c => String(c).trim()));
     } catch (err) {
-      console.error("Error al cargar códigos excluidos:", err);
-      cache = new Set(); // fallo silencioso: no excluye nada en vez de romper el análisis
+      cache = null;
+      throw err;
     } finally {
       cargaEnCurso = null;
     }
