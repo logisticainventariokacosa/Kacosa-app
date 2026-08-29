@@ -226,7 +226,7 @@ function totalizarPorMaterial(materiales, campo) {
   const mapa = {};
   materiales.forEach(m => {
     if (!mapa[m.codigo]) {
-      mapa[m.codigo] = { codigo: m.codigo, descripcion: m.descripcion, umb: m.umb, total: 0 };
+      mapa[m.codigo] = { codigo: m.codigo, descripcion: m.descripcion, umb: m.umb, clase: m.clase || '', total: 0 };
     }
     mapa[m.codigo].total += m[campo] || 0;
   });
@@ -349,6 +349,7 @@ function mostrarResultadosPorMetrica() {
     { key: 'codigo', label: 'Código' },
     { key: 'descripcion', label: 'Descripción' },
     { key: 'umb', label: 'UMB' },
+    { key: 'clase', label: 'Clase' },
     { key: 'total', label: etiqueta, numeric: true }
   ];
   const container = document.getElementById('consulta-tabla-container');
@@ -411,6 +412,7 @@ function descargarConsultaExcel() {
       { key: 'codigo', label: 'Material', ancho: 14 },
       { key: 'descripcion', label: 'Descripcion', ancho: 42 },
       { key: 'umb', label: 'UMB', ancho: 8 },
+      { key: 'clase', label: 'Clase', ancho: 8 },
       { key: 'total', label: etiqueta.replace(/\s+/g, '_'), ancho: 14 }
     ];
     XLSX.utils.book_append_sheet(wb, construirHojaEstilizada(totalizado, columnas), `Total ${etiqueta}`.slice(0, 31));
