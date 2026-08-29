@@ -8,6 +8,15 @@ import { callBridge } from "./bridge.js";
 let cachePaquetes = null;
 let cargaEnCurso = null;
 
+/**
+ * Carga (o recarga) la lista de paquetes/empaque desde Supabase.
+ *
+ * IMPORTANTE: si falla la carga, esta función LANZA un error en vez de seguir
+ * con una lista vacía. Un fallo silencioso aquí hacía que obtenerEmpaque()
+ * devolviera 1 para TODOS los materiales (como si ninguno viniera en caja/
+ * paquete), lo que afecta directamente el redondeo del "a pedir" — mismo
+ * problema de fondo que tenía cargarFactoresConversion().
+ */
 export async function cargarPaquetes() {
   if (cachePaquetes) return cachePaquetes;
   if (cargaEnCurso) return cargaEnCurso;
@@ -15,20 +24,18 @@ export async function cargarPaquetes() {
   cargaEnCurso = (async () => {
     try {
       const resp = await callBridge("leerPaquetes", {});
-      const mapa = {};
-      if (resp.ok) {
-        (resp.paquetes || []).forEach(p => {
-          mapa[String(p.material)] = { umb: p.umb, empaque: p.empaque, descripcion: p.descripcion };
-        });
-      } else {
-        console.error("No se pudo cargar la lista de paquetes:", resp.error);
+      if (!resp.ok) {
+        throw new Error("No se pudo cargar la lista de paquetes: " + (resp.error || "error desconocido"));
       }
+      const mapa = {};
+      (resp.paquetes || []).forEach(p => {
+        mapa[String(p.material)] = { umb: p.umb, empaque: p.empaque, descripcion: p.descripcion };
+      });
       cachePaquetes = mapa;
       return mapa;
     } catch (err) {
-      console.error("Error al cargar paquetes:", err);
-      cachePaquetes = {}; // caché vacía: obtenerEmpaque() usará 1 para todo
-      return cachePaquetes;
+      cachePaquetes = null;
+      throw err;
     } finally {
       cargaEnCurso = null;
     }
