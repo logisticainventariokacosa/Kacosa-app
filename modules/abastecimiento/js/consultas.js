@@ -53,10 +53,11 @@ function render() {
         </div>
 
         <div>
-          <label class="form-label" for="consulta-materiales">Material(es)</label>
+          <label class="form-label" for="consulta-materiales">Material(es) / Descripción</label>
           <textarea id="consulta-materiales" class="input-modern" rows="2"
-            placeholder="Pega uno o varios códigos de material separados por coma, espacio o salto de línea. Déjalo vacío para no filtrar por material."
+            placeholder="Códigos exactos y/o palabras a buscar en la descripción, separados por coma o salto de línea. Ej: 1000000163, capacitor, condensador, minerales. Déjalo vacío para no filtrar."
             style="resize:vertical; font-family:inherit"></textarea>
+          <p class="vista-sub" style="margin:4px 0 0 0; font-size:11.5px">Los números se buscan como código exacto; el resto se busca dentro de la descripción (sin importar mayúsculas). Se trae todo lo que coincida con cualquiera de los términos.</p>
         </div>
 
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px">
@@ -115,7 +116,7 @@ async function ejecutarConsulta() {
     .flatMap(chk => centrosDeTienda(chk.value));
 
   const materiales = (document.getElementById("consulta-materiales").value || "")
-    .split(/[\s,;]+/)
+    .split(/[,;\n]+/)
     .map(m => m.trim())
     .filter(Boolean);
 
@@ -147,7 +148,7 @@ async function ejecutarConsulta() {
       return;
     }
 
-    ultimoResultado = resp.materiales || [];
+    ultimoResultado = dedupUltimoPorTiendaYMaterial(resp.materiales || []);
     modoConsulta = (document.querySelector('input[name="modo-consulta"]:checked') || {}).value || "general";
     vistaActual = "detalle";
     estadoTexto.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${ultimoResultado.length} fila(s) encontrada(s).`;
@@ -160,6 +161,27 @@ async function ejecutarConsulta() {
     btnConsultar.disabled = false;
     btnConsultar.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Consultar';
   }
+}
+
+/**
+ * Se queda con UN SOLO renglón por combinación tienda+material: el más
+ * reciente según creadoEn. Es indispensable antes de sumar nada, porque
+ * guardarAnalisis_() en el backend solo borra el análisis anterior de la
+ * MISMA combinación usuario+tienda — si dos usuarios distintos analizaron la
+ * misma tienda (cada uno con su propia cuenta), ambos análisis conviven en la
+ * tabla al mismo tiempo. Sin este filtro, un material terminaría sumado dos
+ * (o más) veces para la misma tienda.
+ */
+function dedupUltimoPorTiendaYMaterial(materiales) {
+  const mapa = new Map();
+  materiales.forEach(m => {
+    const clave = `${m.tienda}||${m.codigo}`;
+    const existente = mapa.get(clave);
+    if (!existente || new Date(m.creadoEn) > new Date(existente.creadoEn)) {
+      mapa.set(clave, m);
+    }
+  });
+  return [...mapa.values()];
 }
 
 /** Agrupa el detalle por material, sumando las columnas numéricas (igual que "totales por material" en SAP). */
@@ -197,6 +219,8 @@ function agruparPorMaterial(materiales) {
  * el campo pedido ('aPedir' o 'pendiente') entre todas las tiendas/filas que
  * hayan quedado dentro de los filtros aplicados. Para el modo "A_Pedir" /
  * "Pendiente" de Consultas: material, descripción, UMB y el total de ese campo.
+ * Solo devuelve materiales cuyo total sea MAYOR A 0 (no tiene sentido listar
+ * algo cuyo total a pedir/pendiente terminó en 0 o menos).
  */
 function totalizarPorMaterial(materiales, campo) {
   const mapa = {};
@@ -206,7 +230,7 @@ function totalizarPorMaterial(materiales, campo) {
     }
     mapa[m.codigo].total += m[campo] || 0;
   });
-  return Object.values(mapa);
+  return Object.values(mapa).filter(m => m.total > 0);
 }
 
 function mostrarResultadosConsulta() {
