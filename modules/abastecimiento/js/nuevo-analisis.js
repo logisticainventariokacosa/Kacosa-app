@@ -1766,7 +1766,10 @@ async function enviarCorreo() {
       base64: XLSX.write(wb, { type: "base64", bookType: "xlsx" })
     }];
 
-    const totalAPedir = obtenerPedidoActivo().reduce((acc, m) => acc + (m.aPedir || 0), 0);
+    // Para el correo, "Total de materiales a pedir" debe ser la CANTIDAD de
+    // códigos distintos que dieron a pedir (SKUs), no la suma de piezas/unidades
+    // de todos ellos — por eso aquí se usa .length y no un reduce sumando aPedir.
+    const totalMaterialesAPedir = obtenerPedidoActivo().length;
 
     estadoAcciones.textContent = "Enviando correo...";
     const resp = await callBridge("sendReport", {
@@ -1774,8 +1777,7 @@ async function enviarCorreo() {
       tienda: estado.tiendaSeleccionada,
       fechaAnalisis: estado.fechaAnalisis,
       resumen: {
-        totalAPedir,
-        valorEstimado: totalAPedir,
+        totalAPedir: totalMaterialesAPedir,
         quiebresKacosa: estado.grupos.pendienteStock.length
       },
       usuarioEmail: window.KACOSA?.usuario?.email || "",
