@@ -37,9 +37,17 @@ export { normalizarUnidad };
 /**
  * Carga (o recarga) ambas tablas de factores de conversión desde Supabase y las
  * deja en caché en memoria para el resto de la sesión. Llamarla antes de procesar
- * un archivo de ventas/movimientos. Si falla la carga, la caché queda vacía y
- * obtenerFactor() simplemente usa 1 (sin conversión) para todo, en vez de romper
- * el análisis.
+ * un archivo de ventas/movimientos.
+ *
+ * IMPORTANTE: si falla la carga (red, Apps Script, Supabase, lo que sea), esta
+ * función ahora LANZA un error en vez de continuar con una caché vacía. Antes,
+ * un fallo silencioso aquí dejaba obtenerFactor()/tieneFactor() devolviendo
+ * "sin conversión" para TODO el análisis sin que nadie se enterara — el
+ * síntoma exacto era que "a veces" un análisis salía con las unidades mal
+ * convertidas, y al repetirlo (con la red ya recuperada) salía bien. Ahora,
+ * si esto falla, el análisis se detiene por completo (lo captura el try/catch
+ * de ejecutarAnalisis en nuevo-analisis.js) en vez de seguir con datos
+ * potencialmente incorrectos.
  */
 export async function cargarFactoresConversion() {
   if (cargaEnCurso) return cargaEnCurso; // evita cargas duplicadas en paralelo
@@ -51,29 +59,31 @@ export async function cargarFactoresConversion() {
         callBridge("leerFactoresConversionUMB", {})
       ]);
 
-      const mapa = new Map();
-      if (respMaterial.ok) {
-        (respMaterial.factores || []).forEach(f => {
-          mapa.set(`${f.material}|${normalizarUnidad(f.unidadVenta)}`, Number(f.factor) || 1);
-        });
-      } else {
-        console.error("No se pudieron cargar los factores de conversión por material:", respMaterial.error);
+      if (!respMaterial.ok) {
+        throw new Error("No se pudieron cargar los factores de conversión por material: " + (respMaterial.error || "error desconocido"));
       }
+      if (!respUMB.ok) {
+        throw new Error("No se pudieron cargar los factores de conversión por UMB: " + (respUMB.error || "error desconocido"));
+      }
+
+      const mapa = new Map();
+      (respMaterial.factores || []).forEach(f => {
+        mapa.set(`${f.material}|${normalizarUnidad(f.unidadVenta)}`, Number(f.factor) || 1);
+      });
       cache = mapa;
 
       const mapaUMB = new Map();
-      if (respUMB.ok) {
-        (respUMB.factoresUMB || []).forEach(f => {
-          mapaUMB.set(`${normalizarUnidad(f.umb)}|${normalizarUnidad(f.unidadVenta)}`, Number(f.factor) || 1);
-        });
-      } else {
-        console.error("No se pudieron cargar los factores de conversión por UMB:", respUMB.error);
-      }
+      (respUMB.factoresUMB || []).forEach(f => {
+        mapaUMB.set(`${normalizarUnidad(f.umb)}|${normalizarUnidad(f.unidadVenta)}`, Number(f.factor) || 1);
+      });
       cacheUMB = mapaUMB;
     } catch (err) {
-      console.error("Error al cargar factores de conversión:", err);
-      cache = new Map();    // caché vacía: obtenerFactor() usará 1 para todo
-      cacheUMB = new Map();
+      // OJO: se limpia la caché (no se deja a medio llenar de un intento
+      // anterior) y se relanza — quien llame a cargarFactoresConversion()
+      // DEBE dejar que este error interrumpa el análisis, no ignorarlo.
+      cache = null;
+      cacheUMB = null;
+      throw err;
     } finally {
       cargaEnCurso = null;
     }
