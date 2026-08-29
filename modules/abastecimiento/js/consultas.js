@@ -17,7 +17,13 @@ import { construirHojaEstilizada } from "./excel-estilos.js";
 import { notificarExito } from "./notificaciones.js";
 
 let ultimoResultado = [];   // detalle tal cual vino del servidor (con el filtro aplicado)
-let vistaActual = "detalle"; // 'detalle' | 'resumen'
+let vistaActual = "detalle"; // 'detalle' | 'resumen'  (solo aplica cuando modoConsulta === 'general')
+let modoConsulta = "general"; // 'general' | 'a_pedir' | 'pendiente'
+
+const ETIQUETAS_MODO = {
+  a_pedir: "A pedir",
+  pendiente: "Pendiente"
+};
 
 function render() {
   const cont = document.getElementById("consultas-contenido");
@@ -62,6 +68,22 @@ function render() {
             <label class="form-label" for="consulta-fecha-hasta">Fecha hasta</label>
             <input type="date" id="consulta-fecha-hasta" class="input-modern">
           </div>
+        </div>
+
+        <div>
+          <label class="form-label">¿Qué quieres consultar?</label>
+          <div style="display:flex; flex-wrap:wrap; gap:16px; margin-top:4px">
+            <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer">
+              <input type="radio" name="modo-consulta" value="general" checked> General (todas las columnas, detalle + resumen)
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer">
+              <input type="radio" name="modo-consulta" value="a_pedir"> Total "A pedir" por material
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer">
+              <input type="radio" name="modo-consulta" value="pendiente"> Total "Pendiente" por material
+            </label>
+          </div>
+          <p class="vista-sub" style="margin:4px 0 0 0; font-size:11.5px">Las dos últimas opciones traen un solo renglón por material (sin repetir código), ya sumado entre todas las tiendas/filtros elegidos.</p>
         </div>
       </div>
 
@@ -126,6 +148,7 @@ async function ejecutarConsulta() {
     }
 
     ultimoResultado = resp.materiales || [];
+    modoConsulta = (document.querySelector('input[name="modo-consulta"]:checked') || {}).value || "general";
     vistaActual = "detalle";
     estadoTexto.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${ultimoResultado.length} fila(s) encontrada(s).`;
     estadoTexto.style.color = 'var(--verde-kpi)';
@@ -169,12 +192,34 @@ function agruparPorMaterial(materiales) {
   return Object.values(mapa).map(g => ({ ...g, cantidadTiendas: g.tiendas.size }));
 }
 
+/**
+ * Totaliza el detalle por material ÚNICO (sin repetir código), sumando SOLO
+ * el campo pedido ('aPedir' o 'pendiente') entre todas las tiendas/filas que
+ * hayan quedado dentro de los filtros aplicados. Para el modo "A_Pedir" /
+ * "Pendiente" de Consultas: material, descripción, UMB y el total de ese campo.
+ */
+function totalizarPorMaterial(materiales, campo) {
+  const mapa = {};
+  materiales.forEach(m => {
+    if (!mapa[m.codigo]) {
+      mapa[m.codigo] = { codigo: m.codigo, descripcion: m.descripcion, umb: m.umb, total: 0 };
+    }
+    mapa[m.codigo].total += m[campo] || 0;
+  });
+  return Object.values(mapa);
+}
+
 function mostrarResultadosConsulta() {
   const cont = document.getElementById("consulta-resultados");
   if (!cont) return;
 
   if (ultimoResultado.length === 0) {
     cont.innerHTML = `<div class="card"><p class="vista-sub" style="margin:0">No se encontraron análisis guardados con esos filtros.</p></div>`;
+    return;
+  }
+
+  if (modoConsulta === "a_pedir" || modoConsulta === "pendiente") {
+    mostrarResultadosPorMetrica();
     return;
   }
 
@@ -239,6 +284,56 @@ function mostrarResultadosConsulta() {
   renderizarTablaConsulta();
 }
 
+/** Vista enfocada para los modos "A_Pedir" / "Pendiente": un solo renglón por material, ya totalizado. */
+function mostrarResultadosPorMetrica() {
+  const cont = document.getElementById("consulta-resultados");
+  const campo = modoConsulta; // 'a_pedir' | 'pendiente' -> se traduce a la key del objeto más abajo
+  const campoJs = campo === "a_pedir" ? "aPedir" : "pendiente";
+  const etiqueta = ETIQUETAS_MODO[campo];
+
+  const totalizado = totalizarPorMaterial(ultimoResultado, campoJs)
+    .sort((a, b) => b.total - a.total);
+
+  const totalGeneral = totalizado.reduce((a, m) => a + m.total, 0);
+  const materialesUnicos = totalizado.length;
+
+  cont.innerHTML = `
+    <div class="card">
+      <div class="kpi-grid">
+        <div class="kpi-card verde">
+          <div class="kpi-icono"><i class="fa-solid fa-boxes-stacked"></i></div>
+          <div class="label">Materiales únicos</div>
+          <div class="valor">${materialesUnicos}</div>
+        </div>
+        <div class="kpi-card ambar">
+          <div class="kpi-icono"><i class="fa-solid fa-cart-shopping"></i></div>
+          <div class="label">Total "${etiqueta}" (suma de todas las tiendas/filtros)</div>
+          <div class="valor">${totalGeneral}</div>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; margin-bottom:14px">
+        <button id="btn-descargar-consulta" class="btn-secundario"><i class="fa-solid fa-download"></i> Descargar Excel</button>
+      </div>
+
+      <div id="consulta-tabla-container"></div>
+      <p class="vista-sub" style="margin-top:10px"><i class="fa-solid fa-circle-info"></i> Un renglón por material (sin repetir código), ya sumado entre las tiendas/filtros elegidos. Esta consulta solo trae el ÚLTIMO análisis guardado por cada tienda/usuario.</p>
+    </div>
+  `;
+
+  const columnas = [
+    { key: 'codigo', label: 'Código' },
+    { key: 'descripcion', label: 'Descripción' },
+    { key: 'umb', label: 'UMB' },
+    { key: 'total', label: etiqueta, numeric: true }
+  ];
+  const container = document.getElementById('consulta-tabla-container');
+  const { renderizar } = crearTablaPaginada(container, columnas, 50);
+  renderizar(totalizado);
+
+  document.getElementById("btn-descargar-consulta").addEventListener("click", descargarConsultaExcel);
+}
+
 function renderizarTablaConsulta() {
   const container = document.getElementById("consulta-tabla-container");
   if (!container) return;
@@ -282,6 +377,25 @@ function renderizarTablaConsulta() {
 
 function descargarConsultaExcel() {
   const wb = XLSX.utils.book_new();
+
+  if (modoConsulta === "a_pedir" || modoConsulta === "pendiente") {
+    const campoJs = modoConsulta === "a_pedir" ? "aPedir" : "pendiente";
+    const etiqueta = ETIQUETAS_MODO[modoConsulta];
+    const totalizado = totalizarPorMaterial(ultimoResultado, campoJs).sort((a, b) => b.total - a.total);
+
+    const columnas = [
+      { key: 'codigo', label: 'Material', ancho: 14 },
+      { key: 'descripcion', label: 'Descripcion', ancho: 42 },
+      { key: 'umb', label: 'UMB', ancho: 8 },
+      { key: 'total', label: etiqueta.replace(/\s+/g, '_'), ancho: 14 }
+    ];
+    XLSX.utils.book_append_sheet(wb, construirHojaEstilizada(totalizado, columnas), `Total ${etiqueta}`.slice(0, 31));
+
+    const fecha = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `Consulta_${etiqueta.replace(/\s+/g, '_')}_${fecha}.xlsx`);
+    notificarExito(`El Excel con el total de "${etiqueta}" por material se descargó correctamente.`, { titulo: "Descarga lista" });
+    return;
+  }
 
   const columnasDetalle = [
     { key: 'tienda', label: 'Tienda', ancho: 16 },
