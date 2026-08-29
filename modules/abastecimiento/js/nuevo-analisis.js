@@ -3,7 +3,7 @@ import { parsearMHT, aNumero } from "./mht-parser.js";
 import { procesarVentas, calcularRangoFechasVentas } from "./ventas-parser.js";
 import { cargarFactoresConversion } from "./factores-conversion.js";
 import { cargarCodigosExcluidos } from "./exclusiones.js";
-import { agruparStock, procesarNotasPendientes } from "./stock-parser.js";
+import { agruparStock, procesarNotasPendientes, restarNotasPendientesDeKacosa } from "./stock-parser.js";
 import { cargarPaquetes } from "./paquetes.js";
 import { cargarUbicaciones, obtenerUbicacion } from "./ubicaciones.js";
 import { calcularAbastecimiento } from "./calculo-abastecimiento.js";
@@ -1003,7 +1003,10 @@ async function ejecutarAnalisis() {
 
     estadoTexto.textContent = "Agrupando stock por material...";
     const stockTienda = agruparStock(filasStockTienda, centrosValidos);
-    const stockKacosa = agruparStock(filasStockKacosa, CENTROS_KACOSA);
+    // CAMBIO 28-ago-2026: el stock Kacosa ahora solo considera "Libre
+    // utilización" (antes también sumaba Trans./Trasl. y Devoluciones). El
+    // stock de tienda no cambia.
+    const stockKacosa = agruparStock(filasStockKacosa, CENTROS_KACOSA, { soloLibreUtilizacion: true });
 
     // Mapa código -> UMB (unidad de medida base), tomado del stock: Kacosa primero,
     // stock tienda como respaldo si el material no aparece ahí — mismo criterio que
@@ -1034,8 +1037,11 @@ async function ejecutarAnalisis() {
       const filasNotas = parsearMHT(await archivoNotasPendientes.text());
       if (fueCancelado()) return;
       
-      // Validar que el archivo de notas contenga el centro correcto
-      const errorNotas = validarCentroNotasPendientes(filasNotas, centrosValidos);
+      // CAMBIO 28-ago-2026: el archivo puede traer varios centros receptores
+      // a la vez (una nota por cada tienda destino) — eso es normal y
+      // esperado, ya no se exige que coincida con la tienda que se está
+      // analizando (ver validarNotasPendientes).
+      const errorNotas = validarNotasPendientes(filasNotas);
       if (errorNotas) {
         estadoTexto.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' + errorNotas;
         btnAnalizar.disabled = false;
@@ -1047,11 +1053,18 @@ async function ejecutarAnalisis() {
       }
       
       estadoTexto.textContent = "Procesando notas pendientes por despacho...";
+      // Las notas hacia el centro de ESTA tienda (cantidadPropia) se restarán
+      // de su "a pedir"; las notas hacia CUALQUIER OTRO centro (cantidadOtros)
+      // se restan del stock Kacosa disponible (ver más abajo).
       notasPendientes = procesarNotasPendientes(filasNotas, centrosValidos);
       if (notasPendientes && Object.keys(notasPendientes).length > 0) {
+        // Solo la parte de OTROS centros se resta del stock Kacosa ANTES de
+        // calcular; la parte propia de esta tienda se resta de su "a pedir"
+        // después de calcularAbastecimiento (ver finalizarCalculo).
+        restarNotasPendientesDeKacosa(stockKacosa, notasPendientes);
         estadoTexto.textContent = `Se encontraron ${Object.keys(notasPendientes).length} material(es) con notas pendientes por despacho.`;
       } else {
-        estadoTexto.textContent = "No se encontraron notas pendientes para esta tienda.";
+        estadoTexto.textContent = "No se encontraron notas pendientes por despacho en el archivo.";
       }
     }
 
@@ -1125,29 +1138,15 @@ async function ejecutarAnalisis() {
 }
 
 /**
- * Valida que el archivo de notas pendientes por despacho contenga al menos un
- * centro receptor que coincida con los centros de la tienda seleccionada.
+ * Valida el archivo de notas pendientes por despacho. Ya NO exige que el
+ * centro receptor coincida con la tienda que se está analizando —el archivo
+ * puede (y normalmente va a) traer varios centros a la vez, uno por cada nota
+ * pendiente hacia cualquier tienda— solo valida que el archivo tenga datos.
  */
-function validarCentroNotasPendientes(filas, centrosValidos) {
+function validarNotasPendientes(filas) {
   if (filas.length === 0) {
     return "El archivo de notas pendientes está vacío o no tiene datos.";
   }
-
-  const centrosEnNotas = new Set();
-  filas.forEach(f => {
-    const centro = String(f["Centro Receptor"] || "").trim();
-    if (centro) centrosEnNotas.add(centro);
-  });
-
-  if (centrosEnNotas.size === 0) {
-    return "El archivo de notas pendientes no tiene datos de 'Centro Receptor' reconocibles.";
-  }
-
-  const centrosCoincidentes = [...centrosEnNotas].filter(c => centrosValidos.includes(c));
-  if (centrosCoincidentes.length === 0) {
-    return `El archivo de notas pendientes contiene el/los centro(s) ${[...centrosEnNotas].join(", ")}, pero la tienda seleccionada corresponde a ${centrosValidos.join(" o ")}. Verifica que subiste el archivo correcto.`;
-  }
-
   return null;
 }
 
@@ -1231,19 +1230,26 @@ async function finalizarCalculo(gruposConfirmados) {
     margenPct: estado.margenPct
   });
 
-  // Aplicar ajuste por notas pendientes por despacho
+  // Notas pendientes por despacho: la parte hacia OTROS centros ya se restó
+  // del stock Kacosa ANTES de calcularAbastecimiento (ver
+  // restarNotasPendientesDeKacosa más arriba); aquí solo falta restar la
+  // parte PROPIA de esta tienda (lo que ya viene en camino hacia ella) de su
+  // "a pedir". La columna "Por despacho" muestra el TOTAL (propia + otros) y
+  // los números/fechas de nota se muestran todos juntos, sin importar el
+  // centro al que iba cada uno.
   if (estado.notasPendientes && Object.keys(estado.notasPendientes).length > 0) {
     estadoTexto.textContent = "Aplicando ajuste por notas pendientes por despacho...";
     resultado = resultado.map(m => {
       const nota = estado.notasPendientes[m.codigo];
       if (nota) {
-        const cantidadPendiente = nota.cantidad || 0;
-        // Restar del A_Pedir, sin bajar de 0
-        const aPedirAjustado = Math.max(0, (m.aPedir || 0) - cantidadPendiente);
+        const cantidadPropia = nota.cantidadPropia || 0;
+        const cantidadOtros = nota.cantidadOtros || 0;
+        // Restar del A_Pedir solo lo que ya viene en camino hacia ESTA tienda, sin bajar de 0
+        const aPedirAjustado = Math.max(0, (m.aPedir || 0) - cantidadPropia);
         return {
           ...m,
           aPedir: aPedirAjustado,
-          porDespacho: cantidadPendiente,
+          porDespacho: cantidadPropia + cantidadOtros,
           numeroDeNota: nota.numeroNota || '',
           fechaDeNota: nota.fechaNota || ''
         };
