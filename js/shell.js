@@ -66,6 +66,19 @@ const MODULES = [
         icon: "fa-magnifying-glass",
         src: "modules/inventario/index.html#section=home",
         roles: ROLES_INVENTARIO
+      },
+      {
+        id: "toma-fisica",
+        label: "Inventario Físico",
+        icon: "fa-clipboard-list",
+        src: "modules/inventario/index.html#section=fisico",
+        // Se agrega "analista" además de los roles habituales: la Fase 2b
+        // (Captura Móvil) la usará el analista de campo. Para que un
+        // usuario vea esta pestaña, su documento en Firestore
+        // ("usuarios" > campo "rol") debe tener el valor "analista" —
+        // es un rol de PORTAL (shell), distinto del rol "analista" que
+        // ya existe en la tabla "usuarios" de Supabase.
+        roles: [...ROLES_INVENTARIO, "analista"]
       }
     ]
   },
