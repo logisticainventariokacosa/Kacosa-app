@@ -734,7 +734,18 @@ thead tr {
   border-bottom: 2px solid var(--borde);
 }
 
+/* Encabezado de tabla fijo (sticky): al desplazarse hacia abajo para ver más
+   materiales, el encabezado (Código, Descripción, UMB, Clase, etc.) se queda
+   visible en vez de desaparecer con el resto de la fila. El "top" coincide
+   con la altura del header fijo de la app (.app-header, min-height:64px) para
+   que el encabezado de la tabla se pegue justo debajo, sin taparlo.
+   Se aplica a "th" (no a "thead") porque el soporte de position:sticky sobre
+   <thead> es inconsistente entre navegadores; sobre <th> funciona en todos. */
 th {
+  position: sticky;
+  top: 64px;
+  z-index: 10;
+  background: var(--blanco);
   padding: 10px 8px;
   text-align: left;
   font-weight: 600;
@@ -742,7 +753,6 @@ th {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  position: relative;
 }
 
 th:hover {
@@ -757,6 +767,25 @@ td {
 }
 
 tbody tr:hover {
+  background: var(--fondo);
+}
+
+/* Columna de acción (excluir/deshacer) de la tabla "Materiales a pedir":
+   se fija al borde derecho para que el botón quede siempre visible sin tener
+   que desplazarse hasta el final de la tabla en pantallas angostas — como el
+   encabezado (arriba), pero fijo a la derecha en vez de arriba. Se limita a
+   esta tabla en particular (#na-tabla-container) porque es la única con
+   botón de acción por fila; las demás tablas (Dashboard, Alertas Kacosa,
+   Consultas) no lo necesitan. */
+#na-tabla-container td:last-child,
+#na-tabla-container th:last-child {
+  position: sticky;
+  right: 0;
+  background: var(--blanco);
+  z-index: 11; /* por encima del resto del thead sticky (z-index:10) en la esquina superior derecha */
+  box-shadow: -6px 0 8px -6px rgba(0, 0, 0, 0.15);
+}
+#na-tabla-container tbody tr:hover td:last-child {
   background: var(--fondo);
 }
 
@@ -1018,7 +1047,13 @@ tbody tr.fila-excluida:hover {
     padding: 10px 16px;
     min-height: 56px;
   }
-  
+
+  /* El encabezado sticky de las tablas debe coincidir con la nueva altura
+     del header fijo de la app en pantallas chicas (56px en vez de 64px). */
+  th {
+    top: 56px;
+  }
+
   .brand-icon h2 {
     font-size: 15px;
   }
@@ -1493,7 +1528,7 @@ tbody tr.fila-excluida:hover {
   font-size: 14px;
   cursor: pointer;
 }
-.kn-boton:hover { background: var(--azul-base-alto); }
+.kn-boton:hover { background: var(--azul-medio); }
 
 /* --- Variante "larga": avisos que no se cierran solos (ej. lista de
    materiales sin factor de conversión configurado al terminar un análisis).
