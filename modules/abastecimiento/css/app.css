@@ -713,9 +713,23 @@ textarea.input-modern {
 /* --- Tablas --- */
 .table-responsive {
   overflow-x: auto;
+  overflow-y: visible; /* ver nota abajo: CRÍTICO para que el encabezado sticky funcione */
   -webkit-overflow-scrolling: touch;
   margin: 0 -4px;
 }
+/* NOTA: si "overflow-y" no se fija explícito en "visible", el navegador la
+   calcula sola como "auto" en cuanto "overflow-x" no es "visible" (así lo
+   dice la propia especificación de CSS) — y ese "auto" convierte a este DIV
+   en su PROPIO contenedor de scroll vertical, aunque nunca se vea una barra
+   de scroll (porque su alto ya se ajusta a su contenido). El problema es que
+   el encabezado sticky (position:sticky; top:64px) empieza a "pegarse" con
+   respecto A ESE DIV en vez de con respecto a toda la página — y como el div
+   no se desplaza, el encabezado terminaba fijo a medio camino de las filas,
+   superpuesto con ellas, en lugar de pegarse debajo del header de la app al
+   hacer scroll en la página real. Con overflow-y:visible forzado, el único
+   contenedor de scroll vertical vuelve a ser la página completa, y el
+   encabezado se pega correctamente debajo del header al desplazarse.
+*/
 
 .table-responsive table {
   min-width: 600px;
