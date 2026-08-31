@@ -43,6 +43,21 @@
 
   function render(cont) {
     cont.innerHTML = `
+      <style>
+        .fisico-inv-card{border:1px solid rgba(100,116,139,0.25);border-radius:12px;padding:14px 16px;margin-bottom:12px;background:var(--card-bg);}
+        .fisico-inv-card .fisico-top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
+        .fisico-inv-card .fisico-titulo{font-weight:600;}
+        .fisico-badge{font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;}
+        .fisico-badge.falta{background:#fee2e2;color:#991b1b;}
+        .fisico-badge.sobra{background:#fef3c7;color:#92400e;}
+        .fisico-badge.ok{background:#dcfce7;color:#166534;}
+        html.kacosa-dark .fisico-badge.falta{background:#7f1d1d;color:#fecaca;}
+        html.kacosa-dark .fisico-badge.sobra{background:#78350f;color:#fde68a;}
+        html.kacosa-dark .fisico-badge.ok{background:#14532d;color:#bbf7d0;}
+        .fisico-inv-card .fisico-meta{margin-top:6px;font-size:0.9rem;}
+        .fisico-inv-card .fisico-acciones{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
+        .fisico-inv-card .fisico-acciones button{padding:8px 14px;font-size:0.9rem;}
+      </style>
       <div class="search-card">
         <h2>${inventarioActivo.nombre_centro} · Almacén ${inventarioActivo.almacen}</h2>
         <p class="muted">Inventario abierto — día ${inventarioActivo.dias_transcurridos}</p>
@@ -63,6 +78,9 @@
       <div class="row" id="capturaVideoAcciones" style="display:none; margin-top:8px;">
         <button class="alt" id="btnCerrarCamara">Cerrar cámara</button>
       </div>
+
+      <h3 style="margin-top:28px;margin-bottom:12px;">Mis conteos pendientes</h3>
+      <div id="misConteosLista"><p class="muted">Cargando...</p></div>
     `;
 
     document.getElementById('btnBuscarCodigo').addEventListener('click', () => buscarCodigo());
@@ -73,6 +91,82 @@
     });
     document.getElementById('btnEscanearCamaraCodigo').addEventListener('click', () => abrirCamara('capturaCodigo'));
     document.getElementById('btnCerrarCamara').addEventListener('click', cerrarCamara);
+
+    cargarMisConteos();
+  }
+
+  function emailActual() {
+    return window.firebase && firebase.auth().currentUser ? firebase.auth().currentUser.email : '';
+  }
+
+  // Solo lo que ESTE analista contó, en ESTE inventario (que ya sabemos
+  // que está abierto, porque solo llegamos aquí si lo está), y que
+  // todavía no pasó a otra etapa: sin contabilizar, no preliminar, no
+  // verificado. En cuanto el supervisor cambia cualquiera de esos tres,
+  // el registro deja de aparecer en la lista del analista.
+  async function cargarMisConteos() {
+    const cont = document.getElementById('misConteosLista');
+    if (!cont) return;
+    cont.innerHTML = '<p class="muted">Cargando...</p>';
+
+    try {
+      const filas = await window.supabaseDirecto.request(
+        'GET',
+        'maestro_conteo?id_inventario_ref=eq.' + inventarioActivo.id_inventario +
+        '&usuario_asignado=eq.' + encodeURIComponent(emailActual()) +
+        '&documento=eq.' + encodeURIComponent('sin contabilizar') +
+        '&preliminar=eq.false&verificado=eq.false' +
+        '&select=*&order=fecha_ultimo_conteo.desc'
+      );
+
+      if (!filas || !filas.length) {
+        cont.innerHTML = '<p class="muted">Todavía no has registrado conteos en este inventario.</p>';
+        return;
+      }
+
+      cont.innerHTML = filas.map(f => `
+        <div class="fisico-inv-card" data-id="${f.unique_id}">
+          <div class="fisico-top">
+            <span class="fisico-titulo">${f.material} — ${f.descripcion_material || 'Sin descripción'}</span>
+            <span class="fisico-badge ${f.estatus_diferencia || ''}">${f.estatus_diferencia || '—'}</span>
+          </div>
+          <div class="fisico-meta muted">
+            Ubicación: ${f.ubicacion_fisica || '—'} · Conteo: ${f.conteo} · Sistema: ${f.libre_utilizacion}
+          </div>
+          <div class="fisico-acciones">
+            <button class="alt" data-editar="${f.unique_id}">Ver / editar</button>
+          </div>
+        </div>
+      `).join('');
+
+      cont.querySelectorAll('button[data-editar]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const fila = filas.find(f => String(f.unique_id) === btn.dataset.editar);
+          if (fila) cargarParaEditar(fila);
+        });
+      });
+    } catch (err) {
+      cont.innerHTML = `<p class="muted">Error al cargar tus conteos: ${err.message}</p>`;
+    }
+  }
+
+  // Reutiliza el mismo formulario de captura, precargado con un registro
+  // que ya existe (los datos del material ya están guardados en la fila,
+  // no hace falta volver a consultar maestro_materiales/UBICACIONES/stock).
+  function cargarParaEditar(fila) {
+    materialActual = {
+      material: fila.material,
+      descripcion: fila.descripcion_material,
+      umb: fila.unidad_medida_base,
+      ubicacionSistema: fila.ubicacion_sistema,
+      libreUtilizacion: fila.libre_utilizacion,
+      codigoEan: fila.codigo_ean,
+      existente: fila
+    };
+    document.getElementById('capturaCodigo').value = fila.codigo_ean || fila.material;
+    document.getElementById('capturaEstado').textContent = 'Editando un conteo existente.';
+    renderFormulario();
+    document.getElementById('capturaFormulario').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   async function buscarCodigo() {
@@ -256,6 +350,7 @@
         // Storage (guardar solo la URL) — queda como mejora futura.
       }
 
+      const emailUsuario = window.firebase && firebase.auth().currentUser ? firebase.auth().currentUser.email : '';
       const filaBase = {
         id_inventario_ref: inventarioActivo.id_inventario,
         material: m.material,
@@ -270,8 +365,8 @@
         nombre_centro: inventarioActivo.nombre_centro,
         centro: inventarioActivo.centro,
         almacen: inventarioActivo.almacen,
-        usuario_asignado: perfil.rol,
-        correo_ultimo_auditor: window.firebase && firebase.auth().currentUser ? firebase.auth().currentUser.email : '',
+        usuario_asignado: emailUsuario,
+        correo_ultimo_auditor: emailUsuario,
         observacion: observacion
       };
       if (imagenBase64) filaBase.imagen_visual = imagenBase64;
@@ -295,6 +390,7 @@
 
       status.textContent = 'Conteo guardado correctamente.';
       cancelarCaptura();
+      cargarMisConteos();
     } catch (err) {
       status.textContent = 'No se pudo guardar: ' + err.message;
     }
