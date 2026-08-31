@@ -1019,12 +1019,6 @@ tbody tr.fila-excluida:hover {
     min-height: 56px;
   }
 
-  /* El encabezado sticky de las tablas debe coincidir con la nueva altura
-     del header fijo de la app en pantallas chicas (56px en vez de 64px). */
-  th {
-    top: 56px;
-  }
-
   .brand-icon h2 {
     font-size: 15px;
   }
