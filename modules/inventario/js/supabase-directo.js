@@ -10,7 +10,7 @@
 //                    de la "anon key" clásica — NO es la "secret key").
 (function () {
   const SUPABASE_URL = "https://nlrgneggfqhmwszzbydb.supabase.co";
-  const PUBLISHABLE_KEY = "PEGA_AQUI_TU_SUPABASE_PUBLISHABLE_KEY";
+  const PUBLISHABLE_KEY = "sb_publishable_3w3-FLBmhA3NPqwXVdm3AQ_OxTGvPix";
 
   let tokenActual = null;
   let expiraEn = 0; // epoch ms
