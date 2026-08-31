@@ -61,21 +61,24 @@
       </div>
 
       <h3 style="margin-top:30px;margin-bottom:15px">Inventarios</h3>
-      <div class="table-container">
-        <table class="inventory-table" id="tablaInventarios">
-          <thead>
-            <tr>
-              <th>Centro</th>
-              <th>Almacén</th>
-              <th>Estado</th>
-              <th>Días transcurridos</th>
-              <th>Apertura</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
+      <style>
+        .fisico-inv-card{border:1px solid rgba(100,116,139,0.25);border-radius:12px;padding:14px 16px;margin-bottom:12px;background:var(--card-bg);}
+        .fisico-inv-card .fisico-top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
+        .fisico-inv-card .fisico-titulo{font-weight:600;}
+        .fisico-badge{font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;}
+        .fisico-badge.abierto{background:#dcfce7;color:#166534;}
+        .fisico-badge.pausado{background:#fef3c7;color:#92400e;}
+        .fisico-badge.cerrado{background:#e2e8f0;color:#334155;}
+        .fisico-badge.cancelado{background:#fee2e2;color:#991b1b;}
+        html.kacosa-dark .fisico-badge.abierto{background:#14532d;color:#bbf7d0;}
+        html.kacosa-dark .fisico-badge.pausado{background:#78350f;color:#fde68a;}
+        html.kacosa-dark .fisico-badge.cerrado{background:#334155;color:#e2e8f0;}
+        html.kacosa-dark .fisico-badge.cancelado{background:#7f1d1d;color:#fecaca;}
+        .fisico-inv-card .fisico-meta{margin-top:6px;font-size:0.9rem;}
+        .fisico-inv-card .fisico-acciones{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
+        .fisico-inv-card .fisico-acciones button{padding:8px 14px;font-size:0.9rem;}
+      </style>
+      <div id="listaInventarios"></div>
     `;
 
     document.getElementById('fisicoCentro').addEventListener('change', cargarAlmacenesDelCentro);
@@ -122,32 +125,35 @@
   }
 
   async function refrescarListado() {
-    const tbody = document.querySelector('#tablaInventarios tbody');
-    if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="6" class="muted">Cargando...</td></tr>';
+    const cont = document.getElementById('listaInventarios');
+    if (!cont) return;
+    cont.innerHTML = '<p class="muted">Cargando...</p>';
 
     const resp = await window.callBridgeInventario('listarInventarios', {});
     if (!resp.ok) {
-      tbody.innerHTML = `<tr><td colspan="6" class="muted">${resp.error}</td></tr>`;
+      cont.innerHTML = `<p class="muted">${resp.error}</p>`;
       return;
     }
     if (!resp.inventarios.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="muted">No hay inventarios registrados todavía.</td></tr>';
+      cont.innerHTML = '<p class="muted">No hay inventarios registrados todavía.</p>';
       return;
     }
 
-    tbody.innerHTML = resp.inventarios.map(inv => `
-      <tr>
-        <td>${inv.nombre_centro || inv.centro}</td>
-        <td>${inv.almacen}</td>
-        <td>${inv.estado}</td>
-        <td>${inv.dias_transcurridos}</td>
-        <td>${new Date(inv.fecha_apertura).toLocaleDateString('es-VE')}</td>
-        <td>${botonesAccion(inv)}</td>
-      </tr>
+    cont.innerHTML = resp.inventarios.map(inv => `
+      <div class="fisico-inv-card">
+        <div class="fisico-top">
+          <span class="fisico-titulo">${inv.nombre_centro || inv.centro} · Almacén ${inv.almacen}</span>
+          <span class="fisico-badge ${inv.estado}">${inv.estado}</span>
+        </div>
+        <div class="fisico-meta muted">
+          Apertura: ${new Date(inv.fecha_apertura).toLocaleDateString('es-VE')} ·
+          Días transcurridos: ${inv.dias_transcurridos}
+        </div>
+        <div class="fisico-acciones">${botonesAccion(inv)}</div>
+      </div>
     `).join('');
 
-    tbody.querySelectorAll('button[data-accion]').forEach(btn => {
+    cont.querySelectorAll('button[data-accion]').forEach(btn => {
       btn.addEventListener('click', () => cambiarEstado(btn.dataset.id, btn.dataset.accion));
     });
   }
@@ -161,11 +167,11 @@
     }
     if (inv.estado === 'pausado') {
       return `
-        <button class="alt" data-accion="abierto" data-id="${inv.id_inventario}">Reanudar</button>
+        <button data-accion="abierto" data-id="${inv.id_inventario}">Reanudar</button>
         <button class="alt" data-accion="cerrado" data-id="${inv.id_inventario}">Cerrar</button>
       `;
     }
-    return '—';
+    return '<span class="muted">Sin acciones disponibles</span>';
   }
 
   async function cambiarEstado(idInventario, nuevoEstado) {
