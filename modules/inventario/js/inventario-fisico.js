@@ -25,7 +25,11 @@
     perfilActual = resp;
 
     if (resp.rol === 'analista') {
-      cont.innerHTML = '<p class="muted">Este submódulo es solo para supervisores y coordinadores. Usa "Captura Móvil" para registrar tus conteos.</p>';
+      if (typeof window.iniciarCapturaMovil === 'function') {
+        await window.iniciarCapturaMovil(cont, perfilActual);
+      } else {
+        cont.innerHTML = '<p class="muted">La Captura Móvil todavía no está disponible.</p>';
+      }
       return;
     }
 
