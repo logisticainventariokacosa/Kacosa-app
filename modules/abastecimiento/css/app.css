@@ -713,23 +713,9 @@ textarea.input-modern {
 /* --- Tablas --- */
 .table-responsive {
   overflow-x: auto;
-  overflow-y: visible; /* ver nota abajo: CRÍTICO para que el encabezado sticky funcione */
   -webkit-overflow-scrolling: touch;
   margin: 0 -4px;
 }
-/* NOTA: si "overflow-y" no se fija explícito en "visible", el navegador la
-   calcula sola como "auto" en cuanto "overflow-x" no es "visible" (así lo
-   dice la propia especificación de CSS) — y ese "auto" convierte a este DIV
-   en su PROPIO contenedor de scroll vertical, aunque nunca se vea una barra
-   de scroll (porque su alto ya se ajusta a su contenido). El problema es que
-   el encabezado sticky (position:sticky; top:64px) empieza a "pegarse" con
-   respecto A ESE DIV en vez de con respecto a toda la página — y como el div
-   no se desplaza, el encabezado terminaba fijo a medio camino de las filas,
-   superpuesto con ellas, en lugar de pegarse debajo del header de la app al
-   hacer scroll en la página real. Con overflow-y:visible forzado, el único
-   contenedor de scroll vertical vuelve a ser la página completa, y el
-   encabezado se pega correctamente debajo del header al desplazarse.
-*/
 
 .table-responsive table {
   min-width: 600px;
@@ -748,18 +734,7 @@ thead tr {
   border-bottom: 2px solid var(--borde);
 }
 
-/* Encabezado de tabla fijo (sticky): al desplazarse hacia abajo para ver más
-   materiales, el encabezado (Código, Descripción, UMB, Clase, etc.) se queda
-   visible en vez de desaparecer con el resto de la fila. El "top" coincide
-   con la altura del header fijo de la app (.app-header, min-height:64px) para
-   que el encabezado de la tabla se pegue justo debajo, sin taparlo.
-   Se aplica a "th" (no a "thead") porque el soporte de position:sticky sobre
-   <thead> es inconsistente entre navegadores; sobre <th> funciona en todos. */
 th {
-  position: sticky;
-  top: 64px;
-  z-index: 10;
-  background: var(--blanco);
   padding: 10px 8px;
   text-align: left;
   font-weight: 600;
@@ -767,6 +742,7 @@ th {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  position: relative;
 }
 
 th:hover {
@@ -781,25 +757,6 @@ td {
 }
 
 tbody tr:hover {
-  background: var(--fondo);
-}
-
-/* Columna de acción (excluir/deshacer) de la tabla "Materiales a pedir":
-   se fija al borde derecho para que el botón quede siempre visible sin tener
-   que desplazarse hasta el final de la tabla en pantallas angostas — como el
-   encabezado (arriba), pero fijo a la derecha en vez de arriba. Se limita a
-   esta tabla en particular (#na-tabla-container) porque es la única con
-   botón de acción por fila; las demás tablas (Dashboard, Alertas Kacosa,
-   Consultas) no lo necesitan. */
-#na-tabla-container td:last-child,
-#na-tabla-container th:last-child {
-  position: sticky;
-  right: 0;
-  background: var(--blanco);
-  z-index: 11; /* por encima del resto del thead sticky (z-index:10) en la esquina superior derecha */
-  box-shadow: -6px 0 8px -6px rgba(0, 0, 0, 0.15);
-}
-#na-tabla-container tbody tr:hover td:last-child {
   background: var(--fondo);
 }
 
