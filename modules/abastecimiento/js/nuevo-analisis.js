@@ -13,7 +13,7 @@ import { callBridge } from "./bridge.js";
 import { crearTablaPaginada } from "./tabla-utils.js";
 import { notificarExito, confirmarAccion } from "./notificaciones.js";
 import { construirHojaEstilizada, construirHojaResumen } from "./excel-estilos.js";
-import { leerXLSXGenerico, procesarPendientesSync, restarPendientesSync } from "./pendientes-sync-parser.js";
+import { procesarPendientesSync, restarPendientesSync } from "./pendientes-sync-parser.js";
 
 const CENTROS_KACOSA = ["1000", "3000"];
 
@@ -29,7 +29,7 @@ const CONFIG_ARCHIVOS = [
   { id: 'na-stock-tienda', nameId: 'file-name-stock-tienda', statusId: 'file-status-stock-tienda', wrapperId: 'file-wrapper-stock-tienda', validId: 'validacion-stock-tienda', clearId: 'file-clear-stock-tienda', tipo: 'stock', opcional: false },
   { id: 'na-stock-kacosa', nameId: 'file-name-stock-kacosa', statusId: 'file-status-stock-kacosa', wrapperId: 'file-wrapper-stock-kacosa', validId: 'validacion-stock-kacosa', clearId: 'file-clear-stock-kacosa', tipo: 'stock', opcional: false },
   { id: 'na-notas-pendientes', nameId: 'file-name-notas-pendientes', statusId: 'file-status-notas-pendientes', wrapperId: 'file-wrapper-notas-pendientes', validId: 'validacion-notas-pendientes', clearId: 'file-clear-notas-pendientes', tipo: 'notas', opcional: true },
-  { id: 'na-pendientes-sync', nameId: 'file-name-pendientes-sync', statusId: 'file-status-pendientes-sync', wrapperId: 'file-wrapper-pendientes-sync', validId: 'validacion-pendientes-sync', clearId: 'file-clear-pendientes-sync', tipo: 'xlsx', opcional: true }
+  { id: 'na-pendientes-sync', nameId: 'file-name-pendientes-sync', statusId: 'file-status-pendientes-sync', wrapperId: 'file-wrapper-pendientes-sync', validId: 'validacion-pendientes-sync', clearId: 'file-clear-pendientes-sync', tipo: 'pendientes-sync', opcional: true }
 ];
 
 // IDs de todos los campos del formulario que deben bloquearse mientras se procesa
@@ -117,9 +117,15 @@ const COLUMNAS_NOTAS_PENDIENTES = [
   "Material", "Texto breve", "Centro Receptor", "Entrega", "Fec. Entrega", "Cant Entrega"
 ];
 
-// El de pendientes por sincronizar lo arma el usuario a mano en Excel: debe
-// tener EXACTAMENTE estas dos columnas, ni de más ni de menos.
-const COLUMNAS_PENDIENTES_SYNC = ["Material", "Cantidad_por_sincronizar"];
+// El de pendientes por sincronizar ahora se descarga directo de SAP como
+// .MHT (igual que ventas/stock/notas), no se arma más a mano en Excel. Debe
+// contener AL MENOS estas columnas (pueden venir más, no pasa nada — a
+// diferencia del viejo formato .xlsx que exigía columnas exactas).
+const COLUMNAS_PENDIENTES_SYNC = [
+  "Fec. Fact/Dev", "Tienda", "Almacen", "Caja", "Nro. Fact./Dev.", "F. Fiscal",
+  "Nro. Posicion", "Material", "Lote", "Cantidad", "Un.medida venta",
+  "Nro. Doc. FI", "Nro. Doc. MM", "Cl. Mov.", "Icono", "Observación"
+];
 
 // ============================================================
 //  ALMACENES PERMITIDOS (columna "Almacén" de los archivos de stock)
@@ -430,11 +436,11 @@ function render() {
           <span class="file-icon"><i class="fa-solid fa-arrows-rotate"></i></span>
           <div class="file-info">
             <div class="file-name" id="file-name-pendientes-sync">Seleccionar archivo</div>
-            <div class="file-hint">.xlsx propio · Columnas: Material, Cantidad_por_sincronizar</div>
+            <div class="file-hint">.MHT de SAP · Materiales pendientes por sincronizar</div>
           </div>
           <span class="file-status empty" id="file-status-pendientes-sync">Sin usar</span>
           <button type="button" class="file-clear-btn" id="file-clear-pendientes-sync" title="Quitar archivo" style="display:none"><i class="fa-solid fa-xmark"></i></button>
-          <input type="file" id="na-pendientes-sync" accept=".xlsx,.xls">
+          <input type="file" id="na-pendientes-sync" accept=".mht,.MHT">
         </div>
         <div id="validacion-pendientes-sync" class="estado-texto" style="color:var(--verde-kpi); font-size:12px; margin-top:4px"></div>
       </div>
@@ -534,25 +540,17 @@ function render() {
 
           if (validEl && tipo) {
             try {
-              // El archivo de pendientes por sincronizar es un .xlsx real (no un
-              // .MHT de SAP) y exige columnas EXACTAS, ni de más ni de menos.
-              const filas = tipo === 'xlsx'
-                ? await leerXLSXGenerico(input.files[0])
-                : parsearMHT(await input.files[0].text());
+              const filas = parsearMHT(await input.files[0].text());
 
               if (tipo === 'stock') cacheFilasStock[id] = filas;
 
-              let resultado;
-              if (tipo === 'xlsx') {
-                resultado = validarColumnasExactas(filas, COLUMNAS_PENDIENTES_SYNC);
-              } else {
-                let columnasRequeridas;
-                if (tipo === 'ventas') columnasRequeridas = COLUMNAS_VENTAS;
-                else if (tipo === 'stock') columnasRequeridas = COLUMNAS_STOCK;
-                else if (tipo === 'notas') columnasRequeridas = COLUMNAS_NOTAS_PENDIENTES;
-                else columnasRequeridas = [];
-                resultado = validarColumnasArchivo(filas, columnasRequeridas, tipo);
-              }
+              let columnasRequeridas;
+              if (tipo === 'ventas') columnasRequeridas = COLUMNAS_VENTAS;
+              else if (tipo === 'stock') columnasRequeridas = COLUMNAS_STOCK;
+              else if (tipo === 'notas') columnasRequeridas = COLUMNAS_NOTAS_PENDIENTES;
+              else if (tipo === 'pendientes-sync') columnasRequeridas = COLUMNAS_PENDIENTES_SYNC;
+              else columnasRequeridas = [];
+              let resultado = validarColumnasArchivo(filas, columnasRequeridas, tipo);
 
               let mensajeFinal = resultado.mensaje;
               let validoFinal = resultado.valido;
@@ -657,40 +655,11 @@ function validarColumnasArchivo(filas, columnasRequeridas, tipo) {
     return { valido: true, mensaje: `<i class="fa-solid fa-circle-check"></i> Archivo válido: contiene todas las columnas requeridas (${columnasRequeridas.length})`, faltantes: [] };
   }
 
-  const nombreTipo = tipo === 'ventas' ? 'ventas' : tipo === 'stock' ? 'stock' : 'notas pendientes';
+  const nombreTipo = tipo === 'ventas' ? 'ventas' : tipo === 'stock' ? 'stock' : tipo === 'notas' ? 'notas pendientes' : 'materiales pendientes por sincronizar';
   return {
     valido: false,
     mensaje: `<i class="fa-solid fa-triangle-exclamation"></i> El archivo de ${nombreTipo} no tiene las columnas correctas. Faltan: ${faltantes.join(', ')}`,
     faltantes: faltantes
-  };
-}
-
-/**
- * Igual que validarColumnasArchivo, pero exige columnas EXACTAS: ni faltan ni
- * sobran. Se usa para el archivo de "pendientes por sincronizar" (lo arma el
- * usuario a mano en Excel, así que es fácil que se cuele una columna de más
- * o un nombre distinto).
- */
-function validarColumnasExactas(filas, columnasExactas) {
-  if (filas.length === 0) {
-    return { valido: false, mensaje: '<i class="fa-solid fa-triangle-exclamation"></i> El archivo está vacío o no tiene datos' };
-  }
-
-  const columnasExistentes = Object.keys(filas[0]);
-  const faltantes = columnasExactas.filter(c => !columnasExistentes.includes(c));
-  const sobrantes = columnasExistentes.filter(c => !columnasExactas.includes(c));
-
-  if (faltantes.length === 0 && sobrantes.length === 0) {
-    return { valido: true, mensaje: `<i class="fa-solid fa-circle-check"></i> Archivo válido: contiene exactamente las columnas requeridas (${columnasExactas.join(', ')})` };
-  }
-
-  const partes = [];
-  if (faltantes.length > 0) partes.push(`le falta(n): ${faltantes.join(', ')}`);
-  if (sobrantes.length > 0) partes.push(`tiene de más (no debe traerlas): ${sobrantes.join(', ')}`);
-
-  return {
-    valido: false,
-    mensaje: `<i class="fa-solid fa-triangle-exclamation"></i> Este archivo debe contener EXACTAMENTE las columnas ${columnasExactas.join(' y ')} — ${partes.join('; ')}.`
   };
 }
 
@@ -1065,10 +1034,24 @@ async function ejecutarAnalisis() {
     // Archivo opcional de pendientes por sincronizar
     const archivoPendientesSync = document.getElementById("na-pendientes-sync").files[0];
     if (archivoPendientesSync) {
-      estadoTexto.textContent = "Aplicando pendientes por sincronizar...";
-      const filasPendientes = await leerXLSXGenerico(archivoPendientesSync);
+      estadoTexto.textContent = "Validando archivo de materiales pendientes por sincronizar...";
+      const filasPendientes = parsearMHT(await archivoPendientesSync.text());
       if (fueCancelado()) return;
-      const mapaPendientes = procesarPendientesSync(filasPendientes);
+
+      // Validar que el archivo solo traiga el centro/tienda que se está analizando
+      const errorPendientesSync = validarCentroPendientesSync(filasPendientes, centrosValidos);
+      if (errorPendientesSync) {
+        estadoTexto.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' + errorPendientesSync;
+        btnAnalizar.disabled = false;
+        btnAnalizar.innerHTML = '<i class="fa-solid fa-bolt"></i> Analizar';
+        bloquearFormulario(false);
+        estado.analizando = false;
+        if (btnDetener) btnDetener.style.display = "none";
+        return;
+      }
+
+      estadoTexto.textContent = "Aplicando pendientes por sincronizar...";
+      const mapaPendientes = procesarPendientesSync(filasPendientes, centrosValidos);
       const afectados = restarPendientesSync(stockTienda, mapaPendientes);
       if (afectados > 0) {
         estadoTexto.textContent = `Se ajustó el stock de ${afectados} material(es) por pendientes de sincronización.`;
@@ -1153,6 +1136,37 @@ function validarCentroNotasPendientes(filas, centrosValidos) {
   const centrosCoincidentes = [...centrosEnNotas].filter(c => centrosValidos.includes(c));
   if (centrosCoincidentes.length === 0) {
     return `El archivo de notas pendientes contiene el/los centro(s) ${[...centrosEnNotas].join(", ")}, pero la tienda seleccionada corresponde a ${centrosValidos.join(" o ")}. Verifica que subiste el archivo correcto.`;
+  }
+
+  return null;
+}
+
+/**
+ * Valida que el archivo de materiales pendientes por sincronizar contenga
+ * ÚNICAMENTE el centro/tienda que se está analizando. A diferencia de las
+ * notas pendientes (que sí pueden traer varios centros mezclados y solo
+ * importan las propias), este archivo debe corresponder por completo a una
+ * sola tienda: si trae aunque sea un centro distinto, se rechaza el archivo
+ * entero en vez de solo ignorar esas filas.
+ */
+function validarCentroPendientesSync(filas, centrosValidos) {
+  if (filas.length === 0) {
+    return "El archivo de materiales pendientes por sincronizar está vacío o no tiene datos.";
+  }
+
+  const centrosEnArchivo = new Set();
+  filas.forEach(f => {
+    const centro = String(f["Tienda"] || "").trim();
+    if (centro) centrosEnArchivo.add(centro);
+  });
+
+  if (centrosEnArchivo.size === 0) {
+    return "El archivo de materiales pendientes por sincronizar no tiene datos de 'Tienda' reconocibles.";
+  }
+
+  const centrosNoCoincidentes = [...centrosEnArchivo].filter(c => !centrosValidos.includes(c));
+  if (centrosNoCoincidentes.length > 0) {
+    return `El archivo de materiales pendientes por sincronizar contiene el/los centro(s) ${centrosNoCoincidentes.join(", ")}, que no corresponde(n) a la tienda seleccionada (${centrosValidos.join(" o ")}). Verifica que subiste el archivo correcto para esta tienda.`;
   }
 
   return null;
