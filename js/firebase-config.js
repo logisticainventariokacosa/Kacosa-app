@@ -4,7 +4,7 @@
 // se comparte automáticamente entre el shell y los iframes de cada submódulo
 // (misma sesión de Firebase Auth persistida en el mismo origen).
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -20,3 +20,17 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
+
+// Persistencia SOLO por sesión del navegador (no "recordar sesión" indefinido):
+// si el usuario cierra la pestaña/app sin haber tocado "Cerrar sesión", la
+// próxima vez que abra la app debe pedir login de nuevo. Con la persistencia
+// por defecto de Firebase (LOCAL) la sesión sobrevive aunque se cierre el
+// navegador por completo; con SESSION se limpia sola al cerrar la pestaña.
+// OJO: esto aplica a partir del PRÓXIMO inicio de sesión — a alguien que ya
+// esté logueado ahora mismo con la persistencia vieja no se le cierra la
+// sesión de golpe, pero si cierra su pestaña y vuelve a entrar sí tendrá que
+// loguearse de nuevo (Firebase ya habrá guardado la sesión con la nueva
+// persistencia en su primer login posterior a este cambio).
+setPersistence(auth, browserSessionPersistence).catch(err => {
+  console.error("No se pudo configurar la persistencia de sesión (SESSION):", err);
+});
