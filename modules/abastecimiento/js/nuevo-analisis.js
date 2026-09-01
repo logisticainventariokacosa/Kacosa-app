@@ -28,7 +28,7 @@ const CONFIG_ARCHIVOS = [
   { id: 'na-ventas', nameId: 'file-name-ventas', statusId: 'file-status-ventas', wrapperId: 'file-wrapper-ventas', validId: 'validacion-ventas', clearId: 'file-clear-ventas', tipo: 'ventas', opcional: false },
   { id: 'na-stock-tienda', nameId: 'file-name-stock-tienda', statusId: 'file-status-stock-tienda', wrapperId: 'file-wrapper-stock-tienda', validId: 'validacion-stock-tienda', clearId: 'file-clear-stock-tienda', tipo: 'stock', opcional: false },
   { id: 'na-stock-kacosa', nameId: 'file-name-stock-kacosa', statusId: 'file-status-stock-kacosa', wrapperId: 'file-wrapper-stock-kacosa', validId: 'validacion-stock-kacosa', clearId: 'file-clear-stock-kacosa', tipo: 'stock', opcional: false },
-  { id: 'na-notas-pendientes', nameId: 'file-name-notas-pendientes', statusId: 'file-status-notas-pendientes', wrapperId: 'file-wrapper-notas-pendientes', validId: 'validacion-notas-pendientes', clearId: 'file-clear-notas-pendientes', tipo: 'notas', opcional: true },
+  { id: 'na-notas-pendientes', nameId: 'file-name-notas-pendientes', statusId: 'file-status-notas-pendientes', wrapperId: 'file-wrapper-notas-pendientes', validId: 'validacion-notas-pendientes', clearId: 'file-clear-notas-pendientes', tipo: 'notas', opcional: false },
   { id: 'na-pendientes-sync', nameId: 'file-name-pendientes-sync', statusId: 'file-status-pendientes-sync', wrapperId: 'file-wrapper-pendientes-sync', validId: 'validacion-pendientes-sync', clearId: 'file-clear-pendientes-sync', tipo: 'pendientes-sync', opcional: true }
 ];
 
@@ -292,6 +292,7 @@ function estadoInicial() {
     stockTienda: null,
     stockKacosa: null,
     notasPendientes: null,
+    pendientesSync: null,
     clustersCandidatos: [],
     gruposCandidatos: [],
     tiendaSeleccionada: null,
@@ -413,9 +414,9 @@ function render() {
         <div id="validacion-stock-kacosa" class="estado-texto" style="color:var(--verde-kpi); font-size:12px; margin-top:4px"></div>
       </div>
 
-      <!-- Notas pendientes por despacho (opcional) -->
+      <!-- Notas pendientes por despacho (obligatorio) -->
       <div style="margin-top:16px">
-        <label class="form-label" for="na-notas-pendientes">Notas pendientes por despacho <span style="color:var(--texto-claro); font-weight:400">(opcional)</span></label>
+        <label class="form-label" for="na-notas-pendientes">Notas pendientes por despacho <span class="required">*</span></label>
         <div class="file-input-wrapper" id="file-wrapper-notas-pendientes">
           <span class="file-icon"><i class="fa-solid fa-file-invoice"></i></span>
           <div class="file-info">
@@ -670,10 +671,10 @@ function verificarArchivosValidos() {
   const requeridos = [
     { id: 'na-ventas', nombre: 'ventas' },
     { id: 'na-stock-tienda', nombre: 'stock de tienda' },
-    { id: 'na-stock-kacosa', nombre: 'stock de Kacosa' }
+    { id: 'na-stock-kacosa', nombre: 'stock de Kacosa' },
+    { id: 'na-notas-pendientes', nombre: 'notas pendientes por despacho' }
   ];
   const opcionales = [
-    { id: 'na-notas-pendientes', nombre: 'notas pendientes por despacho' },
     { id: 'na-pendientes-sync', nombre: 'materiales pendientes por sincronizar' }
   ];
 
@@ -770,6 +771,7 @@ function limpiarAnalisis() {
   estado.stockTienda = null;
   estado.stockKacosa = null;
   estado.notasPendientes = null;
+  estado.pendientesSync = null;
   estado.clustersCandidatos = [];
   estado.gruposCandidatos = [];
   estado.resultadoFinal = null;
@@ -818,6 +820,7 @@ function detenerAnalisisEnCurso() {
   estado.stockTienda = null;
   estado.stockKacosa = null;
   estado.notasPendientes = null;
+  estado.pendientesSync = null;
   estado.clustersCandidatos = [];
   estado.gruposCandidatos = [];
   estado.resultadoFinal = null;
@@ -996,7 +999,8 @@ async function ejecutarAnalisis() {
     // de los archivos que se acaban de subir. No bloquea el análisis si falla.
     sincronizarStockYMovimientos(filasVentas, filasStockTienda, filasStockKacosa);
 
-    // Archivo opcional de notas pendientes por despacho
+    // Archivo de notas pendientes por despacho (obligatorio — verificarArchivosValidos()
+    // ya garantizó arriba que está presente y es válido antes de llegar acá).
     let notasPendientes = null;
     if (archivoNotasPendientes) {
       estadoTexto.textContent = "Validando archivo de notas pendientes por despacho...";
@@ -1033,6 +1037,7 @@ async function ejecutarAnalisis() {
 
     // Archivo opcional de pendientes por sincronizar
     const archivoPendientesSync = document.getElementById("na-pendientes-sync").files[0];
+    let pendientesSync = null;
     if (archivoPendientesSync) {
       estadoTexto.textContent = "Validando archivo de materiales pendientes por sincronizar...";
       const filasPendientes = parsearMHT(await archivoPendientesSync.text());
@@ -1052,6 +1057,7 @@ async function ejecutarAnalisis() {
 
       estadoTexto.textContent = "Aplicando pendientes por sincronizar...";
       const mapaPendientes = procesarPendientesSync(filasPendientes, centrosValidos);
+      pendientesSync = mapaPendientes;
       const afectados = restarPendientesSync(stockTienda, mapaPendientes);
       if (afectados > 0) {
         estadoTexto.textContent = `Se ajustó el stock de ${afectados} material(es) por pendientes de sincronización.`;
@@ -1081,6 +1087,7 @@ async function ejecutarAnalisis() {
       ...estado,
       ventasProcesadas, stockTienda, stockKacosa,
       notasPendientes: notasPendientes || null,
+      pendientesSync: pendientesSync || null,
       clustersCandidatos: clusters, gruposCandidatos,
       tiendaSeleccionada: tienda, periodo, mesesCantidad, margenPct,
       fechaAnalisis: new Date().toLocaleDateString("es-VE"),
@@ -1302,6 +1309,13 @@ async function finalizarCalculo(gruposConfirmados) {
   resultado.forEach(m => {
     m.tienda = nombrePorId(estado.tiendaSeleccionada);
     m.fechaAnalisis = estado.fechaAnalisis;
+    // EN NOTAS KACOSA: total que se restó del stock Kacosa para este material
+    // por estar en notas pendientes hacia OTROS centros (cantidadOtros).
+    const notaInfo = estado.notasPendientes ? estado.notasPendientes[m.codigo] : null;
+    m.enNotasKacosa = notaInfo ? (notaInfo.cantidadOtros || 0) : 0;
+    // POR SINCRONIZAR: total que se restó del stock de esta tienda por
+    // materiales pendientes por sincronizar.
+    m.porSincronizar = estado.pendientesSync ? (estado.pendientesSync[m.codigo] || 0) : 0;
   });
 
   const sugerencias = generarSugerencias(resultado, estado.stockTienda, estado.stockKacosa, altaRotacion);
@@ -1560,6 +1574,8 @@ function mostrarResultados(resultado, sugerencias) {
     </div>
   `;
 
+  const centroAnalizado = centrosDeTienda(estado.tiendaSeleccionada).join("/");
+
   const columnas = [
     { key: 'codigo', label: 'Código' },
     { key: 'descripcion', label: 'Descripción' },
@@ -1568,12 +1584,14 @@ function mostrarResultados(resultado, sugerencias) {
     { key: 'totalVentas', label: 'Total ventas', numeric: true },
     { key: 'promedioVentasPeriodo', label: 'Promedio ventas periodo', numeric: true },
     { key: 'stockTienda', label: 'Stock tienda', numeric: true },
+    { key: 'porSincronizar', label: 'Por sincronizar', numeric: true },
     { key: 'stockKacosa1000', label: 'Stock Kacosa 1000', numeric: true },
     { key: 'stockKacosa3000', label: 'Stock Kacosa 3000', numeric: true },
     { key: 'stockKacosa', label: 'Total Stock Kacosa', numeric: true },
     { key: 'ubicacionKacosa', label: 'Ubicación Kacosa' },
     { key: 'aPedir', label: 'A pedir', numeric: true },
-    { key: 'porDespacho', label: 'Por despacho', numeric: true },
+    { key: 'porDespacho', label: `Por despacho a ${centroAnalizado}`, numeric: true },
+    { key: 'enNotasKacosa', label: 'En notas Kacosa', numeric: true },
     { key: 'numeroDeNota', label: 'Número de nota' },
     { key: 'fechaDeNota', label: 'Fecha de nota' },
     {
@@ -1772,6 +1790,7 @@ function generarSinRotacion(stockKacosa, stockTienda, ventasProcesadas) {
       descripcion: m.descripcion,
       unidadBase: m.unidadBase,
       stockTienda: m.stockDisponible,
+      porSincronizar: estado.pendientesSync ? (estado.pendientesSync[m.codigo] || 0) : 0,
       stockKacosa: infoKacosa ? infoKacosa.stockDisponible : 0
     };
   });
@@ -1882,6 +1901,9 @@ function construirWorkbookCompleto() {
   );
   XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
 
+  const centroAnalizado = centrosDeTienda(estado.tiendaSeleccionada).join("_");
+  const labelPorDespacho = `Por_Despacho_A_${centroAnalizado}`;
+
   const columnasCompletas = [
     { key: 'codigo', label: 'Codigo', ancho: 14 },
     { key: 'descripcion', label: 'Descripcion', ancho: 38 },
@@ -1891,13 +1913,15 @@ function construirWorkbookCompleto() {
     { key: 'totalVentas', label: 'Total_Ventas', ancho: 12 },
     { key: 'promedioVentasPeriodo', label: 'Promedio_Ventas_Periodo', ancho: 16 },
     { key: 'stockTienda', label: 'Stock_Tienda', ancho: 12 },
+    { key: 'porSincronizar', label: 'Por_Sincronizar', ancho: 14 },
     { key: 'stockKacosa1000', label: 'Stock_Kacosa_1000', ancho: 14 },
     { key: 'stockKacosa3000', label: 'Stock_Kacosa_3000', ancho: 14 },
     { key: 'stockKacosa', label: 'Total_Stock_Kacosa', ancho: 14 },
     { key: 'ubicacionKacosa', label: 'Ubicacion_Kacosa', ancho: 16 },
     { key: 'umb', label: 'UMB', ancho: 10 },
     { key: 'aPedir', label: 'A_Pedir', ancho: 10 },
-    { key: 'porDespacho', label: 'Por_Despacho', ancho: 12 },
+    { key: 'porDespacho', label: labelPorDespacho, ancho: 16 },
+    { key: 'enNotasKacosa', label: 'En_Notas_Kacosa', ancho: 14 },
     { key: 'numeroDeNota', label: 'Numero_De_Nota', ancho: 14 },
     { key: 'fechaDeNota', label: 'Fecha_De_Nota', ancho: 14 },
     { key: 'periodoVentas', label: 'Periodo_Ventas', ancho: 14 },
@@ -1926,6 +1950,7 @@ function construirWorkbookCompleto() {
       { key: 'totalVentas', label: 'Total_Ventas', ancho: 12 },
       { key: 'promedioVentasPeriodo', label: 'Promedio_Ventas_Periodo', ancho: 16 },
       { key: 'stockTienda', label: 'Stock_Tienda', ancho: 12 },
+      { key: 'porSincronizar', label: 'Por_Sincronizar', ancho: 14 },
       { key: 'umb', label: 'UMB', ancho: 10 },
       { key: 'aPedirIdeal', label: 'A_Pedir_Ideal', ancho: 12 },
       { key: 'aPedir', label: 'A_Pedir_Real', ancho: 12 }, { key: 'pendiente', label: 'Pendiente', ancho: 12 },
@@ -1950,7 +1975,8 @@ function construirWorkbookCompleto() {
 
   XLSX.utils.book_append_sheet(wb, construirHojaEstilizada((estado.sinRotacion || []), [
     { key: 'codigo', label: 'Codigo', ancho: 14 }, { key: 'descripcion', label: 'Descripcion', ancho: 38 },
-    { key: 'stockTienda', label: 'Stock_Tienda', ancho: 12 }, { key: 'stockKacosa', label: 'Stock_Kacosa', ancho: 12 }
+    { key: 'stockTienda', label: 'Stock_Tienda', ancho: 12 }, { key: 'porSincronizar', label: 'Por_Sincronizar', ancho: 14 },
+    { key: 'stockKacosa', label: 'Stock_Kacosa', ancho: 12 }
   ]), "Sin_Rotacion");
 
   return wb;
