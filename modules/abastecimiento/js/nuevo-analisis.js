@@ -3,7 +3,7 @@ import { parsearMHT, aNumero } from "./mht-parser.js";
 import { procesarVentas, calcularRangoFechasVentas } from "./ventas-parser.js";
 import { cargarFactoresConversion } from "./factores-conversion.js";
 import { cargarCodigosExcluidos } from "./exclusiones.js";
-import { agruparStock, procesarNotasPendientes } from "./stock-parser.js";
+import { agruparStock, procesarNotasPendientes, restarNotasPendientesDeKacosa } from "./stock-parser.js";
 import { cargarPaquetes } from "./paquetes.js";
 import { cargarUbicaciones, obtenerUbicacion } from "./ubicaciones.js";
 import { calcularAbastecimiento } from "./calculo-abastecimiento.js";
@@ -1049,7 +1049,14 @@ async function ejecutarAnalisis() {
       estadoTexto.textContent = "Procesando notas pendientes por despacho...";
       notasPendientes = procesarNotasPendientes(filasNotas, centrosValidos);
       if (notasPendientes && Object.keys(notasPendientes).length > 0) {
-        estadoTexto.textContent = `Se encontraron ${Object.keys(notasPendientes).length} material(es) con notas pendientes por despacho.`;
+        // Las notas hacia OTROS centros ya comprometieron ese stock: se resta
+        // de stockKacosa ANTES de calcularAbastecimiento para que el cálculo
+        // de todas las tiendas use el stock Kacosa real. Las notas hacia la
+        // tienda que se está analizando (cantidadPropia) NO se tocan acá —
+        // esas se restan del "a pedir" más adelante, en finalizarCalculo().
+        const afectadosKacosa = restarNotasPendientesDeKacosa(stockKacosa, notasPendientes);
+        estadoTexto.textContent = `Se encontraron ${Object.keys(notasPendientes).length} material(es) con notas pendientes por despacho` +
+          (afectadosKacosa > 0 ? ` (${afectadosKacosa} descontado(s) del stock Kacosa por ir hacia otros centros).` : ".");
       } else {
         estadoTexto.textContent = "No se encontraron notas pendientes para esta tienda.";
       }
@@ -1237,7 +1244,10 @@ async function finalizarCalculo(gruposConfirmados) {
     resultado = resultado.map(m => {
       const nota = estado.notasPendientes[m.codigo];
       if (nota) {
-        const cantidadPendiente = nota.cantidad || 0;
+        // Solo la parte de la nota dirigida a ESTA tienda (cantidadPropia) se
+        // resta del "a pedir": esa mercancía ya viene en camino. La parte hacia
+        // otros centros (cantidadOtros) ya se descontó del stock Kacosa arriba.
+        const cantidadPendiente = nota.cantidadPropia || 0;
         // Restar del A_Pedir, sin bajar de 0
         const aPedirAjustado = Math.max(0, (m.aPedir || 0) - cantidadPendiente);
         return {
