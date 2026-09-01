@@ -1,6 +1,6 @@
 // js/bridge.js
 // Punto único de comunicación con el Apps Script (Gemini, Sheets, Drive, Email).
-import { auth } from "./firebase-config.js";
+import { auth } from "./firebase-config.js?v=3";
 import { getIdToken } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 
 // URL de tu implementación /exec del Apps Script
