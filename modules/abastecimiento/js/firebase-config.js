@@ -1,6 +1,6 @@
 // Configuración pública del cliente de Firebase (no es sensible, es del lado cliente)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 // ---- Proyecto de DATOS: el de siempre, no cambia (análisis, tiendas, etc.) ----
@@ -40,3 +40,15 @@ export const auth = getAuth(appAuth);         // login compartido con el portal
 export const db = getFirestore(appDatos);     // datos propios de esta app (sin cambios)
 export const dbAuth = getFirestore(appAuth);  // colección "usuarios" del portal (rol/tienda)
 export const googleProvider = new GoogleAuthProvider();
+
+// Persistencia SOLO por sesión del navegador — misma razón y mismo cambio que
+// en el firebase-config.js del shell (../../js/firebase-config.js): si el
+// usuario sale de la app sin cerrar sesión explícitamente, al volver debe
+// pedirle login de nuevo, en vez de "recordarlo" indefinidamente. Se fija acá
+// también (y no solo en el del shell) porque este módulo puede abrirse
+// directamente sin pasar por el shell, y ambos comparten la misma sesión de
+// Firebase por usar el mismo proyecto "portal-kacosa" registrado como app por
+// defecto (ver comentario más arriba).
+setPersistence(auth, browserSessionPersistence).catch(err => {
+  console.error("No se pudo configurar la persistencia de sesión (SESSION):", err);
+});
