@@ -760,6 +760,49 @@ tbody tr:hover {
   background: var(--fondo);
 }
 
+/* Columnas fijas (Código y Descripción) al desplazar horizontalmente, igual
+   que "inmovilizar columnas" en Excel: quedan siempre visibles sin importar
+   cuánto se desplace la tabla hacia la derecha. Se les da un ancho FIJO
+   (no solo mínimo) porque la 2da columna necesita saber exactamente cuánto
+   mide la 1ra para calcular su posición "left". Aplica a cualquier tabla
+   generada por crearTablaPaginada() (Nuevo Análisis y Dashboard usan la
+   misma función). */
+.table-responsive table th:nth-child(1),
+.table-responsive table td:nth-child(1) {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  width: 100px;
+  min-width: 100px;
+  max-width: 100px;
+  background: var(--blanco);
+}
+
+.table-responsive table th:nth-child(2),
+.table-responsive table td:nth-child(2) {
+  position: sticky;
+  left: 100px;
+  z-index: 2;
+  width: 180px;
+  min-width: 180px;
+  max-width: 180px;
+  background: var(--blanco);
+  /* Línea sutil para marcar dónde termina el área fija */
+  box-shadow: 2px 0 4px -2px rgba(15, 26, 46, 0.15);
+}
+
+/* Mantener el fondo correcto de las columnas fijas también en hover y en
+   filas excluidas manualmente, para que no "salten" de color al desplazar. */
+.table-responsive table tbody tr:hover td:nth-child(1),
+.table-responsive table tbody tr:hover td:nth-child(2) {
+  background: var(--fondo);
+}
+
+.table-responsive table tbody tr.fila-excluida td:nth-child(1),
+.table-responsive table tbody tr.fila-excluida td:nth-child(2) {
+  background: var(--blanco);
+}
+
 /* Fila excluida manualmente del pedido (ver botón de excluir/deshacer más abajo):
    se ve apagada mientras sigue en la tabla, para dejar claro que no entrará
    en el correo ni en el Excel, sin borrarla de la vista. */
