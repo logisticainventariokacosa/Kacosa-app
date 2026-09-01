@@ -33,8 +33,38 @@
       return;
     }
 
-    render(cont);
-    await refrescarListado();
+    renderConSubpestanas(cont);
+  }
+
+  function renderConSubpestanas(cont) {
+    cont.innerHTML = `
+      <div class="row" style="gap:8px;margin-bottom:16px;">
+        <button id="tabApertura">Apertura / Control</button>
+        <button class="alt" id="tabMonitor">Monitor</button>
+      </div>
+      <div id="fisicoSub"></div>
+    `;
+    const sub = document.getElementById('fisicoSub');
+
+    document.getElementById('tabApertura').addEventListener('click', () => {
+      document.getElementById('tabApertura').className = '';
+      document.getElementById('tabMonitor').className = 'alt';
+      render(sub);
+      refrescarListado();
+    });
+    document.getElementById('tabMonitor').addEventListener('click', () => {
+      document.getElementById('tabApertura').className = 'alt';
+      document.getElementById('tabMonitor').className = '';
+      if (typeof window.iniciarMonitorInventario === 'function') {
+        window.iniciarMonitorInventario(sub, perfilActual);
+      } else {
+        sub.innerHTML = '<p class="muted">El Monitor todavía no está disponible.</p>';
+      }
+    });
+
+    // Vista inicial: Apertura / Control.
+    render(sub);
+    refrescarListado();
   }
 
   function render(cont) {
