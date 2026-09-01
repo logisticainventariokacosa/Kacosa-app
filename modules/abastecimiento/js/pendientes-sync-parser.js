@@ -1,30 +1,43 @@
 // js/pendientes-sync-parser.js
-// Este archivo lo arma manualmente el usuario en Excel real (.xlsx), a diferencia
-// de los otros que son exportaciones .MHT de SAP. Por eso se lee con SheetJS
-// directamente. Debe contener EXACTAMENTE las columnas "Material" y
-// "Cantidad_por_sincronizar" — ni de más ni de menos (la validación de columnas
-// exactas vive en nuevo-analisis.js, ver validarColumnasExactas()).
-
-/** Lee un archivo .xlsx real y devuelve un array de objetos usando la primera fila como encabezados. */
-export async function leerXLSXGenerico(file) {
-  const buffer = await file.arrayBuffer();
-  const wb = XLSX.read(buffer, { type: "array" });
-  const primeraHoja = wb.SheetNames[0];
-  const ws = wb.Sheets[primeraHoja];
-  return XLSX.utils.sheet_to_json(ws, { defval: "" });
-}
+// Materiales pendientes por sincronizar: igual que ventas/stock/notas, este
+// archivo se descarga directo de SAP como .MHT — ya NO se arma a mano en
+// Excel. La validación de que contenga todas las columnas de la exportación
+// real de SAP vive en nuevo-analisis.js (ver COLUMNAS_PENDIENTES_SYNC y
+// validarColumnasArchivo()); la validación de que el centro/tienda del
+// archivo corresponda a la tienda que se está analizando vive ahí también
+// (ver validarCentroPendientesSync()).
+import { aNumero } from "./mht-parser.js";
 
 /**
- * Toma las filas ya leídas y devuelve un mapa codigo -> cantidad pendiente por sincronizar
- * (sumando si un material aparece en más de una fila).
+ * Toma las filas ya parseadas del .MHT (parsearMHT) y devuelve un mapa
+ * codigo -> cantidad pendiente por sincronizar, sumando el total por
+ * material (un mismo código puede repetirse en varias filas — una por cada
+ * factura/entrega pendiente de sincronizar).
+ *
+ * Solo se consideran las filas cuya columna "Tienda" coincide con el centro
+ * que se está analizando. En la práctica el archivo ya debería venir
+ * filtrado a un solo centro (se valida ANTES de llegar acá, ver
+ * validarCentroPendientesSync en nuevo-analisis.js, que bloquea el archivo
+ * completo si trae un centro distinto al de la tienda seleccionada); este
+ * filtro es una segunda capa de seguridad por si la función se llama sin
+ * pasar por esa validación.
+ *
+ * @param {Array<Object>} filas - salida de parsearMHT()
+ * @param {Array<string>} centrosValidos - centros de la tienda que se está analizando
+ * @returns {Object} codigo -> cantidad pendiente por sincronizar
  */
-export function procesarPendientesSync(filas) {
+export function procesarPendientesSync(filas, centrosValidos) {
   const mapa = {};
   filas.forEach(f => {
+    const tienda = String(f["Tienda"] ?? "").trim();
+    if (!centrosValidos.includes(tienda)) return;
+
     const codigo = String(f["Material"] ?? "").trim();
     if (!codigo) return;
-    const cantidad = Number(f["Cantidad_por_sincronizar"]) || 0;
+
+    const cantidad = aNumero(f["Cantidad"]);
     if (cantidad === 0) return;
+
     mapa[codigo] = (mapa[codigo] || 0) + cantidad;
   });
   return mapa;
