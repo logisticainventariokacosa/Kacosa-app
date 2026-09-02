@@ -1006,19 +1006,7 @@ async function ejecutarAnalisis() {
       estadoTexto.textContent = "Validando archivo de notas pendientes por despacho...";
       const filasNotas = parsearMHT(await archivoNotasPendientes.text());
       if (fueCancelado()) return;
-      
-      // Validar que el archivo de notas contenga el centro correcto
-      const errorNotas = validarCentroNotasPendientes(filasNotas, centrosValidos);
-      if (errorNotas) {
-        estadoTexto.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' + errorNotas;
-        btnAnalizar.disabled = false;
-        btnAnalizar.innerHTML = '<i class="fa-solid fa-bolt"></i> Analizar';
-        bloquearFormulario(false);
-        estado.analizando = false;
-        if (btnDetener) btnDetener.style.display = "none";
-        return;
-      }
-      
+
       estadoTexto.textContent = "Procesando notas pendientes por despacho...";
       notasPendientes = procesarNotasPendientes(filasNotas, centrosValidos);
       if (notasPendientes && Object.keys(notasPendientes).length > 0) {
@@ -1119,33 +1107,6 @@ async function ejecutarAnalisis() {
     const btnDetenerErr = document.getElementById("btn-detener-analisis");
     if (btnDetenerErr) btnDetenerErr.style.display = "none";
   }
-}
-
-/**
- * Valida que el archivo de notas pendientes por despacho contenga al menos un
- * centro receptor que coincida con los centros de la tienda seleccionada.
- */
-function validarCentroNotasPendientes(filas, centrosValidos) {
-  if (filas.length === 0) {
-    return "El archivo de notas pendientes está vacío o no tiene datos.";
-  }
-
-  const centrosEnNotas = new Set();
-  filas.forEach(f => {
-    const centro = String(f["Centro Receptor"] || "").trim();
-    if (centro) centrosEnNotas.add(centro);
-  });
-
-  if (centrosEnNotas.size === 0) {
-    return "El archivo de notas pendientes no tiene datos de 'Centro Receptor' reconocibles.";
-  }
-
-  const centrosCoincidentes = [...centrosEnNotas].filter(c => centrosValidos.includes(c));
-  if (centrosCoincidentes.length === 0) {
-    return `El archivo de notas pendientes contiene el/los centro(s) ${[...centrosEnNotas].join(", ")}, pero la tienda seleccionada corresponde a ${centrosValidos.join(" o ")}. Verifica que subiste el archivo correcto.`;
-  }
-
-  return null;
 }
 
 /**
