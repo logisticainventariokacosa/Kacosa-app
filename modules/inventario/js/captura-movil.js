@@ -116,7 +116,7 @@
         '&usuario_asignado=eq.' + encodeURIComponent(emailActual()) +
         '&documento=eq.' + encodeURIComponent('sin contabilizar') +
         '&preliminar=eq.false&verificado=eq.false' +
-        '&select=*&order=fecha_ultimo_conteo.desc'
+        '&select=*&order=fecha_ultimo_conteo.desc&limit=200'
       );
 
       if (!filas || !filas.length) {
@@ -124,20 +124,34 @@
         return;
       }
 
-      cont.innerHTML = filas.map(f => `
-        <div class="fisico-inv-card" data-id="${f.unique_id}">
-          <div class="fisico-top">
-            <span class="fisico-titulo">${f.material} — ${f.descripcion_material || 'Sin descripción'}</span>
-            <span class="fisico-badge ${f.estatus_diferencia || ''}">${f.estatus_diferencia || '—'}</span>
-          </div>
-          <div class="fisico-meta muted">
-            Ubicación: ${f.ubicacion_fisica || '—'} · Conteo: ${f.conteo} · Sistema: ${f.libre_utilizacion}
-          </div>
-          <div class="fisico-acciones">
-            <button class="alt" data-editar="${f.unique_id}">Ver / editar</button>
-          </div>
+      cont.innerHTML = `
+        <div class="table-container">
+          <table class="inventory-table">
+            <thead>
+              <tr>
+                <th>Material</th>
+                <th>Ubicación</th>
+                <th>Conteo</th>
+                <th>Sistema</th>
+                <th>Estatus</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filas.map(f => `
+                <tr data-id="${f.unique_id}">
+                  <td>${f.material}<br/><span class="muted" style="font-weight:400;">${f.descripcion_material || ''}</span></td>
+                  <td>${f.ubicacion_fisica || '—'}</td>
+                  <td>${f.conteo}</td>
+                  <td>${f.libre_utilizacion}</td>
+                  <td><span class="fisico-badge ${f.estatus_diferencia || ''}">${f.estatus_diferencia || '—'}</span></td>
+                  <td><button class="alt" data-editar="${f.unique_id}">Ver / editar</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
         </div>
-      `).join('');
+      `;
 
       cont.querySelectorAll('button[data-editar]').forEach(btn => {
         btn.addEventListener('click', () => {
