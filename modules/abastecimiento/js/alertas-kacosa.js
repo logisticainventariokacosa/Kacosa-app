@@ -895,6 +895,7 @@ async function enviarCorreoAlertas(alertas) {
       },
       destinatariosAdicionales: ["compras.nacionales@kacosa.com", "compras.internacionales@kacosa.com"],
       usuarioEmail: window.KACOSA?.usuario?.email || "",
+      usuarioNombre: window.KACOSA?.usuario?.nombre || window.KACOSA?.usuario?.email || "",
       archivos
     });
 
