@@ -1958,6 +1958,10 @@ function construirWorkbookCompleto() {
       { key: 'stockKacosa3000', label: 'Stock_Kacosa_3000', ancho: 14 },
       { key: 'stockKacosa', label: 'Total_Stock_Kacosa', ancho: 14 },
       { key: 'ubicacionKacosa', label: 'Ubicacion_Kacosa', ancho: 16 },
+      { key: 'porDespacho', label: labelPorDespacho, ancho: 16 },
+      { key: 'enNotasKacosa', label: 'En_Notas_Kacosa', ancho: 14 },
+      { key: 'numeroDeNota', label: 'Numero_De_Nota', ancho: 14 },
+      { key: 'fechaDeNota', label: 'Fecha_De_Nota', ancho: 14 },
       { key: 'periodoAbastecimiento', label: 'Periodo_Abastecimiento', ancho: 16 },
       { key: 'tienda', label: 'Tienda', ancho: 14 },
       { key: 'rangoSeguridadUsado', label: 'Rango_Seguridad_Usado', ancho: 14 }
