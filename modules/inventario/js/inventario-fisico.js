@@ -41,24 +41,37 @@
       <div class="row" style="gap:8px;margin-bottom:16px;">
         <button id="tabApertura">Apertura / Control</button>
         <button class="alt" id="tabMonitor">Monitor</button>
+        <button class="alt" id="tabReportes">Reportes SAP</button>
       </div>
       <div id="fisicoSub"></div>
     `;
     const sub = document.getElementById('fisicoSub');
 
+    function marcarActiva(idActivo) {
+      ['tabApertura', 'tabMonitor', 'tabReportes'].forEach(id => {
+        document.getElementById(id).className = id === idActivo ? '' : 'alt';
+      });
+    }
+
     document.getElementById('tabApertura').addEventListener('click', () => {
-      document.getElementById('tabApertura').className = '';
-      document.getElementById('tabMonitor').className = 'alt';
+      marcarActiva('tabApertura');
       render(sub);
       refrescarListado();
     });
     document.getElementById('tabMonitor').addEventListener('click', () => {
-      document.getElementById('tabApertura').className = 'alt';
-      document.getElementById('tabMonitor').className = '';
+      marcarActiva('tabMonitor');
       if (typeof window.iniciarMonitorInventario === 'function') {
         window.iniciarMonitorInventario(sub, perfilActual);
       } else {
         sub.innerHTML = '<p class="muted">El Monitor todavía no está disponible.</p>';
+      }
+    });
+    document.getElementById('tabReportes').addEventListener('click', () => {
+      marcarActiva('tabReportes');
+      if (typeof window.iniciarReportesInventario === 'function') {
+        window.iniciarReportesInventario(sub, perfilActual);
+      } else {
+        sub.innerHTML = '<p class="muted">Los Reportes todavía no están disponibles.</p>';
       }
     });
 
