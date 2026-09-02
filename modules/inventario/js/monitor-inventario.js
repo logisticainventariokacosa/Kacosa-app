@@ -2,10 +2,19 @@
 // Submódulo "Monitor de Inventarios" (supervisor/coordinador).
 // Todo pasa por el bridge (Apps Script) con el token maestro — es de bajo
 // volumen comparado con la Captura Móvil, no necesita ir directo a Supabase.
+//
+// Vista en TABLA (no tarjetas) con paginación, porque en producción esto
+// puede tener miles de registros — cargarlos todos de una vez o mostrarlos
+// como tarjetas grandes no escala.
 
 (function () {
+  const TAMANO_PAGINA = 50;
+
   let perfil = null;
   let filasActuales = [];
+  let paginaActual = 0;
+  let hayMasPaginas = false;
+  let analistasCache = {}; // centro -> [{id_analista, nombre, email}]
 
   window.iniciarMonitorInventario = async function (cont, perfilRecibido) {
     perfil = perfilRecibido;
@@ -15,15 +24,15 @@
 
     cont.innerHTML = `
       <style>
-        .monitor-card{border:1px solid rgba(100,116,139,0.25);border-radius:12px;padding:14px 16px;margin-bottom:12px;background:var(--card-bg);}
-        .monitor-card .monitor-top{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;}
-        .monitor-card .monitor-meta{margin-top:6px;font-size:0.88rem;}
-        .monitor-card .monitor-acciones{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
-        .monitor-card .monitor-acciones button{padding:7px 12px;font-size:0.85rem;}
-        .monitor-badge{font-size:0.75rem;font-weight:600;padding:2px 9px;border-radius:999px;text-transform:uppercase;}
+        .monitor-badge{font-size:0.72rem;font-weight:600;padding:2px 8px;border-radius:999px;text-transform:uppercase;white-space:nowrap;}
         .monitor-badge.falta{background:#fee2e2;color:#991b1b;}
         .monitor-badge.sobra{background:#fef3c7;color:#92400e;}
         .monitor-badge.ok{background:#dcfce7;color:#166534;}
+        #monitorTabla td, #monitorTabla th{white-space:nowrap;}
+        #monitorTabla .monitor-acciones{display:flex;gap:4px;flex-wrap:nowrap;}
+        #monitorTabla .monitor-acciones button{padding:5px 8px;font-size:0.78rem;}
+        #monitorTabla select.reasignar-select{font-size:0.8rem;padding:4px;}
+        .monitor-paginacion{display:flex;justify-content:space-between;align-items:center;margin-top:10px;}
       </style>
 
       <div class="search-card">
@@ -53,64 +62,114 @@
         </div>
         <div class="row" style="margin-top:12px;">
           <button id="btnMonitorFiltrar">Filtrar</button>
-          <button class="alt" id="btnMonitorExportar">Exportar CSV</button>
+          <button class="alt" id="btnMonitorExportar">Exportar CSV (esta página)</button>
         </div>
       </div>
 
       <div id="monitorLista" style="margin-top:16px;"><p class="muted">Cargando...</p></div>
     `;
 
-    document.getElementById('btnMonitorFiltrar').addEventListener('click', cargarConteos);
+    document.getElementById('btnMonitorFiltrar').addEventListener('click', () => { paginaActual = 0; cargarConteos(); });
     document.getElementById('btnMonitorExportar').addEventListener('click', exportarCSV);
 
+    paginaActual = 0;
     await cargarConteos();
   };
+
+  function filtroActual() {
+    return {
+      centro: document.getElementById('monCentro').value || undefined,
+      estatus_diferencia: document.getElementById('monEstatus').value || undefined,
+      verificado: document.getElementById('monVerificado').value === '' ? undefined : document.getElementById('monVerificado').value === 'true',
+      offset: paginaActual * TAMANO_PAGINA,
+      limit: TAMANO_PAGINA
+    };
+  }
 
   async function cargarConteos() {
     const cont = document.getElementById('monitorLista');
     cont.innerHTML = '<p class="muted">Cargando...</p>';
 
-    const filtro = {
-      centro: document.getElementById('monCentro').value || undefined,
-      estatus_diferencia: document.getElementById('monEstatus').value || undefined,
-      verificado: document.getElementById('monVerificado').value === '' ? undefined : document.getElementById('monVerificado').value === 'true'
-    };
-
-    const resp = await window.callBridgeInventario('monitorConteos', filtro);
+    const resp = await window.callBridgeInventario('monitorConteos', filtroActual());
     if (!resp.ok) {
       cont.innerHTML = `<p class="muted">${resp.error}</p>`;
       return;
     }
     filasActuales = resp.conteos;
+    // Pedimos un elemento de más para saber si hay siguiente página, sin
+    // depender de un COUNT(*) aparte (más barato en Apps Script/Supabase).
+    hayMasPaginas = filasActuales.length > TAMANO_PAGINA;
+    if (hayMasPaginas) filasActuales = filasActuales.slice(0, TAMANO_PAGINA);
 
     if (!filasActuales.length) {
-      cont.innerHTML = '<p class="muted">No hay registros con esos filtros.</p>';
+      cont.innerHTML = paginaActual === 0
+        ? '<p class="muted">No hay registros con esos filtros.</p>'
+        : '<p class="muted">No hay más registros.</p>';
       return;
     }
 
-    cont.innerHTML = filasActuales.map(f => `
-      <div class="monitor-card" data-id="${f.unique_id}">
-        <div class="monitor-top">
-          <strong>${f.material} — ${f.descripcion_material || 'Sin descripción'}</strong>
-          <span class="monitor-badge ${f.estatus_diferencia || ''}">${f.estatus_diferencia || '—'}</span>
-        </div>
-        <div class="monitor-meta muted">
-          ${f.nombre_centro || f.centro} · Almacén ${f.almacen} · Ubicación: ${f.ubicacion_fisica || '—'}<br/>
-          Conteo: ${f.conteo} · Sistema: ${f.libre_utilizacion} · Diferencia: ${f.diferencia}<br/>
-          Asignado a: ${f.usuario_asignado || '—'} · Documento: ${f.documento} ·
-          Verificado: ${f.verificado ? 'Sí' : 'No'} · Preliminar: ${f.preliminar ? 'Sí' : 'No'}
-        </div>
-        <div class="monitor-acciones">
-          <button class="alt" data-accion="verificar" data-id="${f.unique_id}">${f.verificado ? 'Quitar verificado' : 'Marcar verificado'}</button>
-          <button class="alt" data-accion="preliminar" data-id="${f.unique_id}">${f.preliminar ? 'Quitar preliminar' : 'Marcar preliminar'}</button>
-          <button class="alt" data-accion="reasignar" data-id="${f.unique_id}" data-centro="${f.centro}">Reasignar</button>
-        </div>
+    cont.innerHTML = `
+      <div class="table-container">
+        <table class="inventory-table" id="monitorTabla">
+          <thead>
+            <tr>
+              <th>Material</th>
+              <th>Centro / Almacén</th>
+              <th>Ubicación</th>
+              <th>Conteo</th>
+              <th>Sistema</th>
+              <th>Diferencia</th>
+              <th>Estatus</th>
+              <th>Asignado</th>
+              <th>Documento</th>
+              <th>Verif.</th>
+              <th>Prelim.</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filasActuales.map(filaHtml).join('')}
+          </tbody>
+        </table>
       </div>
-    `).join('');
+      <div class="monitor-paginacion">
+        <button class="alt" id="btnPagAnterior" ${paginaActual === 0 ? 'disabled' : ''}>← Anterior</button>
+        <span class="muted">Página ${paginaActual + 1}</span>
+        <button class="alt" id="btnPagSiguiente" ${hayMasPaginas ? '' : 'disabled'}>Siguiente →</button>
+      </div>
+    `;
 
-    cont.querySelectorAll('button[data-accion]').forEach(btn => {
+    document.getElementById('btnPagAnterior').addEventListener('click', () => { paginaActual--; cargarConteos(); });
+    document.getElementById('btnPagSiguiente').addEventListener('click', () => { paginaActual++; cargarConteos(); });
+
+    document.querySelectorAll('#monitorTabla button[data-accion]').forEach(btn => {
       btn.addEventListener('click', () => manejarAccion(btn));
     });
+  }
+
+  function filaHtml(f) {
+    return `
+      <tr data-id="${f.unique_id}">
+        <td>${f.material}<br/><span class="muted" style="font-weight:400;">${f.descripcion_material || ''}</span></td>
+        <td>${f.nombre_centro || f.centro}<br/>${f.almacen}</td>
+        <td>${f.ubicacion_fisica || '—'}</td>
+        <td>${f.conteo}</td>
+        <td>${f.libre_utilizacion}</td>
+        <td>${f.diferencia}</td>
+        <td><span class="monitor-badge ${f.estatus_diferencia || ''}">${f.estatus_diferencia || '—'}</span></td>
+        <td>${f.usuario_asignado || '—'}</td>
+        <td>${f.documento}</td>
+        <td>${f.verificado ? 'Sí' : 'No'}</td>
+        <td>${f.preliminar ? 'Sí' : 'No'}</td>
+        <td>
+          <div class="monitor-acciones">
+            <button class="alt" data-accion="verificar" data-id="${f.unique_id}">${f.verificado ? 'Desverif.' : 'Verificar'}</button>
+            <button class="alt" data-accion="preliminar" data-id="${f.unique_id}">${f.preliminar ? 'Quitar prelim.' : 'Preliminar'}</button>
+            <button class="alt" data-accion="reasignar" data-id="${f.unique_id}" data-centro="${f.centro}">Reasignar</button>
+          </div>
+        </td>
+      </tr>
+    `;
   }
 
   async function manejarAccion(btn) {
@@ -124,7 +183,7 @@
     } else if (accion === 'preliminar') {
       await actualizar(id, { preliminar: !fila.preliminar });
     } else if (accion === 'reasignar') {
-      await abrirReasignacion(id, btn.dataset.centro);
+      await mostrarSelectorReasignacion(id, btn.dataset.centro);
     }
   }
 
@@ -137,21 +196,42 @@
     await cargarConteos();
   }
 
-  async function abrirReasignacion(unique_id, centro) {
-    const resp = await window.callBridgeInventario('listarAnalistasDelCentro', { centro });
-    if (!resp.ok || !resp.analistas.length) {
-      alert('No hay analistas asignados a ese centro.');
+  /** Reemplaza la celda de acciones por un <select> con Nombre Apellido (no el email). */
+  async function mostrarSelectorReasignacion(unique_id, centro) {
+    const fila = document.querySelector('#monitorTabla tr[data-id="' + unique_id + '"]');
+    const celda = fila.querySelector('td:last-child');
+    celda.innerHTML = '<span class="muted">Cargando analistas...</span>';
+
+    if (!analistasCache[centro]) {
+      const resp = await window.callBridgeInventario('listarAnalistasDelCentro', { centro });
+      if (!resp.ok) {
+        celda.innerHTML = `<span class="muted">${resp.error}</span>`;
+        return;
+      }
+      analistasCache[centro] = resp.analistas;
+    }
+
+    const analistas = analistasCache[centro];
+    if (!analistas.length) {
+      celda.innerHTML = '<span class="muted">Sin analistas en ese centro.</span>';
       return;
     }
-    const opciones = resp.analistas.map(a => `${a.nombre} <${a.email}>`).join('\n');
-    const seleccion = prompt('Escribe el email del analista al que quieres reasignar este registro:\n\n' + opciones);
-    if (!seleccion) return;
-    const encontrado = resp.analistas.find(a => a.email.toLowerCase() === seleccion.trim().toLowerCase());
-    if (!encontrado) {
-      alert('Ese email no está en la lista de analistas de ese centro.');
-      return;
-    }
-    await actualizar(unique_id, { usuario_asignado: encontrado.email });
+
+    celda.innerHTML = `
+      <div class="monitor-acciones">
+        <select class="reasignar-select">
+          ${analistas.map(a => `<option value="${a.email}">${a.nombre}</option>`).join('')}
+        </select>
+        <button data-confirmar="1">OK</button>
+        <button class="alt" data-cancelar="1">X</button>
+      </div>
+    `;
+
+    celda.querySelector('[data-confirmar]').addEventListener('click', async () => {
+      const email = celda.querySelector('select').value;
+      await actualizar(unique_id, { usuario_asignado: email });
+    });
+    celda.querySelector('[data-cancelar]').addEventListener('click', () => cargarConteos());
   }
 
   function exportarCSV() {
@@ -171,7 +251,7 @@
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'monitor_inventarios_' + new Date().toISOString().slice(0, 10) + '.csv';
+    a.download = 'monitor_inventarios_pagina' + (paginaActual + 1) + '_' + new Date().toISOString().slice(0, 10) + '.csv';
     a.click();
     URL.revokeObjectURL(url);
   }
