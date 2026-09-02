@@ -1,6 +1,6 @@
 // js/dashboard.js
 import { callBridge } from "./bridge.js";
-import { TIENDAS, nombrePorId } from "./tiendas.js";
+import { TIENDAS, nombrePorId, centrosDeTienda } from "./tiendas.js";
 import { crearTablaPaginada } from "./tabla-utils.js";
 import { notificarExito } from "./notificaciones.js";
 import { construirHojaEstilizada, construirHojaResumen } from "./excel-estilos.js";
@@ -115,6 +115,7 @@ async function cargarAnalisis() {
       totalVentas: Number(m.totalVentas) || 0,
       promedioVentasPeriodo: Number(m.promedioVentasPeriodo) || 0,
       stockTienda: stockTienda,
+      porSincronizar: Number(m.porSincronizar) || 0,
       stockKacosa1000: Number(m.stockKacosa1000) || 0,
       stockKacosa3000: Number(m.stockKacosa3000) || 0,
       stockKacosa: stockKacosa,
@@ -123,6 +124,7 @@ async function cargarAnalisis() {
       aPedirIdeal: Number(m.aPedirIdeal) || 0,
       pendiente: Number(m.pendiente) || 0,
       porDespacho: porDespacho,
+      enNotasKacosa: Number(m.enNotasKacosa) || 0,
       numeroDeNota: String(m.numeroDeNota || ''),
       fechaDeNota: String(m.fechaDeNota || ''),
       empaque: Number(m.empaque) || 1,
@@ -258,6 +260,8 @@ function mostrarDashboard(analisis) {
     </div>
   `;
 
+  const centroAnalizado = centrosDeTienda(analisis.tienda).join("/");
+
   const columnas = [
     { key: 'codigo', label: 'Código' },
     { key: 'descripcion', label: 'Descripción' },
@@ -266,12 +270,14 @@ function mostrarDashboard(analisis) {
     { key: 'totalVentas', label: 'Total ventas', numeric: true },
     { key: 'promedioVentasPeriodo', label: 'Promedio ventas periodo', numeric: true },
     { key: 'stockTienda', label: 'Stock tienda', numeric: true },
+    { key: 'porSincronizar', label: 'Por sincronizar', numeric: true },
     { key: 'stockKacosa1000', label: 'Stock Kacosa 1000', numeric: true },
     { key: 'stockKacosa3000', label: 'Stock Kacosa 3000', numeric: true },
     { key: 'stockKacosa', label: 'Total Stock Kacosa', numeric: true },
     { key: 'ubicacionKacosa', label: 'Ubicación Kacosa' },
     { key: 'aPedir', label: 'A pedir', numeric: true },
-    { key: 'porDespacho', label: 'Por despacho', numeric: true },
+    { key: 'porDespacho', label: `Por despacho a ${centroAnalizado}`, numeric: true },
+    { key: 'enNotasKacosa', label: 'En notas Kacosa', numeric: true },
     { key: 'numeroDeNota', label: 'Número de nota' },
     { key: 'fechaDeNota', label: 'Fecha de nota' }
   ];
@@ -315,8 +321,10 @@ function descargarExcelDashboard(materialesOriginal, analisis) {
       stockKacosa1000: Number(m.stockKacosa1000) || 0,
       stockKacosa3000: Number(m.stockKacosa3000) || 0,
       stockKacosa: stockKacosa,
+      porSincronizar: Number(m.porSincronizar) || 0,
       ubicacionKacosa: String(m.ubicacionKacosa || ''),
       porDespacho: porDespacho,
+      enNotasKacosa: Number(m.enNotasKacosa) || 0,
       numeroDeNota: String(m.numeroDeNota || ''),
       fechaDeNota: String(m.fechaDeNota || ''),
       fechaAnalisis: analisis.fechaAnalisis || ''
@@ -361,6 +369,9 @@ function descargarExcelDashboard(materialesOriginal, analisis) {
   );
   XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
 
+  const centroAnalizado = centrosDeTienda(analisis.tienda).join("_");
+  const labelPorDespacho = `Por_Despacho_A_${centroAnalizado}`;
+
   const columnasCompletas = [
     { key: 'codigo', label: 'Codigo', ancho: 14 },
     { key: 'descripcion', label: 'Descripcion', ancho: 38 },
@@ -370,13 +381,15 @@ function descargarExcelDashboard(materialesOriginal, analisis) {
     { key: 'totalVentas', label: 'Total_Ventas', ancho: 12 },
     { key: 'promedioVentasPeriodo', label: 'Promedio_Ventas_Periodo', ancho: 16 },
     { key: 'stockTienda', label: 'Stock_Tienda', ancho: 12 },
+    { key: 'porSincronizar', label: 'Por_Sincronizar', ancho: 14 },
     { key: 'stockKacosa1000', label: 'Stock_Kacosa_1000', ancho: 14 },
     { key: 'stockKacosa3000', label: 'Stock_Kacosa_3000', ancho: 14 },
     { key: 'stockKacosa', label: 'Total_Stock_Kacosa', ancho: 14 },
     { key: 'ubicacionKacosa', label: 'Ubicacion_Kacosa', ancho: 16 },
     { key: 'umb', label: 'UMB', ancho: 10 },
     { key: 'aPedir', label: 'A_Pedir', ancho: 10 },
-    { key: 'porDespacho', label: 'Por_Despacho', ancho: 12 },
+    { key: 'porDespacho', label: labelPorDespacho, ancho: 16 },
+    { key: 'enNotasKacosa', label: 'En_Notas_Kacosa', ancho: 14 },
     { key: 'numeroDeNota', label: 'Numero_De_Nota', ancho: 14 },
     { key: 'fechaDeNota', label: 'Fecha_De_Nota', ancho: 14 },
     { key: 'periodoVentas', label: 'Periodo_Ventas', ancho: 14 },
@@ -407,6 +420,7 @@ function descargarExcelDashboard(materialesOriginal, analisis) {
     { key: 'totalVentas', label: 'Total_Ventas', ancho: 12 },
     { key: 'promedioVentasPeriodo', label: 'Promedio_Ventas_Periodo', ancho: 16 },
     { key: 'stockTienda', label: 'Stock_Tienda', ancho: 12 },
+    { key: 'porSincronizar', label: 'Por_Sincronizar', ancho: 14 },
     { key: 'umb', label: 'UMB', ancho: 10 },
     { key: 'aPedirIdeal', label: 'A_Pedir_Ideal', ancho: 12 },
     { key: 'aPedir', label: 'A_Pedir_Real', ancho: 12 },
@@ -415,6 +429,10 @@ function descargarExcelDashboard(materialesOriginal, analisis) {
     { key: 'stockKacosa3000', label: 'Stock_Kacosa_3000', ancho: 14 },
     { key: 'stockKacosa', label: 'Total_Stock_Kacosa', ancho: 14 },
     { key: 'ubicacionKacosa', label: 'Ubicacion_Kacosa', ancho: 16 },
+    { key: 'porDespacho', label: labelPorDespacho, ancho: 16 },
+    { key: 'enNotasKacosa', label: 'En_Notas_Kacosa', ancho: 14 },
+    { key: 'numeroDeNota', label: 'Numero_De_Nota', ancho: 14 },
+    { key: 'fechaDeNota', label: 'Fecha_De_Nota', ancho: 14 },
     { key: 'periodoAbastecimiento', label: 'Periodo_Abastecimiento', ancho: 16 },
     { key: 'tienda', label: 'Tienda', ancho: 14 },
     { key: 'rangoSeguridadUsado', label: 'Rango_Seguridad_Usado', ancho: 14 }
