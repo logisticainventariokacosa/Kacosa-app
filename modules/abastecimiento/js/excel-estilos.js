@@ -85,6 +85,11 @@ export function construirHojaEstilizada(filas, columnas, opciones = {}) {
 
   ws["!cols"] = columnas.map(c => ({ wch: c.ancho || Math.max(12, c.label.length + 2) }));
   ws["!rows"] = [{ hpx: 22 }];
+  // Inmoviliza la fila de encabezados (fila 1): al abrir el Excel y desplazarse
+  // hacia abajo, los títulos de columna quedan siempre visibles — el mismo
+  // efecto de "Vista > Inmovilizar fila superior" en Excel, pero ya guardado
+  // en el archivo, sin que el usuario tenga que activarlo a mano cada vez.
+  ws["!freeze"] = { xSplit: "0", ySplit: "1", topLeftCell: "A2", activePane: "bottomLeft", state: "frozen" };
 
   return ws;
 }
