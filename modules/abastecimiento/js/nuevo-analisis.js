@@ -1838,6 +1838,7 @@ async function enviarCorreo() {
         quiebresKacosa: estado.grupos.pendienteStock.length
       },
       usuarioEmail: window.KACOSA?.usuario?.email || "",
+      usuarioNombre: window.KACOSA?.usuario?.nombre || window.KACOSA?.usuario?.email || "",
       archivos
     });
 
