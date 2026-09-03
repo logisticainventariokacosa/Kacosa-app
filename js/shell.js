@@ -90,6 +90,17 @@ const MODULES = [
         // Solo supervisor/coordinador: aquí se abre/pausa/cierra un
         // inventario y se generan los Reportes SAP.
         roles: ROLES_INVENTARIO
+      },
+      {
+        id: "administracion-inventario",
+        label: "Administración",
+        icon: "fa-user-gear",
+        src: "modules/inventario/index.html#section=administracion",
+        // Visible para supervisor/coordinador/admin; cada pestaña interna
+        // se filtra según el rol real (ver administracion.js). "admin"
+        // aquí es el rol de Firestore/shell, equivalente al rol
+        // "administrador" que se agregó a la tabla usuarios de Supabase.
+        roles: ["admin", "supervisor", "coordinador"]
       }
     ]
   },
