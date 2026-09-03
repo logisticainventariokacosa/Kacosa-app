@@ -12,25 +12,54 @@
   let perfil = null;
   let materialActual = null; // material encontrado tras la búsqueda, listo para guardar
 
-  // Se llama desde inventario-fisico.js cuando el rol es "analista".
+  // Se llama desde inventario-fisico.js cuando el rol es "analista": su
+  // tienda ya está fija, se busca el inventario abierto directamente.
   window.iniciarCapturaMovil = async function (cont, perfilRecibido) {
     perfil = perfilRecibido;
-    cont.innerHTML = '<p class="muted">Buscando inventario abierto en tu tienda...</p>';
+    const centro = perfil.centros && perfil.centros[0] ? perfil.centros[0].centro : null;
+    if (!centro) {
+      cont.innerHTML = '<p class="muted">Tu usuario no tiene una tienda asignada.</p>';
+      return;
+    }
+    await cargarInventarioYMostrar(cont, centro);
+  };
 
+  // Se llama desde "Control de Inventarios" > "Contar" cuando el rol es
+  // supervisor/coordinador: como puede tener varios centros asignados,
+  // primero elige en cuál va a apoyar el conteo.
+  window.iniciarCapturaSupervisor = async function (cont, perfilRecibido) {
+    perfil = perfilRecibido;
+    if (!perfil.centros || !perfil.centros.length) {
+      cont.innerHTML = '<p class="muted">No tienes centros asignados.</p>';
+      return;
+    }
+    const opciones = perfil.centros.map(c => `<option value="${c.centro}">${c.nombre_centro} (${c.centro})</option>`).join('');
+    cont.innerHTML = `
+      <div class="search-card">
+        <h2>Contar como apoyo</h2>
+        <label for="capturaSupCentro">Centro</label>
+        <select id="capturaSupCentro" class="custom-select">${opciones}</select>
+        <div class="row" style="margin-top:14px;">
+          <button id="btnContinuarCaptura">Continuar</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('btnContinuarCaptura').addEventListener('click', () => {
+      const centro = document.getElementById('capturaSupCentro').value;
+      cargarInventarioYMostrar(cont, centro);
+    });
+  };
+
+  async function cargarInventarioYMostrar(cont, centro) {
+    cont.innerHTML = '<p class="muted">Buscando inventario abierto...</p>';
     try {
-      const centro = perfil.centros && perfil.centros[0] ? perfil.centros[0].centro : null;
-      if (!centro) {
-        cont.innerHTML = '<p class="muted">Tu usuario no tiene una tienda asignada.</p>';
-        return;
-      }
-
       const inventarios = await window.supabaseDirecto.request(
         'GET',
         'control_inventarios?centro=eq.' + encodeURIComponent(centro) + '&estado=eq.abierto&select=*&limit=1'
       );
 
       if (!inventarios || !inventarios.length) {
-        cont.innerHTML = '<p class="muted">No hay ningún inventario abierto en tu tienda todavía. Avisa a tu supervisor.</p>';
+        cont.innerHTML = '<p class="muted">No hay ningún inventario abierto en esa tienda todavía.</p>';
         return;
       }
 
@@ -46,7 +75,7 @@
     } catch (err) {
       cont.innerHTML = `<p class="muted">Error al iniciar la captura: ${err.message}</p>`;
     }
-  };
+  }
 
   function render(cont) {
     cont.innerHTML = `
@@ -321,6 +350,12 @@
         <label for="capturaObservacion" style="margin-top:10px;display:block;">Observación (opcional)</label>
         <input id="capturaObservacion" value="${ex ? (ex.observacion || '') : ''}" />
 
+        <label for="capturaVerificado" style="margin-top:10px;display:block;">Verificado</label>
+        <select id="capturaVerificado" class="custom-select">
+          <option value="false" ${!ex || !ex.verificado ? 'selected' : ''}>No</option>
+          <option value="true" ${ex && ex.verificado ? 'selected' : ''}>Sí</option>
+        </select>
+
         <label for="capturaImagenInput" style="margin-top:10px;display:block;">Foto del producto (opcional)</label>
         <input id="capturaImagenInput" type="file" accept="image/*" capture="environment" />
         <div id="capturaImagenPreview" style="margin-top:8px;"></div>
@@ -403,6 +438,7 @@
 
     const porSincronizar = parseFloat(document.getElementById('capturaPorSincronizar').value) || 0;
     const observacion = document.getElementById('capturaObservacion').value.trim();
+    const verificado = document.getElementById('capturaVerificado').value === 'true';
     const archivoImagen = document.getElementById('capturaImagenInput').files[0];
     const m = materialActual;
 
@@ -433,6 +469,7 @@
         centro: inventarioActivo.centro,
         almacen: inventarioActivo.almacen,
         usuario_asignado: emailUsuario,
+        verificado: verificado,
         correo_ultimo_auditor: emailUsuario,
         observacion: observacion
       };
@@ -530,4 +567,73 @@
     document.getElementById('capturaVideo').style.display = 'none';
     document.getElementById('capturaVideoAcciones').style.display = 'none';
   }
+  // ---------------------------------------------------------------------
+  // Modal de edición reutilizable — lo usa Monitor (supervisor) para
+  // editar un conteo existente sin tener que "entrar" a la pantalla de
+  // Captura Móvil. Incluye Verificado como Sí/No, tal como en el
+  // formulario normal de captura.
+  // ---------------------------------------------------------------------
+  window.abrirEdicionConteoModal = function (fila, opciones) {
+    opciones = opciones || {};
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;';
+    overlay.innerHTML = `
+      <div class="search-card" style="max-width:420px;width:100%;max-height:85vh;overflow-y:auto;">
+        <h3>${fila.material} — ${fila.descripcion_material || 'Sin descripción'}</h3>
+        <p class="muted">${fila.nombre_centro || fila.centro} · Almacén ${fila.almacen}</p>
+
+        <label for="modalEdicionUbicacion">Ubicación física</label>
+        <input id="modalEdicionUbicacion" value="${fila.ubicacion_fisica || ''}" />
+
+        <label for="modalEdicionConteo" style="margin-top:10px;display:block;">Conteo físico</label>
+        <input id="modalEdicionConteo" type="number" step="0.001" value="${fila.conteo}" />
+
+        <label for="modalEdicionPorSincronizar" style="margin-top:10px;display:block;">Por sincronizar</label>
+        <input id="modalEdicionPorSincronizar" type="number" step="0.001" value="${fila.por_sincronizar || 0}" />
+
+        <label for="modalEdicionObservacion" style="margin-top:10px;display:block;">Observación</label>
+        <input id="modalEdicionObservacion" value="${fila.observacion || ''}" />
+
+        <label for="modalEdicionVerificado" style="margin-top:10px;display:block;">Verificado</label>
+        <select id="modalEdicionVerificado" class="custom-select">
+          <option value="false" ${!fila.verificado ? 'selected' : ''}>No</option>
+          <option value="true" ${fila.verificado ? 'selected' : ''}>Sí</option>
+        </select>
+
+        <div class="row" style="margin-top:16px;">
+          <button id="modalEdicionGuardar">Guardar</button>
+          <button class="alt" id="modalEdicionCancelar">Cancelar</button>
+        </div>
+        <div id="modalEdicionStatus" class="muted" style="margin-top:8px;"></div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#modalEdicionCancelar').addEventListener('click', () => overlay.remove());
+    overlay.querySelector('#modalEdicionGuardar').addEventListener('click', async () => {
+      const status = overlay.querySelector('#modalEdicionStatus');
+      const ubicacion = overlay.querySelector('#modalEdicionUbicacion').value.trim();
+      const conteo = parseFloat(overlay.querySelector('#modalEdicionConteo').value);
+      if (!ubicacion) { status.textContent = 'La ubicación física es obligatoria.'; return; }
+      if (isNaN(conteo)) { status.textContent = 'El conteo físico es obligatorio.'; return; }
+
+      const cambios = {
+        ubicacion_fisica: ubicacion,
+        conteo: conteo,
+        por_sincronizar: parseFloat(overlay.querySelector('#modalEdicionPorSincronizar').value) || 0,
+        observacion: overlay.querySelector('#modalEdicionObservacion').value.trim(),
+        verificado: overlay.querySelector('#modalEdicionVerificado').value === 'true',
+        libre_utilizacion: fila.libre_utilizacion
+      };
+
+      status.textContent = 'Guardando...';
+      try {
+        await window.supabaseDirecto.request('PATCH', 'maestro_conteo?unique_id=eq.' + fila.unique_id, cambios, { Prefer: 'return=minimal' });
+        overlay.remove();
+        if (opciones.onGuardado) opciones.onGuardado(cambios);
+      } catch (err) {
+        status.textContent = 'No se pudo guardar: ' + err.message;
+      }
+    });
+  };
 })();
