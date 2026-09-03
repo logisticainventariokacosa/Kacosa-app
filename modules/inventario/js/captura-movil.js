@@ -35,6 +35,13 @@
       }
 
       inventarioActivo = inventarios[0];
+      if (inventarioActivo.estado === 'abierto') {
+        try {
+          inventarioActivo.dias_transcurridos = await window.supabaseDirecto.request(
+            'POST', 'rpc/fn_recalcular_dias_transcurridos', { p_id_inventario: inventarioActivo.id_inventario }
+          );
+        } catch (e) { /* si falla, se muestra el valor guardado */ }
+      }
       render(cont);
     } catch (err) {
       cont.innerHTML = `<p class="muted">Error al iniciar la captura: ${err.message}</p>`;
@@ -99,6 +106,10 @@
     return window.firebase && firebase.auth().currentUser ? firebase.auth().currentUser.email : '';
   }
 
+  let filasMisConteos = [];
+  let ordenMisConteosCampo = 'fecha_ultimo_conteo';
+  let ordenMisConteosDir = 'desc';
+
   // Solo lo que ESTE analista contó, en ESTE inventario (que ya sabemos
   // que está abierto, porque solo llegamos aquí si lo está), y que
   // todavía no pasó a otra etapa: sin contabilizar, no preliminar, no
@@ -110,58 +121,100 @@
     cont.innerHTML = '<p class="muted">Cargando...</p>';
 
     try {
-      const filas = await window.supabaseDirecto.request(
+      filasMisConteos = await window.supabaseDirecto.request(
         'GET',
         'maestro_conteo?id_inventario_ref=eq.' + inventarioActivo.id_inventario +
         '&usuario_asignado=eq.' + encodeURIComponent(emailActual()) +
         '&documento=eq.' + encodeURIComponent('sin contabilizar') +
         '&preliminar=eq.false&verificado=eq.false' +
-        '&select=*&order=fecha_ultimo_conteo.desc&limit=200'
-      );
+        '&select=*&limit=200'
+      ) || [];
 
-      if (!filas || !filas.length) {
+      if (!filasMisConteos.length) {
         cont.innerHTML = '<p class="muted">Todavía no has registrado conteos en este inventario.</p>';
         return;
       }
 
-      cont.innerHTML = `
-        <div class="table-container">
-          <table class="inventory-table">
-            <thead>
-              <tr>
-                <th>Material</th>
-                <th>Ubicación</th>
-                <th>Conteo</th>
-                <th>Sistema</th>
-                <th>Estatus</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              ${filas.map(f => `
-                <tr data-id="${f.unique_id}">
-                  <td>${f.material}<br/><span class="muted" style="font-weight:400;">${f.descripcion_material || ''}</span></td>
-                  <td>${f.ubicacion_fisica || '—'}</td>
-                  <td>${f.conteo}</td>
-                  <td>${f.libre_utilizacion}</td>
-                  <td><span class="fisico-badge ${f.estatus_diferencia || ''}">${f.estatus_diferencia || '—'}</span></td>
-                  <td><button class="alt" data-editar="${f.unique_id}">Ver / editar</button></td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      `;
-
-      cont.querySelectorAll('button[data-editar]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const fila = filas.find(f => String(f.unique_id) === btn.dataset.editar);
-          if (fila) cargarParaEditar(fila);
-        });
-      });
+      ordenarYRenderizarMisConteos();
     } catch (err) {
       cont.innerHTML = `<p class="muted">Error al cargar tus conteos: ${err.message}</p>`;
     }
+  }
+
+  function filaMisConteosHtml(f) {
+    return `
+      <tr data-id="${f.unique_id}">
+        <td>${f.material}</td>
+        <td>${f.descripcion_material || '—'}</td>
+        <td>${f.ubicacion_fisica || '—'}</td>
+        <td>${f.conteo}</td>
+        <td>${f.por_sincronizar}</td>
+        <td>${f.libre_utilizacion}</td>
+        <td>${f.diferencia}</td>
+        <td><span class="fisico-badge ${f.estatus_diferencia || ''}">${f.estatus_diferencia || '—'}</span></td>
+        <td><button class="alt" data-editar="${f.unique_id}">Ver / editar</button></td>
+      </tr>
+    `;
+  }
+
+  function ordenarYRenderizarMisConteos() {
+    const cont = document.getElementById('misConteosLista');
+    const campo = ordenMisConteosCampo;
+    const dir = ordenMisConteosDir === 'asc' ? 1 : -1;
+    const copia = filasMisConteos.slice().sort((a, b) => {
+      const va = a[campo], vb = b[campo];
+      if (va === null || va === undefined) return 1;
+      if (vb === null || vb === undefined) return -1;
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
+      return String(va).localeCompare(String(vb)) * dir;
+    });
+
+    cont.innerHTML = `
+      <div class="table-container">
+        <table class="inventory-table" id="misConteosTabla">
+          <thead>
+            <tr>
+              <th data-ordenar="material">Material</th>
+              <th data-ordenar="descripcion_material">Descripción</th>
+              <th data-ordenar="ubicacion_fisica">Ubicación</th>
+              <th data-ordenar="conteo">Conteo</th>
+              <th data-ordenar="por_sincronizar">Por sincronizar</th>
+              <th data-ordenar="libre_utilizacion">Sistema</th>
+              <th data-ordenar="diferencia">Diferencia</th>
+              <th data-ordenar="estatus_diferencia">Estatus</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${copia.map(filaMisConteosHtml).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    document.querySelectorAll('#misConteosTabla th[data-ordenar]').forEach(th => {
+      th.style.cursor = 'pointer';
+      if (th.dataset.ordenar === ordenMisConteosCampo) {
+        th.textContent += ordenMisConteosDir === 'asc' ? ' ▲' : ' ▼';
+      }
+      th.addEventListener('click', () => {
+        const campo = th.dataset.ordenar;
+        if (ordenMisConteosCampo === campo) {
+          ordenMisConteosDir = ordenMisConteosDir === 'asc' ? 'desc' : 'asc';
+        } else {
+          ordenMisConteosCampo = campo;
+          ordenMisConteosDir = 'asc';
+        }
+        ordenarYRenderizarMisConteos();
+      });
+    });
+
+    cont.querySelectorAll('button[data-editar]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const fila = filasMisConteos.find(f => String(f.unique_id) === btn.dataset.editar);
+        if (fila) cargarParaEditar(fila);
+      });
+    });
   }
 
   // Reutiliza el mismo formulario de captura, precargado con un registro
