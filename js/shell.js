@@ -1,4 +1,4 @@
-import { auth, db, googleProvider } from "./firebase-config.js?v=1";
+import { auth, db, googleProvider } from "./firebase-config.js";
 import {
   signInWithPopup, signOut, onAuthStateChanged,
   signInWithEmailAndPassword, updatePassword, EmailAuthProvider, reauthenticateWithCredential,
@@ -78,7 +78,18 @@ const MODULES = [
         // ("usuarios" > campo "rol") debe tener el valor "analista" —
         // es un rol de PORTAL (shell), distinto del rol "analista" que
         // ya existe en la tabla "usuarios" de Supabase.
+        // El analista ve la Captura Móvil; supervisor/coordinador ven
+        // todos los conteos a los que tienen acceso.
         roles: [...ROLES_INVENTARIO, "analista"]
+      },
+      {
+        id: "control-inventarios",
+        label: "Control de Inventarios",
+        icon: "fa-clipboard-check",
+        src: "modules/inventario/index.html#section=control-inventarios",
+        // Solo supervisor/coordinador: aquí se abre/pausa/cierra un
+        // inventario y se generan los Reportes SAP.
+        roles: ROLES_INVENTARIO
       }
     ]
   },
@@ -348,17 +359,6 @@ onAuthStateChanged(auth, async (user) => {
     localStorage.removeItem(CLAVE_HUBO_SESION);
     loginStatus.classList.remove("text-kacosa-600");
     loginStatus.textContent = "";
-    // Destruye por completo el submódulo que estuviera cargado en el iframe:
-    // antes, al cerrar sesión, el iframe simplemente quedaba OCULTO detrás de
-    // la pantalla de login (con todo su JS y su estado en memoria intactos y
-    // corriendo). Si al volver a entrar se abría el MISMO submódulo, el
-    // navegador ni siquiera lo recargaba (el <iframe src="..."> ya tenía
-    // exactamente esa URL, y asignar el mismo valor no dispara una recarga) —
-    // por eso reaparecía con toda la "memoria" de la sesión anterior. Navegar
-    // a about:blank descarga el documento del iframe por completo, así que la
-    // próxima vez que se abra cualquier submódulo, se carga 100% desde cero.
-    if (moduleFrame) moduleFrame.src = "about:blank";
-    submoduloActivoId = null;
     mostrarPantalla("login");
     return;
   }
