@@ -9,11 +9,11 @@
   const FILAS_POR_PAGINA = 50;
 
   const COLUMNAS = [
-    { campo: 'material', label: 'Material', tipo: 'texto' },
-    { campo: 'descripcion_material', label: 'Descripción', tipo: 'texto' },
+    { campo: 'material', label: 'Material', tipo: 'campo_libre', validacion: 'material' },
+    { campo: 'descripcion_material', label: 'Descripción', tipo: 'campo_libre', validacion: 'descripcion' },
     { campo: 'centro', label: 'Centro', tipo: 'texto', render: f => `${f.nombre_centro || f.centro}` },
     { campo: 'almacen', label: 'Almacén', tipo: 'texto' },
-    { campo: 'ubicacion_fisica', label: 'Ubicación', tipo: 'texto' },
+    { campo: 'ubicacion_fisica', label: 'Ubicación', tipo: 'campo_libre', validacion: 'ubicacion' },
     { campo: 'conteo', label: 'Conteo', tipo: 'numero' },
     { campo: 'por_sincronizar', label: 'Por sincronizar', tipo: 'numero' },
     { campo: 'libre_utilizacion', label: 'Sistema', tipo: 'numero' },
@@ -51,6 +51,7 @@
         .monitor-badge.sobra{background:#fef3c7;color:#92400e;}
         .monitor-badge.ok{background:#dcfce7;color:#166534;}
         #monitorTabla td, #monitorTabla th{white-space:nowrap;}
+        #monitorTabla td.celda-larga{white-space:normal;word-break:break-word;overflow-wrap:break-word;max-width:220px;min-width:140px;}
         #monitorTabla th{cursor:pointer;user-select:none;}
         #monitorTabla th .filtro-icono{margin-left:6px;cursor:pointer;}
         #monitorTabla th .filtro-activo{color:#dc2626;}
@@ -161,6 +162,12 @@
         return true;
       }
 
+      if (filtro.tipo === 'campo_libre') {
+        const blanco = valorEsBlanco(valor);
+        if (blanco) return false;
+        return String(valor).toLowerCase().includes(filtro.valor.toLowerCase());
+      }
+
       return true;
     });
   }
@@ -246,10 +253,16 @@
     </th>`;
   }
 
+  const COLUMNAS_TEXTO_LARGO = new Set(['descripcion_material', 'ubicacion_fisica']);
+
   function filaHtml(f) {
     return `
       <tr data-id="${f.unique_id}">
-        ${COLUMNAS.map(col => `<td>${col.render ? col.render(f) : (valorEsBlanco(f[col.campo]) ? '—' : f[col.campo])}</td>`).join('')}
+        ${COLUMNAS.map(col => {
+          const claseLarga = COLUMNAS_TEXTO_LARGO.has(col.campo) ? ' class="celda-larga"' : '';
+          const valor = col.render ? col.render(f) : (valorEsBlanco(f[col.campo]) ? '—' : f[col.campo]);
+          return `<td${claseLarga}>${valor}</td>`;
+        }).join('')}
         <td>
           <div class="monitor-acciones">
             <button class="alt" data-accion="verificar" data-id="${f.unique_id}">${f.verificado ? 'Desverif.' : 'Verificar'}</button>
@@ -276,11 +289,27 @@
     return { valores: Array.from(set).sort(), hayBlancos };
   }
 
+  const VALIDACIONES_CAMPO_LIBRE = {
+    material: { tipoInput: 'text', inputMode: 'numeric', pattern: '[0-9]*', maxlength: 15, minlength: 3, mensaje: 'El material solo admite números, entre 3 y 15 dígitos.', validar: v => /^[0-9]{3,15}$/.test(v) },
+    descripcion: { tipoInput: 'text', maxlength: 100, mensaje: 'Máximo 100 caracteres.', validar: v => v.length > 0 && v.length <= 100 },
+    ubicacion: { tipoInput: 'text', maxlength: 20, mensaje: 'Máximo 20 caracteres.', validar: v => v.length > 0 && v.length <= 20 }
+  };
+
   function abrirModalFiltro(col) {
     const actual = filtrosColumna[col.campo];
     let cuerpoHtml = '';
 
-    if (col.tipo === 'texto' || col.tipo === 'booleano') {
+    if (col.tipo === 'campo_libre') {
+      const val = VALIDACIONES_CAMPO_LIBRE[col.validacion];
+      cuerpoHtml = `
+        <label>Contiene</label>
+        <input id="modalValor" type="${val.tipoInput}" inputmode="${val.inputMode || ''}"
+               maxlength="${val.maxlength}" value="${actual ? actual.valor || '' : ''}"
+               placeholder="Escribe para buscar en ${col.label.toLowerCase()}..." />
+        <p class="muted" style="font-size:0.78rem;margin-top:4px;">${val.mensaje}</p>
+        <div id="modalErrorValidacion" style="color:#dc2626;font-size:0.8rem;margin-top:4px;"></div>
+      `;
+    } else if (col.tipo === 'texto' || col.tipo === 'booleano') {
       const { valores, hayBlancos } = valoresDistintos(col.campo);
       const incluidos = actual && actual.tipo === 'valores' ? actual.incluidos : new Set(valores);
       const incluirBlancos = actual && actual.tipo === 'valores' ? actual.incluirBlancos : true;
@@ -352,7 +381,18 @@
       aplicarYRenderizar();
     });
     overlay.querySelector('#modalAplicar').addEventListener('click', () => {
-      if (col.tipo === 'texto' || col.tipo === 'booleano') {
+      if (col.tipo === 'campo_libre') {
+        const val = VALIDACIONES_CAMPO_LIBRE[col.validacion];
+        const valor = overlay.querySelector('#modalValor').value.trim();
+        if (!valor) {
+          delete filtrosColumna[col.campo];
+        } else if (!val.validar(valor)) {
+          overlay.querySelector('#modalErrorValidacion').textContent = val.mensaje;
+          return; // no cierra el modal hasta que sea válido
+        } else {
+          filtrosColumna[col.campo] = { tipo: 'campo_libre', valor };
+        }
+      } else if (col.tipo === 'texto' || col.tipo === 'booleano') {
         const casillas = Array.from(overlay.querySelectorAll('.lista-valores input[type="checkbox"]'));
         const incluirBlancos = casillas.some(cb => cb.value === '__blanco__' && cb.checked);
         const incluidos = new Set(casillas.filter(cb => cb.checked && cb.value !== '__blanco__').map(cb => cb.value));
