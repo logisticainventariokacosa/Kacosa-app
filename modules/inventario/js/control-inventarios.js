@@ -35,6 +35,7 @@
     cont.innerHTML = `
       <div class="row" style="gap:8px;margin-bottom:16px;">
         <button id="tabApertura">Apertura / Control</button>
+        <button class="alt" id="tabContar">Contar</button>
         <button class="alt" id="tabReportes">Reportes SAP</button>
       </div>
       <div id="controlSub"></div>
@@ -42,7 +43,7 @@
     const sub = document.getElementById('controlSub');
 
     function marcarActiva(idActivo) {
-      ['tabApertura', 'tabReportes'].forEach(id => {
+      ['tabApertura', 'tabContar', 'tabReportes'].forEach(id => {
         document.getElementById(id).className = id === idActivo ? '' : 'alt';
       });
     }
@@ -51,6 +52,14 @@
       marcarActiva('tabApertura');
       render(sub);
       refrescarListado();
+    });
+    document.getElementById('tabContar').addEventListener('click', () => {
+      marcarActiva('tabContar');
+      if (typeof window.iniciarCapturaSupervisor === 'function') {
+        window.iniciarCapturaSupervisor(sub, perfilActual);
+      } else {
+        sub.innerHTML = '<p class="muted">La captura todavía no está disponible.</p>';
+      }
     });
     document.getElementById('tabReportes').addEventListener('click', () => {
       marcarActiva('tabReportes');
