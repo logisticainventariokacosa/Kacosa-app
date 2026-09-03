@@ -265,7 +265,7 @@
         }).join('')}
         <td>
           <div class="monitor-acciones">
-            <button class="alt" data-accion="verificar" data-id="${f.unique_id}">${f.verificado ? 'Desverif.' : 'Verificar'}</button>
+            <button data-accion="editar" data-id="${f.unique_id}">Editar</button>
             <button class="alt" data-accion="preliminar" data-id="${f.unique_id}">${f.preliminar ? 'Quitar prelim.' : 'Preliminar'}</button>
             <button class="alt" data-accion="reasignar" data-id="${f.unique_id}" data-centro="${f.centro}">Reasignar</button>
           </div>
@@ -432,8 +432,17 @@
     const fila = datosCompletos.find(f => String(f.unique_id) === id);
     if (!fila) return;
 
-    if (accion === 'verificar') {
-      await actualizar(id, { verificado: !fila.verificado });
+    if (accion === 'editar') {
+      if (typeof window.abrirEdicionConteoModal !== 'function') {
+        alert('El editor de conteos todavía no está cargado (falta captura-movil.js en esta página).');
+        return;
+      }
+      window.abrirEdicionConteoModal(fila, {
+        onGuardado: (cambios) => {
+          Object.assign(fila, cambios);
+          aplicarYRenderizar();
+        }
+      });
     } else if (accion === 'preliminar') {
       await actualizar(id, { preliminar: !fila.preliminar });
     } else if (accion === 'reasignar') {
