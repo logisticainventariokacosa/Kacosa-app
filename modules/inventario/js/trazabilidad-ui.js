@@ -1,4 +1,31 @@
 // js/trazabilidad-ui.js - Módulo independiente de Trazabilidad (MODULAR)
+
+// Columnas obligatorias del archivo importado (Excel o .MHT). Los patrones
+// de coincidencia son los MISMOS que usa TrazabilidadCore.transformRow()
+// para encontrar cada columna — si transformRow no podría encontrarla,
+// tampoco pasa la validación, así ambas partes quedan sincronizadas.
+const REQUISITOS_COLUMNAS_TRAZABILIDAD = [
+    { nombre: 'Material', patrones: ['material', 'mat'] },
+    { nombre: 'Texto breve de material', patrones: ['texto', 'descripcion', 'descr'] },
+    { nombre: 'Centro', patrones: ['centro', 'center'] },
+    { nombre: 'Almacén', patrones: ['almacen', 'almacén', 'alm'] },
+    { nombre: 'Clase de movimiento', patrones: ['clase', 'movimiento', 'mov'] },
+    { nombre: 'Documento material', patrones: ['documento', 'doc'] },
+    { nombre: 'Fe.contabilización', patrones: ['fe.contabilizacion', 'fecha', 'fe'] },
+    { nombre: 'Hora de entrada', patrones: ['hora', 'time'] },
+    { nombre: 'Ctd.en UM entrada', patrones: ['ctd', 'cantidad', 'qty'] },
+    { nombre: 'Un.medida de entrada', patrones: ['un.medida', 'unidad', 'um'] },
+    { nombre: 'Cliente', patrones: ['cliente', 'customer'] },
+    { nombre: 'Nombre del usuario', patrones: ['usuario', 'user', 'nombre'] }
+];
+
+function validarColumnasTrazabilidad(headers) {
+    const headersLower = (headers || []).map(h => String(h).toLowerCase());
+    return REQUISITOS_COLUMNAS_TRAZABILIDAD
+        .filter(req => !headersLower.some(h => req.patrones.some(p => h.includes(p))))
+        .map(req => req.nombre);
+}
+
 class TrazabilidadSystem {
     constructor(container) {
         this.container = container;
@@ -10,6 +37,47 @@ class TrazabilidadSystem {
         // encabezados (clic para ordenar asc/desc por esa columna), igual
         // que en la tabla de resultados de Consultas.
         this.ordenReporte = { columna: null, asc: true };
+    }
+
+    // Valida las columnas y, si todo está bien, procesa las filas
+    // (compartido entre la ruta .MHT y la ruta Excel del fileInput).
+    procesarFilasImportadas(json, nombreArchivo) {
+        if (!json || !json.length) {
+            this.showCustomAlert('No se detectaron filas en el archivo.', 'warning');
+            return;
+        }
+
+        const headers = Object.keys(json[0]);
+        const faltantes = validarColumnasTrazabilidad(headers);
+        if (faltantes.length) {
+            this.showCustomAlert(
+                `El archivo "${nombreArchivo}" no tiene el formato esperado de Trazabilidad. ` +
+                `Faltan estas columnas (o no se reconocen sus encabezados): ${faltantes.join(', ')}.`,
+                'error'
+            );
+            return;
+        }
+
+        this.core.rawRows = json.map(r => this.core.transformRow(r));
+        if (!this.core.rawRows.length) {
+            this.showCustomAlert('No se detectaron filas en el archivo.', 'warning');
+            return;
+        }
+        this.core.populateMaterialList(this.core.rawRows);
+
+        const filterCentro = document.getElementById('filterCentro');
+        filterCentro.innerHTML = '<option value="">-- Todos --</option>';
+        Array.from(this.core.centroSet).sort().forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c;
+            opt.textContent = c;
+            filterCentro.appendChild(opt);
+        });
+
+        document.getElementById('listMaterialsBtn').disabled = false;
+        document.getElementById('configStockBtn').disabled = false;
+        document.getElementById('generateBtn').disabled = false;
+        document.getElementById('downloadExcelBtn').disabled = true;
     }
 
     // Columnas numéricas del reporte (para que el orden compare por valor y
@@ -92,14 +160,15 @@ class TrazabilidadSystem {
             <div class="trazabilidad-container">
                 <div class="trazabilidad-header">
                     <h3>Analizador de Trazabilidad de Mercancía</h3>
-                    <p>Sube un archivo Excel con las columnas: Material, Texto breve de material, Centro, Almacén, Clase de movimiento, Documento material, Fe.contabilización, Hora de entrada, Ctd.en UM entrada, Un.medida de entrada, Cliente, Nombre del usuario</p>
+                    <p>Sube un archivo con las columnas: Material, Texto breve de material, Centro, Almacén, Clase de movimiento, Documento material, Fe.contabilización, Hora de entrada, Ctd.en UM entrada, Un.medida de entrada, Cliente, Nombre del usuario</p>
+                    <p class="muted" style="font-size:0.85rem;">Recomendado: exporta desde SAP como .MHT (carga mucho más rápido que Excel). También se acepta .xlsx/.xls.</p>
                 </div>
 
                 <div class="search-card">
                     <div class="filter-controls">
                         <div class="filter-input-group">
-                            <label for="fileInput">Archivo Excel (.xlsx/.xls):</label>
-                            <input type="file" id="fileInput" accept=".xlsx,.xls" />
+                            <label for="fileInput">Archivo (.mht recomendado, o .xlsx/.xls):</label>
+                            <input type="file" id="fileInput" accept=".mht,.mhtml,.xlsx,.xls" />
                         </div>
 
                         <div class="filter-input-group">
@@ -829,41 +898,33 @@ goBackToReports() {
         document.getElementById('fileInput').addEventListener('change', (e) => {
             const f = e.target.files[0];
             if (!f) return;
+            const nombreArchivo = f.name.toLowerCase();
+            const esMht = nombreArchivo.endsWith('.mht') || nombreArchivo.endsWith('.mhtml');
+
             const reader = new FileReader();
-            reader.onload = function(ev) {
+            reader.onload = (ev) => {
                 try {
-                    const data = new Uint8Array(ev.target.result);
-                    const wb = XLSX.read(data, {type:'array'});
-                    const firstSheetName = wb.SheetNames[0];
-                    const ws = wb.Sheets[firstSheetName];
-                    const json = XLSX.utils.sheet_to_json(ws, {defval:''});
-                    this.core.rawRows = json.map(r => this.core.transformRow(r));
-                    if (!this.core.rawRows.length) { 
-                        this.showCustomAlert('No se detectaron filas en el archivo.', 'warning');
-                        return; 
+                    let json;
+                    if (esMht) {
+                        json = window.parsearMHT(ev.target.result);
+                    } else {
+                        const data = new Uint8Array(ev.target.result);
+                        const wb = XLSX.read(data, {type:'array'});
+                        const firstSheetName = wb.SheetNames[0];
+                        const ws = wb.Sheets[firstSheetName];
+                        json = XLSX.utils.sheet_to_json(ws, {defval:''});
                     }
-                    this.core.populateMaterialList(this.core.rawRows);
-                    
-                    // Fill filterCentro
-                    const filterCentro = document.getElementById('filterCentro');
-                    filterCentro.innerHTML = '<option value="">-- Todos --</option>';
-                    Array.from(this.core.centroSet).sort().forEach(c => {
-                        const opt = document.createElement('option');
-                        opt.value = c;
-                        opt.textContent = c;
-                        filterCentro.appendChild(opt);
-                    });
-                    
-                    document.getElementById('listMaterialsBtn').disabled = false;
-                    document.getElementById('configStockBtn').disabled = false;
-                    document.getElementById('generateBtn').disabled = false;
-                    document.getElementById('downloadExcelBtn').disabled = true;
+                    this.procesarFilasImportadas(json, f.name);
                 } catch(err) {
                     console.error(err);
                     this.showCustomAlert('Error leyendo archivo: ' + err.message, 'error');
                 }
-            }.bind(this);
-            reader.readAsArrayBuffer(f);
+            };
+            if (esMht) {
+                reader.readAsText(f, 'UTF-8');
+            } else {
+                reader.readAsArrayBuffer(f);
+            }
         });
 
         // Render materials list
