@@ -66,41 +66,6 @@ const MODULES = [
         icon: "fa-magnifying-glass",
         src: "modules/inventario/index.html#section=home",
         roles: ROLES_INVENTARIO
-      },
-      {
-        id: "toma-fisica",
-        label: "Inventario Físico",
-        icon: "fa-clipboard-list",
-        src: "modules/inventario/index.html#section=fisico",
-        // Se agrega "analista" además de los roles habituales: la Fase 2b
-        // (Captura Móvil) la usará el analista de campo. Para que un
-        // usuario vea esta pestaña, su documento en Firestore
-        // ("usuarios" > campo "rol") debe tener el valor "analista" —
-        // es un rol de PORTAL (shell), distinto del rol "analista" que
-        // ya existe en la tabla "usuarios" de Supabase.
-        // El analista ve la Captura Móvil; supervisor/coordinador ven
-        // todos los conteos a los que tienen acceso.
-        roles: [...ROLES_INVENTARIO, "analista"]
-      },
-      {
-        id: "control-inventarios",
-        label: "Control de Inventarios",
-        icon: "fa-clipboard-check",
-        src: "modules/inventario/index.html#section=control-inventarios",
-        // Solo supervisor/coordinador: aquí se abre/pausa/cierra un
-        // inventario y se generan los Reportes SAP.
-        roles: ROLES_INVENTARIO
-      },
-      {
-        id: "administracion-inventario",
-        label: "Administración",
-        icon: "fa-user-gear",
-        src: "modules/inventario/index.html#section=administracion",
-        // Visible para supervisor/coordinador/admin; cada pestaña interna
-        // se filtra según el rol real (ver administracion.js). "admin"
-        // aquí es el rol de Firestore/shell, equivalente al rol
-        // "administrador" que se agregó a la tabla usuarios de Supabase.
-        roles: ["admin", "supervisor", "coordinador"]
       }
     ]
   },
