@@ -1,5 +1,8 @@
 /* ====== CONFIG ====== */
-const API_URL = 'https://script.google.com/macros/s/AKfycbzGoWmn4doU1_vDqQvWYbqg4WzW8WD6y64lI96xKYn_bGd-L1THgt3HVJJl_BprqpysTA/exec';
+// Antes apuntaba a un proyecto de Apps Script aparte; ahora ese código
+// (Reportes_legado.gs) vive en el mismo proyecto que el resto del bridge,
+// así que usa la misma URL de deployment.
+const API_URL = 'https://script.google.com/macros/s/AKfycbw6A3DVq4zgEp0ekfOFawtjzw0rFogHMjcs95x4bHLyxOOWmqyChiJNI0rpdPpiV0fQ/exec';
 
 // Kacosa App: Consultas ahora busca en la MISMA fuente que usa el Dashboard
 // de Resumen de Inventarios (Maestro_Conteo_Completo + Tiendas_Upi +
