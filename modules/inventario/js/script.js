@@ -343,30 +343,29 @@ function getAlertTitle(type) {
     }
 
     async function callApi(action, payload = {}) {
-        const isNoCors = (action === 'uploadFile' || action === 'addNews' || action === 'registerUser'); 
+        const requiereToken = (action === 'uploadFile' || action === 'addNews' || action === 'registerUser'); 
         let extra = {};
-        if (isNoCors) {
-            // El doPost del backend consolidado exige idToken para autorizar
-            // cualquier acción (a diferencia del proyecto viejo, que no
-            // pedía autorización para estas 3). El usuario ya tiene sesión
-            // de Firebase iniciada para poder ver esta página, así que
-            // conseguir el token aquí es inmediato.
+        if (requiereToken) {
             const user = firebase.auth().currentUser;
             if (user) {
                 try { extra.idToken = await user.getIdToken(); } catch (e) { /* si falla, sigue sin token y el backend lo rechazará con un error claro */ }
             }
         }
         const body = JSON.stringify(Object.assign({ action }, extra, payload));
-        if (isNoCors) {
-            await fetch(API_URL, { method: 'POST', body, mode: 'no-cors' }); 
-            return { ok: true, opaque: true };
-        } else {
-            const res = await fetch(API_URL, {
-                method:'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body
-            });
-            return res.json();
+        // Antes 'uploadFile'/'addNews'/'registerUser' iban en modo no-cors
+        // (respuesta invisible para el navegador). Se quitó para poder ver
+        // el error real mientras se depura por qué no se están guardando.
+        const res = await fetch(API_URL, {
+            method:'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body
+        });
+        try {
+            return await res.json();
+        } catch (e) {
+            const texto = await res.text().catch(() => '(sin cuerpo)');
+            console.error('Respuesta no-JSON de', action, ':', texto);
+            return { ok: false, error: 'Respuesta inesperada del servidor: ' + texto.slice(0, 300) };
         }
     }
 
@@ -634,14 +633,19 @@ document.getElementById('filterCenter').addEventListener('change', function() {
         }
         document.getElementById('docStatus').textContent = 'Subiendo...';
         try {
-            await uploadFile(f.files[0], name);
+            const resultado = await uploadFile(f.files[0], name);
+            if (resultado && resultado.error) {
+                document.getElementById('docStatus').textContent = 'Error: ' + resultado.error;
+                console.error('Error al subir documento:', resultado.error);
+                return;
+            }
             document.getElementById('docStatus').textContent = 'Documento subido. Recargando lista...';
             await listUploads('documents');
             document.getElementById('docStatus').textContent = 'Subido: ' + name;
             document.getElementById('docFile').value = '';
             document.getElementById('docName').value = '';
         } catch (e) {
-            document.getElementById('docStatus').textContent = 'Error al subir';
+            document.getElementById('docStatus').textContent = 'Error al subir: ' + e.message;
             console.error(e);
         }
     });
@@ -659,14 +663,19 @@ document.getElementById('filterCenter').addEventListener('change', function() {
         }
         document.getElementById('imgStatus').textContent = 'Subiendo...';
         try {
-            await uploadFile(f.files[0], name);
+            const resultado = await uploadFile(f.files[0], name);
+            if (resultado && resultado.error) {
+                document.getElementById('imgStatus').textContent = 'Error: ' + resultado.error;
+                console.error('Error al subir imagen:', resultado.error);
+                return;
+            }
             document.getElementById('imgStatus').textContent = 'Imagen subida. Recargando lista...';
             await listUploads('images');
             document.getElementById('imgStatus').textContent = 'Subido: ' + name;
             document.getElementById('imgFile').value = '';
             document.getElementById('imgName').value = '';
         } catch (e) {
-            document.getElementById('imgStatus').textContent = 'Error al subir';
+            document.getElementById('imgStatus').textContent = 'Error al subir: ' + e.message;
             console.error(e);
         }
     });
@@ -888,7 +897,12 @@ document.getElementById('filterCenter').addEventListener('change', function() {
             
             status.textContent = 'Publicando noticia..';
             const newsData = { titulo: title, contenido: content, imagenUrl: imageUrl };
-            await callApi('addNews', { news: newsData });
+            const resultado = await callApi('addNews', { news: newsData });
+            if (resultado && resultado.error) {
+                status.textContent = '❌ Error: ' + resultado.error;
+                console.error('Error al publicar noticia:', resultado.error);
+                return;
+            }
             status.textContent = '✅ Noticia publicada exitosamente. Recargando lista...';
             document.getElementById('createNewsForm').classList.add('hidden');
             await loadNews();
