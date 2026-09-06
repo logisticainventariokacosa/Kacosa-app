@@ -344,7 +344,19 @@ function getAlertTitle(type) {
 
     async function callApi(action, payload = {}) {
         const isNoCors = (action === 'uploadFile' || action === 'addNews' || action === 'registerUser'); 
-        const body = JSON.stringify(Object.assign({ action }, payload));
+        let extra = {};
+        if (isNoCors) {
+            // El doPost del backend consolidado exige idToken para autorizar
+            // cualquier acción (a diferencia del proyecto viejo, que no
+            // pedía autorización para estas 3). El usuario ya tiene sesión
+            // de Firebase iniciada para poder ver esta página, así que
+            // conseguir el token aquí es inmediato.
+            const user = firebase.auth().currentUser;
+            if (user) {
+                try { extra.idToken = await user.getIdToken(); } catch (e) { /* si falla, sigue sin token y el backend lo rechazará con un error claro */ }
+            }
+        }
+        const body = JSON.stringify(Object.assign({ action }, extra, payload));
         if (isNoCors) {
             await fetch(API_URL, { method: 'POST', body, mode: 'no-cors' }); 
             return { ok: true, opaque: true };
