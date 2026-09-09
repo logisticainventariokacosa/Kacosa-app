@@ -12,9 +12,15 @@
 // "último análisis guardado" de alguien a la fecha de la consulta.
 import { callBridge } from "./bridge.js";
 import { crearTablaPaginada } from "./tabla-utils.js";
-import { TIENDAS, centrosDeTienda } from "./tiendas.js";
+import { TIENDAS, centrosDeTienda, nombrePorId } from "./tiendas.js";
 import { construirHojaEstilizada } from "./excel-estilos.js";
 import { notificarExito } from "./notificaciones.js";
+
+// Margen que se le suma al promedio de ventas mensual de cada tienda ANTES
+// de calcular su proporción en el "Sugerido de distribución" del modo
+// "Pendiente" (ver calcularDistribucionSugerida). Definido a pedido de
+// Logística: +20%.
+const MARGEN_SUGERIDO_DISTRIBUCION = 1.2;
 
 let ultimoResultado = [];   // detalle tal cual vino del servidor (con el filtro aplicado)
 let vistaActual = "detalle"; // 'detalle' | 'resumen'  (solo aplica cuando modoConsulta === 'general')
@@ -233,6 +239,184 @@ function totalizarPorMaterial(materiales, campo) {
   return Object.values(mapa).filter(m => m.total > 0);
 }
 
+/**
+ * Igual que totalizarPorMaterial() pero específica para el modo "Pendiente":
+ * además del total Pendiente por material, suma el Total de ventas y el
+ * Promedio de ventas mensual (mismo criterio de suma entre las tiendas/
+ * filtros elegidos, tal como ya vienen guardados por tienda en el último
+ * análisis de cada una — columnas total_ventas y promedio_ventas_periodo de
+ * la tabla "analisis") y arma "porTienda": el desglose por tienda de
+ * Pendiente + Promedio de ventas mensual que necesita
+ * calcularDistribucionSugerida() para construir el "Sugerido de
+ * distribución". Solo se cuentan en "porTienda" las tiendas que SÍ tienen
+ * Pendiente > 0 para ese material — una tienda con Pendiente 0 ya tiene
+ * suficiente y no debería recibir reparto sugerido, aunque haya aparecido en
+ * la consulta.
+ */
+function totalizarPendientePorMaterial(materiales) {
+  const mapa = {};
+  materiales.forEach(m => {
+    if (!mapa[m.codigo]) {
+      mapa[m.codigo] = {
+        codigo: m.codigo,
+        descripcion: m.descripcion,
+        umb: m.umb,
+        clase: m.clase || '',
+        total: 0,
+        totalVentas: 0,
+        promedioVentasMensual: 0,
+        porTienda: {}
+      };
+    }
+    const g = mapa[m.codigo];
+    const pendiente = m.pendiente || 0;
+    g.total += pendiente;
+    g.totalVentas += m.totalVentas || 0;
+    g.promedioVentasMensual += m.promedioVentasPeriodo || 0;
+
+    if (pendiente > 0) {
+      if (!g.porTienda[m.tienda]) {
+        g.porTienda[m.tienda] = { pendiente: 0, promedioVentasMensual: 0 };
+      }
+      g.porTienda[m.tienda].pendiente += pendiente;
+      g.porTienda[m.tienda].promedioVentasMensual += m.promedioVentasPeriodo || 0;
+    }
+  });
+
+  return Object.values(mapa)
+    .filter(m => m.total > 0)
+    .map(m => ({ ...m, distribucion: calcularDistribucionSugerida(m.total, m.porTienda) }));
+}
+
+/**
+ * Sugiere cómo repartir el total "Pendiente" de un material (ya sumado entre
+ * las tiendas/filtros elegidos) entre las tiendas que realmente lo componen:
+ *
+ *   - 1 sola tienda involucrada -> el sugerido es igual al total Pendiente
+ *     (no hay nada que repartir).
+ *   - 2 o más tiendas involucradas -> se reparte proporcional al promedio de
+ *     ventas mensual de cada tienda +20% (a pedido de Logística: el +20% se
+ *     suma como margen sobre el promedio de CADA tienda antes de sacar su
+ *     proporción). El total repartido entre las tiendas sigue sumando
+ *     EXACTO el Pendiente — el +20% solo influye en qué tanto le toca a
+ *     cada tienda dentro de ese total, no lo aumenta.
+ *
+ * Respaldo si ninguna de las tiendas involucradas tiene ventas registradas
+ * (todas en 0): se reparte proporcional al Pendiente propio de cada tienda
+ * (mismo criterio que ya usa "Ver distribución" en Alertas Kacosa), y si
+ * tampoco hay Pendiente (no debería pasar, ya que solo entran tiendas con
+ * Pendiente > 0) se reparte en partes iguales, para nunca dividir entre 0.
+ *
+ * @param {number} totalPendiente Total Pendiente del material a repartir.
+ * @param {Object} porTienda { idTienda: { pendiente, promedioVentasMensual } }
+ * @returns {Object} { idTienda: cantidadSugerida }
+ */
+function calcularDistribucionSugerida(totalPendiente, porTienda) {
+  const tiendas = Object.keys(porTienda);
+  const distribucion = {};
+
+  if (tiendas.length === 0) return distribucion;
+  if (tiendas.length === 1) {
+    distribucion[tiendas[0]] = totalPendiente;
+    return distribucion;
+  }
+
+  const pesos = {};
+  let sumaPesos = 0;
+  tiendas.forEach(t => {
+    const peso = (porTienda[t].promedioVentasMensual || 0) * MARGEN_SUGERIDO_DISTRIBUCION;
+    pesos[t] = peso;
+    sumaPesos += peso;
+  });
+
+  if (sumaPesos <= 0) {
+    tiendas.forEach(t => { pesos[t] = porTienda[t].pendiente || 0; });
+    sumaPesos = tiendas.reduce((acc, t) => acc + pesos[t], 0);
+  }
+  if (sumaPesos <= 0) {
+    tiendas.forEach(t => { pesos[t] = 1; });
+    sumaPesos = tiendas.length;
+  }
+
+  let repartido = 0;
+  let tiendaMayorPeso = tiendas[0];
+  tiendas.forEach(t => {
+    const cantidad = Math.round(totalPendiente * (pesos[t] / sumaPesos));
+    distribucion[t] = cantidad;
+    repartido += cantidad;
+    if (pesos[t] > pesos[tiendaMayorPeso]) tiendaMayorPeso = t;
+  });
+
+  // Ajuste por redondeo: la diferencia (si la hay) se le suma/resta a la
+  // tienda de mayor peso, para que la suma repartida sea EXACTA al total
+  // Pendiente (mismo criterio que usa Alertas Kacosa).
+  const diferencia = totalPendiente - repartido;
+  if (diferencia !== 0) {
+    distribucion[tiendaMayorPeso] = (distribucion[tiendaMayorPeso] || 0) + diferencia;
+  }
+
+  return distribucion;
+}
+
+/** Modal con el desglose por tienda del "Sugerido de distribución" (mismo patrón visual que "Ver distribución" de Alertas Kacosa). */
+function mostrarDistribucionSugerida(item) {
+  const distribucion = item.distribucion || {};
+  const total = Object.values(distribucion).reduce((a, b) => a + b, 0);
+  const maximo = Math.max(...Object.values(distribucion), 1);
+
+  const esOscuro = document.documentElement.classList.contains('kacosa-dark');
+  const coloresBarras = esOscuro
+    ? ['#5B7FBD', '#E8A03D', '#3EB08A', '#6E93D4', '#E0685A', '#A387CC', '#4FB3D9']
+    : ['#1B2A41', '#E8A03D', '#2F8F6E', '#4A6FA5', '#C4432B', '#8B6BAE', '#2596BE'];
+
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    position: fixed; inset:0; background:rgba(0,0,0,0.6); z-index:60;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+    animation: fadeIn 0.2s ease;
+  `;
+
+  const filasOrdenadas = Object.entries(distribucion).sort((a, b) => b[1] - a[1]);
+
+  modal.innerHTML = `
+    <div style="background:var(--blanco); border-radius:var(--radio); max-width:520px; width:100%; max-height:90vh; overflow-y:auto; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+      <h3 style="margin:0 0 12px; color:var(--texto-titulo)"><i class="fa-solid fa-chart-column"></i> Sugerido de distribución por tienda</h3>
+      <p style="font-size:13px; color:var(--texto-secundario); margin-bottom:18px">
+        <strong>${item.codigo}</strong> — ${item.descripcion}<br>
+        Total Pendiente a distribuir: <strong style="color:var(--texto-titulo)">${total}</strong> ${item.umb || 'unidades'}
+      </p>
+      <div style="display:flex; flex-direction:column; gap:12px">
+        ${filasOrdenadas.map(([tienda, cantidad], idx) => {
+          const pct = total > 0 ? Math.round((cantidad / total) * 100) : 0;
+          const anchoBarra = Math.max(4, Math.round((cantidad / maximo) * 100));
+          const color = coloresBarras[idx % coloresBarras.length];
+          return `
+            <div>
+              <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px">
+                <span style="font-weight:600">${nombrePorId(tienda)}</span>
+                <span><strong>${cantidad}</strong> <span style="color:var(--texto-claro); font-size:11px">(${pct}%)</span></span>
+              </div>
+              <div style="background:var(--fondo); border-radius:6px; height:14px; overflow:hidden">
+                <div style="width:${anchoBarra}%; height:100%; background:${color}; border-radius:6px; transition:width .3s"></div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:12px 0 0; margin-top:14px; font-weight:700; border-top:2px solid var(--borde-focus); color:var(--texto-principal)">
+        <span>TOTAL</span>
+        <span>${total}</span>
+      </div>
+      <p style="font-size:11px; color:var(--texto-claro); margin:10px 0 0">Reparto proporcional al promedio de ventas mensual de cada tienda (+20%).</p>
+      <button id="cerrar-modal-dist-sugerido" style="margin-top:12px; padding:10px 24px; background:var(--azul-base); color:#fff; border:none; border-radius:var(--radio-peq); cursor:pointer; width:100%; font-weight:600">Cerrar</button>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  document.getElementById('cerrar-modal-dist-sugerido').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+}
+
 function mostrarResultadosConsulta() {
   const cont = document.getElementById("consulta-resultados");
   if (!cont) return;
@@ -310,9 +494,14 @@ function mostrarResultadosConsulta() {
 
 /** Vista enfocada para los modos "A_Pedir" / "Pendiente": un solo renglón por material, ya totalizado. */
 function mostrarResultadosPorMetrica() {
+  if (modoConsulta === "pendiente") {
+    mostrarResultadosPendiente();
+    return;
+  }
+
   const cont = document.getElementById("consulta-resultados");
-  const campo = modoConsulta; // 'a_pedir' | 'pendiente' -> se traduce a la key del objeto más abajo
-  const campoJs = campo === "a_pedir" ? "aPedir" : "pendiente";
+  const campo = modoConsulta; // 'a_pedir'
+  const campoJs = "aPedir";
   const etiqueta = ETIQUETAS_MODO[campo];
 
   const totalizado = totalizarPorMaterial(ultimoResultado, campoJs)
@@ -354,6 +543,78 @@ function mostrarResultadosPorMetrica() {
   ];
   const container = document.getElementById('consulta-tabla-container');
   const { renderizar } = crearTablaPaginada(container, columnas, 50);
+  renderizar(totalizado);
+
+  document.getElementById("btn-descargar-consulta").addEventListener("click", descargarConsultaExcel);
+}
+
+/**
+ * Vista para el modo "Pendiente": un solo renglón por material con el total
+ * Pendiente sumado entre las tiendas/filtros elegidos, más "Total ventas" y
+ * "Promedio ventas mensual" (también sumados entre esas mismas tiendas, tal
+ * como quedaron guardados en el último análisis de cada una) y el "Sugerido
+ * de distribución": ver totalizarPendientePorMaterial() y
+ * calcularDistribucionSugerida() para el detalle del cálculo.
+ */
+function mostrarResultadosPendiente() {
+  const cont = document.getElementById("consulta-resultados");
+
+  const totalizado = totalizarPendientePorMaterial(ultimoResultado)
+    .sort((a, b) => b.total - a.total);
+
+  const totalGeneral = totalizado.reduce((a, m) => a + m.total, 0);
+  const materialesUnicos = totalizado.length;
+
+  cont.innerHTML = `
+    <div class="card">
+      <div class="kpi-grid">
+        <div class="kpi-card verde">
+          <div class="kpi-icono"><i class="fa-solid fa-boxes-stacked"></i></div>
+          <div class="label">Materiales únicos</div>
+          <div class="valor">${materialesUnicos}</div>
+        </div>
+        <div class="kpi-card ambar">
+          <div class="kpi-icono"><i class="fa-solid fa-cart-shopping"></i></div>
+          <div class="label">Total "Pendiente" (suma de todas las tiendas/filtros)</div>
+          <div class="valor">${totalGeneral}</div>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; margin-bottom:14px">
+        <button id="btn-descargar-consulta" class="btn-secundario"><i class="fa-solid fa-download"></i> Descargar Excel</button>
+      </div>
+
+      <div id="consulta-tabla-container"></div>
+      <p class="vista-sub" style="margin-top:10px"><i class="fa-solid fa-circle-info"></i> Un renglón por material (sin repetir código), ya sumado entre las tiendas/filtros elegidos. Esta consulta solo trae el ÚLTIMO análisis guardado por cada tienda/usuario. El "Sugerido de distribución" reparte el Pendiente entre las tiendas que lo componen, proporcional a su promedio de ventas mensual (+20%); si el material solo viene de una tienda, es igual al Pendiente.</p>
+    </div>
+  `;
+
+  const columnas = [
+    { key: 'codigo', label: 'Código' },
+    { key: 'descripcion', label: 'Descripción' },
+    { key: 'umb', label: 'UMB' },
+    { key: 'clase', label: 'Clase' },
+    { key: 'totalVentas', label: 'Total ventas', numeric: true },
+    { key: 'promedioVentasMensual', label: 'Promedio ventas mensual', numeric: true },
+    { key: 'total', label: 'Pendiente', numeric: true },
+    {
+      key: 'sugeridoDistribucion',
+      label: 'Sugerido de distribución',
+      render: (item) => {
+        const tiendasInvolucradas = Object.keys(item.distribucion || {});
+        if (tiendasInvolucradas.length <= 1) {
+          return `<span>${item.total}</span>`;
+        }
+        return `<button type="button" data-fila-accion="ver-distribucion" style="padding:4px 12px; border:none; border-radius:4px; background:var(--azul-base); color:#fff; cursor:pointer; font-size:11px"><i class="fa-solid fa-chart-column"></i> Ver reparto (${tiendasInvolucradas.length} tiendas)</button>`;
+      }
+    }
+  ];
+  const container = document.getElementById('consulta-tabla-container');
+  const { renderizar } = crearTablaPaginada(container, columnas, 50, {
+    onAccionFila: (clave, item, accion) => {
+      if (accion === "ver-distribucion") mostrarDistribucionSugerida(item);
+    }
+  });
   renderizar(totalizado);
 
   document.getElementById("btn-descargar-consulta").addEventListener("click", descargarConsultaExcel);
@@ -403,10 +664,36 @@ function renderizarTablaConsulta() {
 function descargarConsultaExcel() {
   const wb = XLSX.utils.book_new();
 
-  if (modoConsulta === "a_pedir" || modoConsulta === "pendiente") {
-    const campoJs = modoConsulta === "a_pedir" ? "aPedir" : "pendiente";
+  if (modoConsulta === "pendiente") {
+    const totalizado = totalizarPendientePorMaterial(ultimoResultado).sort((a, b) => b.total - a.total);
+    const filasExcel = totalizado.map(m => ({
+      ...m,
+      sugeridoDistribucionTexto: Object.entries(m.distribucion || {})
+        .map(([t, c]) => `${nombrePorId(t)}: ${c}`)
+        .join('; ')
+    }));
+
+    const columnas = [
+      { key: 'codigo', label: 'Material', ancho: 14 },
+      { key: 'descripcion', label: 'Descripcion', ancho: 42 },
+      { key: 'umb', label: 'UMB', ancho: 8 },
+      { key: 'clase', label: 'Clase', ancho: 8 },
+      { key: 'totalVentas', label: 'Total_Ventas', ancho: 14 },
+      { key: 'promedioVentasMensual', label: 'Promedio_Ventas_Mensual', ancho: 18 },
+      { key: 'total', label: 'Pendiente', ancho: 14 },
+      { key: 'sugeridoDistribucionTexto', label: 'Sugerido_Distribucion', ancho: 42 }
+    ];
+    XLSX.utils.book_append_sheet(wb, construirHojaEstilizada(filasExcel, columnas), "Total Pendiente");
+
+    const fecha = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `Consulta_Pendiente_${fecha}.xlsx`);
+    notificarExito('El Excel con el total de "Pendiente" por material se descargó correctamente.', { titulo: "Descarga lista" });
+    return;
+  }
+
+  if (modoConsulta === "a_pedir") {
     const etiqueta = ETIQUETAS_MODO[modoConsulta];
-    const totalizado = totalizarPorMaterial(ultimoResultado, campoJs).sort((a, b) => b.total - a.total);
+    const totalizado = totalizarPorMaterial(ultimoResultado, "aPedir").sort((a, b) => b.total - a.total);
 
     const columnas = [
       { key: 'codigo', label: 'Material', ancho: 14 },
