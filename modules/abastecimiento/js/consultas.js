@@ -602,7 +602,10 @@ function mostrarResultadosPendiente() {
       label: 'Sugerido de distribución',
       render: (item) => {
         const tiendasInvolucradas = Object.keys(item.distribucion || {});
-        if (tiendasInvolucradas.length <= 1) {
+        if (tiendasInvolucradas.length === 1) {
+          return `<span>${item.total} <span style="color:var(--texto-claro); font-size:11px">(${nombrePorId(tiendasInvolucradas[0])})</span></span>`;
+        }
+        if (tiendasInvolucradas.length === 0) {
           return `<span>${item.total}</span>`;
         }
         return `<button type="button" data-fila-accion="ver-distribucion" style="padding:4px 12px; border:none; border-radius:4px; background:var(--azul-base); color:#fff; cursor:pointer; font-size:11px"><i class="fa-solid fa-chart-column"></i> Ver reparto (${tiendasInvolucradas.length} tiendas)</button>`;
