@@ -98,8 +98,18 @@ export function calcularAbastecimiento({ ventasProcesadas, stockTienda, stockKac
       : aPedirIdealEnteros;
 
     // --- Tope real por stock disponible en Kacosa ---
-    const aPedirTopado = Math.min(aPedirBruto, stockKacosaDisp);
-    const aPedirEnteros = Math.ceil(aPedirTopado);
+    // Si Kacosa tiene suficiente para cubrir el redondeo hacia arriba normal,
+    // se sigue redondeando hacia arriba (Math.ceil) como siempre: no hay
+    // problema de inventario, solo se redondea la necesidad real.
+    // Si Kacosa NO alcanza a cubrir ese redondeo (stock insuficiente), NO se
+    // redondea hacia arriba: se pide exactamente las unidades ENTERAS que
+    // Kacosa sí tiene (Math.floor del stock disponible), nunca más de lo que
+    // hay. La diferencia sigue quedando reflejada en "Pendiente" (que no
+    // cambia: se calcula aparte, comparando contra el "Ideal" sin tope).
+    const aPedirRedondeadoSinTope = Math.ceil(aPedirBruto);
+    const aPedirEnteros = stockKacosaDisp >= aPedirRedondeadoSinTope
+      ? aPedirRedondeadoSinTope
+      : Math.floor(stockKacosaDisp);
 
     let aPedirFinal = aPedirEnteros;
     if (empaque > 1 && aPedirEnteros > 0) {
