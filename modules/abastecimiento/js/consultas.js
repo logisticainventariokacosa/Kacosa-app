@@ -31,6 +31,40 @@ const ETIQUETAS_MODO = {
   pendiente: "Pendiente"
 };
 
+// Término de búsqueda actual del buscador de Consultas (por código/descripción).
+// Se guarda a nivel de módulo para que sobreviva al cambio entre las
+// sub-vistas "Detalle" / "Resumen por material" del modo General.
+let terminoBusquedaConsulta = "";
+
+/** Filtra una lista de materiales por código o descripción (sin distinguir mayúsculas/minúsculas). Si el término viene vacío, devuelve la lista tal cual. */
+function filtrarBusquedaConsulta(lista, termino) {
+  const t = (termino || "").trim().toLowerCase();
+  if (!t) return lista;
+  return lista.filter(m =>
+    String(m.codigo || "").toLowerCase().includes(t) ||
+    String(m.descripcion || "").toLowerCase().includes(t)
+  );
+}
+
+/** HTML del buscador (mismo markup para las 3 vistas de Consultas) + función para conectar su evento "input" (filtrado automático mientras se escribe). */
+function htmlBuscadorConsulta() {
+  return `
+    <div style="margin-bottom:14px">
+      <input type="text" id="consulta-buscador" class="input-modern" style="max-width:320px"
+        placeholder="Buscar por código o descripción..." value="${terminoBusquedaConsulta.replace(/"/g, '&quot;')}">
+    </div>
+  `;
+}
+
+function conectarBuscadorConsulta(onBuscar) {
+  const input = document.getElementById("consulta-buscador");
+  if (!input) return;
+  input.addEventListener("input", () => {
+    terminoBusquedaConsulta = input.value;
+    onBuscar(terminoBusquedaConsulta);
+  });
+}
+
 function render() {
   const cont = document.getElementById("consultas-contenido");
   if (!cont) return;
@@ -157,6 +191,7 @@ async function ejecutarConsulta() {
     ultimoResultado = dedupUltimoPorTiendaYMaterial(resp.materiales || []);
     modoConsulta = (document.querySelector('input[name="modo-consulta"]:checked') || {}).value || "general";
     vistaActual = "detalle";
+    terminoBusquedaConsulta = "";
     estadoTexto.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${ultimoResultado.length} fila(s) encontrada(s).`;
     estadoTexto.style.color = 'var(--verde-kpi)';
     mostrarResultadosConsulta();
@@ -222,19 +257,27 @@ function agruparPorMaterial(materiales) {
 
 /**
  * Totaliza el detalle por material ÚNICO (sin repetir código), sumando SOLO
- * el campo pedido ('aPedir' o 'pendiente') entre todas las tiendas/filas que
- * hayan quedado dentro de los filtros aplicados. Para el modo "A_Pedir" /
- * "Pendiente" de Consultas: material, descripción, UMB y el total de ese campo.
+ * el campo pedido ('aPedir') entre todas las tiendas/filas que hayan quedado
+ * dentro de los filtros aplicados. Para el modo "A_Pedir" de Consultas:
+ * material, descripción, UMB, el total de ese campo y "porTienda": el
+ * desglose REAL por tienda (no es un sugerido/reparto — es la suma real de
+ * lo que ya trae cada tienda, tal como quedó calculado en su propio
+ * análisis), que usa el botón "Ver detalle por tienda" de la tabla.
  * Solo devuelve materiales cuyo total sea MAYOR A 0 (no tiene sentido listar
- * algo cuyo total a pedir/pendiente terminó en 0 o menos).
+ * algo cuyo total a pedir terminó en 0 o menos).
  */
 function totalizarPorMaterial(materiales, campo) {
   const mapa = {};
   materiales.forEach(m => {
     if (!mapa[m.codigo]) {
-      mapa[m.codigo] = { codigo: m.codigo, descripcion: m.descripcion, umb: m.umb, clase: m.clase || '', total: 0 };
+      mapa[m.codigo] = { codigo: m.codigo, descripcion: m.descripcion, umb: m.umb, clase: m.clase || '', total: 0, porTienda: {} };
     }
-    mapa[m.codigo].total += m[campo] || 0;
+    const g = mapa[m.codigo];
+    const valor = m[campo] || 0;
+    g.total += valor;
+    if (valor > 0) {
+      g.porTienda[m.tienda] = (g.porTienda[m.tienda] || 0) + valor;
+    }
   });
   return Object.values(mapa).filter(m => m.total > 0);
 }
@@ -358,11 +401,10 @@ function calcularDistribucionSugerida(totalPendiente, porTienda) {
   return distribucion;
 }
 
-/** Modal con el desglose por tienda del "Sugerido de distribución" (mismo patrón visual que "Ver distribución" de Alertas Kacosa). */
-function mostrarDistribucionSugerida(item) {
-  const distribucion = item.distribucion || {};
-  const total = Object.values(distribucion).reduce((a, b) => a + b, 0);
-  const maximo = Math.max(...Object.values(distribucion), 1);
+/** Modal genérico con el desglose por tienda de una cantidad, en barras horizontales (mismo patrón visual que "Ver distribución" de Alertas Kacosa). Lo usan tanto el "Sugerido de distribución" (Pendiente) como el "Detalle por tienda" (A pedir). */
+function mostrarDesglosePorTienda({ codigo, descripcion, umb, valores, titulo, etiquetaTotal, notaPie }) {
+  const total = Object.values(valores).reduce((a, b) => a + b, 0);
+  const maximo = Math.max(...Object.values(valores), 1);
 
   const esOscuro = document.documentElement.classList.contains('kacosa-dark');
   const coloresBarras = esOscuro
@@ -376,14 +418,14 @@ function mostrarDistribucionSugerida(item) {
     animation: fadeIn 0.2s ease;
   `;
 
-  const filasOrdenadas = Object.entries(distribucion).sort((a, b) => b[1] - a[1]);
+  const filasOrdenadas = Object.entries(valores).sort((a, b) => b[1] - a[1]);
 
   modal.innerHTML = `
     <div style="background:var(--blanco); border-radius:var(--radio); max-width:520px; width:100%; max-height:90vh; overflow-y:auto; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,0.3)">
-      <h3 style="margin:0 0 12px; color:var(--texto-titulo)"><i class="fa-solid fa-chart-column"></i> Sugerido de distribución por tienda</h3>
+      <h3 style="margin:0 0 12px; color:var(--texto-titulo)"><i class="fa-solid fa-chart-column"></i> ${titulo}</h3>
       <p style="font-size:13px; color:var(--texto-secundario); margin-bottom:18px">
-        <strong>${item.codigo}</strong> — ${item.descripcion}<br>
-        Total Pendiente a distribuir: <strong style="color:var(--texto-titulo)">${total}</strong> ${item.umb || 'unidades'}
+        <strong>${codigo}</strong> — ${descripcion}<br>
+        ${etiquetaTotal || 'Total'}: <strong style="color:var(--texto-titulo)">${total}</strong> ${umb || 'unidades'}
       </p>
       <div style="display:flex; flex-direction:column; gap:12px">
         ${filasOrdenadas.map(([tienda, cantidad], idx) => {
@@ -407,14 +449,40 @@ function mostrarDistribucionSugerida(item) {
         <span>TOTAL</span>
         <span>${total}</span>
       </div>
-      <p style="font-size:11px; color:var(--texto-claro); margin:10px 0 0">Reparto proporcional al promedio de ventas mensual de cada tienda (+20%).</p>
-      <button id="cerrar-modal-dist-sugerido" style="margin-top:12px; padding:10px 24px; background:var(--azul-base); color:#fff; border:none; border-radius:var(--radio-peq); cursor:pointer; width:100%; font-weight:600">Cerrar</button>
+      ${notaPie ? `<p style="font-size:11px; color:var(--texto-claro); margin:10px 0 0">${notaPie}</p>` : ''}
+      <button id="cerrar-modal-desglose-tienda" style="margin-top:12px; padding:10px 24px; background:var(--azul-base); color:#fff; border:none; border-radius:var(--radio-peq); cursor:pointer; width:100%; font-weight:600">Cerrar</button>
     </div>
   `;
 
   document.body.appendChild(modal);
-  document.getElementById('cerrar-modal-dist-sugerido').addEventListener('click', () => modal.remove());
+  document.getElementById('cerrar-modal-desglose-tienda').addEventListener('click', () => modal.remove());
   modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+}
+
+/** Modal del "Sugerido de distribución" (modo Pendiente). */
+function mostrarDistribucionSugerida(item) {
+  mostrarDesglosePorTienda({
+    codigo: item.codigo,
+    descripcion: item.descripcion,
+    umb: item.umb,
+    valores: item.distribucion || {},
+    titulo: 'Sugerido de distribución por tienda',
+    etiquetaTotal: 'Total Pendiente a distribuir',
+    notaPie: 'Reparto proporcional al promedio de ventas mensual de cada tienda (+20%).'
+  });
+}
+
+/** Modal del "Detalle por tienda" (modo A pedir) — NO es un reparto sugerido: es la cantidad real de "A pedir" que ya trae cada tienda desde su propio análisis. */
+function mostrarDetalleAPedirPorTienda(item) {
+  mostrarDesglosePorTienda({
+    codigo: item.codigo,
+    descripcion: item.descripcion,
+    umb: item.umb,
+    valores: item.porTienda || {},
+    titulo: 'Detalle de "A pedir" por tienda',
+    etiquetaTotal: 'Total "A pedir"',
+    notaPie: 'Cantidad real de "A pedir" de cada tienda (no es un reparto sugerido, es la suma tal cual arrojó el análisis de cada una).'
+  });
 }
 
 function mostrarResultadosConsulta() {
@@ -469,6 +537,7 @@ function mostrarResultadosConsulta() {
         <button id="btn-descargar-consulta" class="btn-secundario"><i class="fa-solid fa-download"></i> Descargar Excel</button>
       </div>
 
+      ${htmlBuscadorConsulta()}
       <div id="consulta-tabla-container"></div>
       <p class="vista-sub" style="margin-top:10px"><i class="fa-solid fa-circle-info"></i> Esta consulta solo trae el ÚLTIMO análisis guardado por cada tienda/usuario — no es un histórico completo de todo lo que se ha analizado.</p>
     </div>
@@ -488,6 +557,7 @@ function mostrarResultadosConsulta() {
   });
 
   document.getElementById("btn-descargar-consulta").addEventListener("click", descargarConsultaExcel);
+  conectarBuscadorConsulta(() => renderizarTablaConsulta());
 
   renderizarTablaConsulta();
 }
@@ -529,6 +599,7 @@ function mostrarResultadosPorMetrica() {
         <button id="btn-descargar-consulta" class="btn-secundario"><i class="fa-solid fa-download"></i> Descargar Excel</button>
       </div>
 
+      ${htmlBuscadorConsulta()}
       <div id="consulta-tabla-container"></div>
       <p class="vista-sub" style="margin-top:10px"><i class="fa-solid fa-circle-info"></i> Un renglón por material (sin repetir código), ya sumado entre las tiendas/filtros elegidos. Esta consulta solo trae el ÚLTIMO análisis guardado por cada tienda/usuario.</p>
     </div>
@@ -539,13 +610,32 @@ function mostrarResultadosPorMetrica() {
     { key: 'descripcion', label: 'Descripción' },
     { key: 'umb', label: 'UMB' },
     { key: 'clase', label: 'Clase' },
-    { key: 'total', label: etiqueta, numeric: true }
+    { key: 'total', label: etiqueta, numeric: true },
+    {
+      key: 'detallePorTienda',
+      label: 'Detalle por tienda',
+      render: (item) => {
+        const tiendasInvolucradas = Object.keys(item.porTienda || {});
+        if (tiendasInvolucradas.length === 0) {
+          return `<span>${item.total}</span>`;
+        }
+        if (tiendasInvolucradas.length === 1) {
+          return `<span>${item.total} <span style="color:var(--texto-claro); font-size:11px">(${nombrePorId(tiendasInvolucradas[0])})</span></span>`;
+        }
+        return `<button type="button" data-fila-accion="ver-detalle-tienda" style="padding:4px 12px; border:none; border-radius:4px; background:var(--azul-base); color:#fff; cursor:pointer; font-size:11px"><i class="fa-solid fa-chart-column"></i> Ver detalle (${tiendasInvolucradas.length} tiendas)</button>`;
+      }
+    }
   ];
   const container = document.getElementById('consulta-tabla-container');
-  const { renderizar } = crearTablaPaginada(container, columnas, 50);
+  const { renderizar } = crearTablaPaginada(container, columnas, 50, {
+    onAccionFila: (clave, item, accion) => {
+      if (accion === "ver-detalle-tienda") mostrarDetalleAPedirPorTienda(item);
+    }
+  });
   renderizar(totalizado);
 
   document.getElementById("btn-descargar-consulta").addEventListener("click", descargarConsultaExcel);
+  conectarBuscadorConsulta((termino) => renderizar(filtrarBusquedaConsulta(totalizado, termino)));
 }
 
 /**
@@ -584,6 +674,7 @@ function mostrarResultadosPendiente() {
         <button id="btn-descargar-consulta" class="btn-secundario"><i class="fa-solid fa-download"></i> Descargar Excel</button>
       </div>
 
+      ${htmlBuscadorConsulta()}
       <div id="consulta-tabla-container"></div>
       <p class="vista-sub" style="margin-top:10px"><i class="fa-solid fa-circle-info"></i> Un renglón por material (sin repetir código), ya sumado entre las tiendas/filtros elegidos. Esta consulta solo trae el ÚLTIMO análisis guardado por cada tienda/usuario. El "Sugerido de distribución" reparte el Pendiente entre las tiendas que lo componen, proporcional a su promedio de ventas mensual (+20%); si el material solo viene de una tienda, es igual al Pendiente.</p>
     </div>
@@ -621,6 +712,7 @@ function mostrarResultadosPendiente() {
   renderizar(totalizado);
 
   document.getElementById("btn-descargar-consulta").addEventListener("click", descargarConsultaExcel);
+  conectarBuscadorConsulta((termino) => renderizar(filtrarBusquedaConsulta(totalizado, termino)));
 }
 
 function renderizarTablaConsulta() {
@@ -641,7 +733,7 @@ function renderizarTablaConsulta() {
       { key: 'porDespacho', label: 'Por despacho (suma)', numeric: true }
     ];
     const { renderizar } = crearTablaPaginada(container, columnas, 50);
-    renderizar(agruparPorMaterial(ultimoResultado));
+    renderizar(filtrarBusquedaConsulta(agruparPorMaterial(ultimoResultado), terminoBusquedaConsulta));
   } else {
     const columnas = [
       { key: 'tienda', label: 'Tienda' },
@@ -660,7 +752,7 @@ function renderizarTablaConsulta() {
       { key: 'usuarioNombre', label: 'Generado por' }
     ];
     const { renderizar } = crearTablaPaginada(container, columnas, 50);
-    renderizar(ultimoResultado);
+    renderizar(filtrarBusquedaConsulta(ultimoResultado, terminoBusquedaConsulta));
   }
 }
 
@@ -697,15 +789,22 @@ function descargarConsultaExcel() {
   if (modoConsulta === "a_pedir") {
     const etiqueta = ETIQUETAS_MODO[modoConsulta];
     const totalizado = totalizarPorMaterial(ultimoResultado, "aPedir").sort((a, b) => b.total - a.total);
+    const filasExcel = totalizado.map(m => ({
+      ...m,
+      detallePorTiendaTexto: Object.entries(m.porTienda || {})
+        .map(([t, c]) => `${nombrePorId(t)}: ${c}`)
+        .join('; ')
+    }));
 
     const columnas = [
       { key: 'codigo', label: 'Material', ancho: 14 },
       { key: 'descripcion', label: 'Descripcion', ancho: 42 },
       { key: 'umb', label: 'UMB', ancho: 8 },
       { key: 'clase', label: 'Clase', ancho: 8 },
-      { key: 'total', label: etiqueta.replace(/\s+/g, '_'), ancho: 14 }
+      { key: 'total', label: etiqueta.replace(/\s+/g, '_'), ancho: 14 },
+      { key: 'detallePorTiendaTexto', label: 'Detalle_Por_Tienda', ancho: 42 }
     ];
-    XLSX.utils.book_append_sheet(wb, construirHojaEstilizada(totalizado, columnas), `Total ${etiqueta}`.slice(0, 31));
+    XLSX.utils.book_append_sheet(wb, construirHojaEstilizada(filasExcel, columnas), `Total ${etiqueta}`.slice(0, 31));
 
     const fecha = new Date().toISOString().slice(0, 10);
     XLSX.writeFile(wb, `Consulta_${etiqueta.replace(/\s+/g, '_')}_${fecha}.xlsx`);
