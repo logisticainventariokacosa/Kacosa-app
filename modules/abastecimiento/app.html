@@ -120,6 +120,9 @@
       <button type="button" class="nav-item activo" data-vista="vista-dashboard">
         <span class="icono"><i class="fa-solid fa-gauge-high"></i></span> Dashboard
       </button>
+      <button type="button" class="nav-item" data-vista="vista-resumen-directiva">
+        <span class="icono"><i class="fa-solid fa-chart-pie"></i></span> Resumen Directiva
+      </button>
       <button type="button" class="nav-item" data-vista="vista-nuevo-analisis">
         <span class="icono"><i class="fa-solid fa-file-arrow-up"></i></span> Nuevo Análisis
       </button>
@@ -171,6 +174,15 @@
         </div>
       </section>
 
+      <!-- VISTA: RESUMEN DIRECTIVA -->
+      <section class="vista" id="vista-resumen-directiva">
+        <h2>Resumen Directiva</h2>
+        <p class="vista-sub">Panorama consolidado de Abastecimiento en todas las tiendas</p>
+        <div id="resumen-directiva-contenido">
+          <p class="vista-sub">Cargando módulo...</p>
+        </div>
+      </section>
+
       <!-- VISTA: NUEVO ANÁLISIS -->
       <section class="vista" id="vista-nuevo-analisis">
         <h2>Nuevo Análisis</h2>
@@ -215,6 +227,7 @@
   <script src="js/tema-classic.js?v=2"></script>
   <script type="module" src="js/nav.js?v=6"></script>
   <script type="module" src="js/dashboard.js?v=2"></script>
+  <script type="module" src="js/resumen-directiva.js?v=1"></script>
   <script type="module" src="js/alertas-kacosa.js?v=1"></script>
   <script type="module" src="js/consultas.js?v=2"></script>
   <script type="module" src="js/nuevo-analisis.js?v=3"></script>
