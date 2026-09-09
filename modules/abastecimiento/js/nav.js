@@ -1,7 +1,7 @@
 // js/nav.js
 import { auth } from "./firebase-config.js?v=3";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-import { protegerPagina, cerrarSesion, obtenerPerfilPortal, ROLES_PERMITIDOS_ABASTECIMIENTO, ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS } from "./auth.js";
+import { protegerPagina, cerrarSesion, obtenerPerfilPortal, ROLES_PERMITIDOS_ABASTECIMIENTO, ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS, ROLES_ACCESO_RESUMEN_DIRECTIVA } from "./auth.js";
 import { nombrePorId } from "./tiendas.js";
 import { mostrarLoader, ocultarLoader } from "./loader.js";
 
@@ -80,6 +80,14 @@ onAuthStateChanged(auth, async (user) => {
   const btnConsultas = document.querySelector('[data-vista="vista-consultas"]');
   if (btnConsultas && !tiendas.includes("TODAS")) {
     btnConsultas.style.display = "none";
+  }
+
+  // "Resumen Directiva" es solo para directiva/coordinador/admin (ver
+  // ROLES_ACCESO_RESUMEN_DIRECTIVA en auth.js) — más restrictivo que "ve
+  // todas las tiendas", así que se controla aparte.
+  const btnResumenDirectiva = document.querySelector('[data-vista="vista-resumen-directiva"]');
+  if (btnResumenDirectiva && !ROLES_ACCESO_RESUMEN_DIRECTIVA.includes(rolNormalizado)) {
+    btnResumenDirectiva.style.display = "none";
   }
 
   // Aviso si un gerente no tiene tienda asignada (no debería pasar, pero evita confusión)
