@@ -29,6 +29,13 @@ export const ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS = [
 // Kacosa) — cualquier otro rol solo ve la última alerta que él mismo generó.
 export const ROLES_CON_ACCESO_A_ALERTAS_DE_OTROS = ["admin", "coordinador", "directiva"];
 
+// Roles con acceso al Resumen de Abastecimiento para Directiva (KPIs por
+// tienda + tabla de materiales A/B de Alertas Kacosa + top de ventas, todo
+// consolidado de una sola vez). Es una lista propia y más chica: no es lo
+// mismo que "ve todas las tiendas" ni que "ve alertas de otros usuarios",
+// es el nuevo dashboard ejecutivo pedido específicamente para estos 3 roles.
+export const ROLES_ACCESO_RESUMEN_DIRECTIVA = ["directiva", "coordinador", "admin"];
+
 // Busca el perfil del usuario en la colección "usuarios" del Portal KACOSA
 export async function obtenerPerfilPortal(email) {
   try {
