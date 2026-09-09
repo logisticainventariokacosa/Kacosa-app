@@ -1736,3 +1736,199 @@ tbody tr.fila-excluida:hover {
   background: linear-gradient(180deg, #8B6BAE, #6B4A8A);
   border-radius: 0 2px 2px 0;
 }
+
+/* =========================================================
+ *  RESUMEN DIRECTIVA — Tarjetas por tienda, filtros y modal
+ * ========================================================= */
+.tiendas-resumen-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.tienda-resumen-card {
+  background: var(--blanco);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra);
+  padding: 18px 20px;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: var(--transicion);
+  text-align: left;
+}
+
+.tienda-resumen-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(180deg, var(--azul-base), var(--azul-medio));
+  border-radius: 0 2px 2px 0;
+}
+
+.tienda-resumen-card:hover {
+  box-shadow: var(--sombra-hover);
+  transform: translateY(-3px);
+  border-color: var(--azul-medio);
+}
+
+.tienda-resumen-card:focus-visible {
+  outline: 2px solid var(--azul-medio);
+  outline-offset: 2px;
+}
+
+.tienda-resumen-card .tienda-resumen-icono {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--azul-base), var(--azul-medio));
+  box-shadow: 0 4px 10px rgba(15, 26, 46, 0.25);
+}
+
+.tienda-resumen-card .tienda-resumen-nombre {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--texto-titulo);
+  padding-right: 42px;
+  margin-bottom: 12px;
+  line-height: 1.3;
+  min-height: 34px;
+}
+
+.tienda-resumen-card .tienda-resumen-fecha {
+  font-size: 11px;
+  color: var(--texto-claro);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.tienda-resumen-card .tienda-resumen-valor {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--verde-kpi);
+  letter-spacing: -0.02em;
+}
+
+.tienda-resumen-card .tienda-resumen-valor-label {
+  font-size: 11px;
+  color: var(--texto-secundario);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.tienda-resumen-card.sin-datos {
+  cursor: default;
+}
+
+.tienda-resumen-card.sin-datos::before {
+  background: var(--borde);
+}
+
+.tienda-resumen-card.sin-datos .tienda-resumen-icono {
+  background: var(--texto-claro);
+  box-shadow: none;
+}
+
+.tienda-resumen-card.sin-datos:hover {
+  transform: none;
+  box-shadow: var(--sombra);
+  border-color: var(--borde);
+}
+
+.tienda-resumen-card.sin-datos .tienda-resumen-valor {
+  color: var(--texto-claro);
+  font-size: 15px;
+}
+
+/* Barra de filtros reutilizable (tabla de materiales más vendidos) */
+.filtros-tabla {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.filtros-tabla select,
+.filtros-tabla input[type="text"] {
+  padding: 8px 14px;
+  border: 1.5px solid var(--borde);
+  border-radius: var(--radio-peq);
+  font-size: 13px;
+  font-family: 'Inter', sans-serif;
+  background: var(--blanco);
+  color: var(--texto-principal);
+  transition: var(--transicion);
+}
+
+.filtros-tabla select {
+  min-width: 200px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%235E6A7A' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 34px;
+}
+
+.filtros-tabla select:focus,
+.filtros-tabla input[type="text"]:focus {
+  outline: none;
+  border-color: var(--azul-medio);
+  box-shadow: 0 0 0 4px rgba(42, 64, 96, 0.08);
+}
+
+/* Modal de detalle de tienda (Resumen Directiva) */
+.modal-detalle-tienda-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 18px 0;
+}
+
+.modal-detalle-item {
+  background: var(--fondo);
+  border-radius: var(--radio-peq);
+  padding: 12px 14px;
+}
+
+.modal-detalle-item .md-label {
+  font-size: 11px;
+  color: var(--texto-secundario);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.modal-detalle-item .md-valor {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--texto-titulo);
+}
+
+@media (max-width: 480px) {
+  .modal-detalle-tienda-grid { grid-template-columns: 1fr; }
+  .tiendas-resumen-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+}
