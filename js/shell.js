@@ -19,9 +19,20 @@ import { doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12
    de negocio reales de KACOSA; se tomó como base los roles que ya
    usaba cada app por separado.
    ===================================================================== */
-const ROLES_INVENTARIO = ["admin", "supervisor", "directiva", "gerente","coordinador"];
+// "directiva" se sacó de ROLES_INVENTARIO a propósito (09-sep-2026): este rol
+// debe ver ÚNICAMENTE los módulos de Abastecimiento y el Dashboard Inventario
+// (ROLES_DASHBOARD_INV, más abajo, es una lista aparte y SÍ sigue incluyendo
+// "directiva"). Al quitarlo de aquí, "directiva" pierde de forma automática
+// el acceso a Inventario (Trazabilidad/Consultas) y a Reportes (Noticias/
+// Imágenes/Documentos, que se arma a partir de ROLES_INVENTARIO más abajo).
+const ROLES_INVENTARIO = ["admin", "supervisor", "gerente", "coordinador"];
 const ROLES_ABASTECIMIENTO = ["gerente", "supervisor", "abastecimiento", "compras", "admin", "directiva","coordinador"];
 const ROLES_DASHBOARD_INV = ["coordinador", "directiva", "admin", "supervisor"];
+// Resumen Directiva: dashboard ejecutivo con el consolidado de Abastecimiento
+// de todas las tiendas. Solo para estos 3 roles (ver también
+// ROLES_ACCESO_RESUMEN_DIRECTIVA en modules/abastecimiento/js/auth.js, que
+// controla el mismo acceso del lado del módulo embebido).
+const ROLES_RESUMEN_DIRECTIVA = ["directiva", "coordinador", "admin"];
 // Reportes (Noticias/Imágenes/Documentos) usa la misma base que Inventario,
 // más "abastecimiento" para que ese rol también tenga acceso.
 const ROLES_REPORTES = [...ROLES_INVENTARIO, "abastecimiento"];
@@ -45,6 +56,13 @@ const MODULES = [
         icon: "fa-truck-fast",
         src: "modules/abastecimiento/app.html#vista=vista-dashboard",
         roles: ROLES_ABASTECIMIENTO
+      },
+      {
+        id: "resumen-directiva",
+        label: "Resumen Directiva",
+        icon: "fa-chart-pie",
+        src: "modules/abastecimiento/app.html#vista=vista-resumen-directiva",
+        roles: ROLES_RESUMEN_DIRECTIVA
       }
     ]
   },
