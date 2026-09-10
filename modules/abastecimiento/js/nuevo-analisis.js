@@ -149,7 +149,9 @@ const ALMACENES_POR_CENTRO = {
   "19A0": ["19A0", "19A3"],
   "2010": ["2010", "2013", "2017"],
   "2090": ["2090", "2093"],
-  "1020": ["1020", "1023"],
+  // Ferretools (centro 1020): además de los almacenes generales (1020/1023),
+  // este centro también admite 1028 y 1029.
+  "1020": ["1020", "1023", "1028", "1029"],
   // Kacosa (casa matriz): 1000/1029 = general, 1001 = exhibición (centro 1000);
   // 3000/3029 = general, 3001 = exhibición (centro 3000).
   "1000": ["1000", "1029", "1001"],
@@ -162,6 +164,19 @@ function almacenesPermitidosParaCentros(centros) {
   centros.forEach(c => (ALMACENES_POR_CENTRO[c] || []).forEach(a => set.add(a)));
   return [...set];
 }
+
+// ============================================================
+//  EXCEPCIÓN: CENTROS DONDE NO SE ANEXAN MATERIALES DE ALTA
+//  ROTACIÓN SIN MOVIMIENTOS
+// ============================================================
+// Para el resto de las tiendas, un material de la base de Alta Rotación que
+// tiene stock disponible en Kacosa pero NO se detectó en los movimientos del
+// archivo de ventas analizado igual se agrega al "a pedir" (ver
+// anexarAltaRotacionFaltante más abajo). Para el centro 1020 (tienda
+// Ferretools) esto NO debe aplicar: si el material no tuvo movimientos en
+// esa tienda, no se anexa, sin importar que esté en Alta Rotación y tenga
+// stock en Kacosa.
+const CENTROS_SIN_ANEXO_ALTA_ROTACION = ["1020"];
 
 /**
  * Revisa que la columna "Almacén" de los archivos de stock (tienda y Kacosa)
@@ -1309,11 +1324,19 @@ async function finalizarCalculo(gruposConfirmados) {
   const respAltaRotacion = await callBridge("leerAltaRotacion", {});
   const altaRotacion = respAltaRotacion.ok ? respAltaRotacion.materiales : [];
 
-  const { resultadoConAnexos } = anexarAltaRotacionFaltante(
-    resultado, estado.stockTienda, estado.stockKacosa, altaRotacion,
-    resultado[0]?.periodoVentas || "", resultado[0]?.periodoAbastecimiento || "", resultado[0]?.rangoSeguridadUsado || ""
-  );
-  resultado = resultadoConAnexos;
+  // Excepción para el centro 1020 (tienda Ferretools): no se anexan al "a
+  // pedir" materiales de Alta Rotación que no tuvieron movimientos detectados
+  // en el archivo de ventas de esta tienda (ver CENTROS_SIN_ANEXO_ALTA_ROTACION).
+  const centrosTiendaActual = centrosDeTienda(estado.tiendaSeleccionada);
+  const omitirAnexoAltaRotacion = centrosTiendaActual.some(c => CENTROS_SIN_ANEXO_ALTA_ROTACION.includes(c));
+
+  if (!omitirAnexoAltaRotacion) {
+    const { resultadoConAnexos } = anexarAltaRotacionFaltante(
+      resultado, estado.stockTienda, estado.stockKacosa, altaRotacion,
+      resultado[0]?.periodoVentas || "", resultado[0]?.periodoAbastecimiento || "", resultado[0]?.rangoSeguridadUsado || ""
+    );
+    resultado = resultadoConAnexos;
+  }
 
   resultado.forEach(m => {
     m.tienda = nombrePorId(estado.tiendaSeleccionada);
