@@ -1608,6 +1608,76 @@ tbody tr.fila-excluida:hover {
   .kn-tarjeta-larga { max-width: 100%; padding: 22px 18px 18px; }
   .kn-tarjeta-larga .kn-mensaje { max-height: min(40vh, 280px); font-size: 12.5px; }
 }
+
+/* =========================================================
+ *  MODAL DE CONFIRMACIÓN (confirmarAccion)
+ *  Antes de este cambio, #kacosa-confirmacion no tenía NINGÚN
+ *  estilo de overlay propio (solo heredaba la tarjeta .kn-tarjeta),
+ *  por eso en pantallas grandes se veía como una cajita perdida
+ *  en vez de un modal centrado. Se le da su propio overlay (más
+ *  oscuro que el de notificarExito, para que se note que es una
+ *  decisión que requiere leerse con calma) y una tarjeta más
+ *  grande y con más peso de "alerta" (.kn-tarjeta-alerta).
+ * ========================================================= */
+#kacosa-confirmacion {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 26, 46, 0.68);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+#kacosa-confirmacion.visible { opacity: 1; visibility: visible; }
+#kacosa-confirmacion.visible .kn-tarjeta { transform: scale(1) translateY(0); }
+
+.kn-tarjeta-alerta {
+  max-width: 500px;
+  padding: 38px 34px 28px;
+  border-top: 6px solid var(--ambar);
+  box-shadow: 0 25px 65px rgba(0,0,0,0.35);
+}
+
+.kn-tarjeta-alerta .kn-icono {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34px;
+  border-radius: 50%;
+  background: rgba(217, 119, 6, 0.14);
+  color: var(--ambar-oscuro);
+}
+
+.kn-tarjeta-alerta .kn-titulo {
+  font-size: 22px;
+  margin-bottom: 12px;
+}
+
+.kn-tarjeta-alerta .kn-mensaje {
+  font-size: 15.5px;
+  line-height: 1.65;
+  color: var(--texto-principal);
+  margin-bottom: 24px;
+}
+
+.kn-tarjeta-alerta .kn-boton {
+  padding: 14px;
+  font-size: 15px;
+}
+
+@media (max-width: 600px) {
+  .kn-tarjeta-alerta { max-width: 100%; padding: 30px 22px 22px; }
+  .kn-tarjeta-alerta .kn-icono { width: 60px; height: 60px; font-size: 28px; }
+  .kn-tarjeta-alerta .kn-titulo { font-size: 19px; }
+  .kn-tarjeta-alerta .kn-mensaje { font-size: 14px; }
+}
 /* --- Sección de usuario al final del sidebar (sin espacio debajo) --- */
 .sidebar {
   display: flex;
