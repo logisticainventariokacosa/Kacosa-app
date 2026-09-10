@@ -108,8 +108,8 @@ export function confirmarAccion(mensaje, opciones = {}) {
     const overlay = document.createElement("div");
     overlay.id = "kacosa-confirmacion";
     overlay.innerHTML = `
-      <div class="kn-tarjeta">
-        <div class="kn-icono" style="color:var(--ambar-oscuro)">${icono}</div>
+      <div class="kn-tarjeta kn-tarjeta-alerta">
+        <div class="kn-icono">${icono}</div>
         <div class="kn-titulo">${titulo}</div>
         <div class="kn-mensaje">${mensaje}</div>
         <button type="button" class="kn-boton kn-boton-advertencia" id="kc-btn-confirmar">${textoConfirmar}</button>
