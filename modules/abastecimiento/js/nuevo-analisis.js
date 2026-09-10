@@ -1094,8 +1094,10 @@ async function ejecutarAnalisis() {
       const filasPendientes = parsearMHT(await archivoPendientesSync.text());
       if (fueCancelado()) return;
 
-      // Validar que el archivo solo traiga el centro/tienda que se está analizando
-      const errorPendientesSync = validarCentroPendientesSync(filasPendientes, centrosValidos);
+      // Validar que el archivo solo traiga el centro/tienda que se está
+      // analizando, y que la columna "Nro. Doc. MM" venga en blanco.
+      const errorPendientesSync = validarCentroPendientesSync(filasPendientes, centrosValidos)
+        || validarNroDocMmPendientesSync(filasPendientes);
       if (errorPendientesSync) {
         estadoTexto.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' + errorPendientesSync;
         btnAnalizar.disabled = false;
@@ -1203,9 +1205,21 @@ function validarCentroPendientesSync(filas, centrosValidos) {
   return null;
 }
 
-// ============================================================
-//  MOSTRAR DUPLICADOS
-// ============================================================
+/**
+ * Valida que la columna "Nro. Doc. MM" del archivo de materiales pendientes
+ * por sincronizar venga siempre en blanco. Un valor ahí indica que ese
+ * material ya tiene un documento de movimiento de materiales asociado (ya se
+ * sincronizó), así que no le corresponde estar en este archivo de
+ * "pendientes" — si aparece aunque sea en una fila, se rechaza el archivo
+ * completo en vez de solo ignorar esa fila.
+ */
+function validarNroDocMmPendientesSync(filas) {
+  const filasConValor = filas.filter(f => String(f["Nro. Doc. MM"] || "").trim() !== "");
+  if (filasConValor.length > 0) {
+    return `El archivo de materiales pendientes por sincronizar tiene ${filasConValor.length} material(es) con un valor en la columna "Nro. Doc. MM" (esa columna debe estar siempre en blanco). Verifica que sea el archivo correcto y vuelve a descargarlo de SAP.`;
+  }
+  return null;
+}
 function mostrarDuplicados(grupos) {
   const cont = document.getElementById("na-duplicados");
   const descripcionPorCodigo = {};
@@ -2060,6 +2074,4 @@ document.addEventListener("kacosa:vista-cambiada", (e) => {
 // si el usuario sigue en esta vista.
 document.addEventListener("kacosa:usuario-listo", () => {
   estado = estadoInicial();
-  const vista = document.getElementById("vista-nuevo-analisis");
-  if (vista && vista.classList.contains("activa")) render();
-});
+  const vista = document.getElementById("vis
