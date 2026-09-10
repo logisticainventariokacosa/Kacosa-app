@@ -889,6 +889,54 @@ async function ejecutarAnalisis() {
     return;
   }
 
+  // Horizonte de una semana: el "a pedir" resultante solo alcanza para 7 días.
+  // Se advierte porque puede quedar corto si la reposición real tarda más que
+  // eso, con riesgo de quedarse sin stock en poco tiempo.
+  if (periodo === "semana") {
+    const btnAnalizarPrevio = document.getElementById("btn-analizar");
+    if (btnAnalizarPrevio) btnAnalizarPrevio.disabled = true; // evita doble clic mientras decide
+    const continuar = await confirmarAccion(
+      `Elegiste un horizonte de abastecimiento de <strong>una semana</strong>. El "a pedir" que va a procesar este análisis se calcula solo para cubrir esos 7 días.<br><br>
+       Esa cantidad puede ser insuficiente si la reposición real tarda más que eso, con riesgo de quedarse sin stock en poco tiempo.<br><br>
+       ¿Quieres continuar con este horizonte?`,
+      {
+        titulo: "Horizonte de una semana",
+        icono: '<i class="fa-solid fa-triangle-exclamation"></i>',
+        textoConfirmar: "Sí, continuar con 1 semana",
+        textoCancelar: "Cancelar y ajustar"
+      }
+    );
+    if (!continuar) {
+      estadoTexto.textContent = "Análisis cancelado. Ajusta el horizonte de abastecimiento si lo deseas.";
+      actualizarBotonAnalizar();
+      return;
+    }
+  }
+
+  // Horizonte de más de 1 mes ("Varios meses" con más de 1 mes elegido): el
+  // "a pedir" resultante cubre todo ese tiempo de una sola vez, lo que puede
+  // generar sobre stock en la tienda.
+  if (periodo === "meses" && mesesCantidad > 1) {
+    const btnAnalizarPrevio = document.getElementById("btn-analizar");
+    if (btnAnalizarPrevio) btnAnalizarPrevio.disabled = true; // evita doble clic mientras decide
+    const continuar = await confirmarAccion(
+      `Elegiste un horizonte de abastecimiento de <strong>${mesesCantidad} meses</strong>. El "a pedir" que va a procesar este análisis se calcula para cubrir todo ese tiempo de una sola vez.<br><br>
+       Esto podría ocasionar un sobre stock en la tienda: se pediría bastante más de lo que normalmente se pide para un mes.<br><br>
+       ¿Quieres continuar con este horizonte?`,
+      {
+        titulo: "Horizonte de varios meses",
+        icono: '<i class="fa-solid fa-triangle-exclamation"></i>',
+        textoConfirmar: `Sí, continuar con ${mesesCantidad} meses`,
+        textoCancelar: "Cancelar y ajustar"
+      }
+    );
+    if (!continuar) {
+      estadoTexto.textContent = "Análisis cancelado. Ajusta el horizonte de abastecimiento si lo deseas.";
+      actualizarBotonAnalizar();
+      return;
+    }
+  }
+
   const MARGEN_UMBRAL_CONFIRMACION = 30;
   if (margenPct > MARGEN_UMBRAL_CONFIRMACION) {
     const btnAnalizarPrevio = document.getElementById("btn-analizar");
