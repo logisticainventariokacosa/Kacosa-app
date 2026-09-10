@@ -149,6 +149,31 @@ const MODULES = [
   }
 ];
 
+// Para el rol "directiva", el grupo "Dashboard" se muestra en un orden
+// distinto (Resumen Directiva primero) y el submódulo "Dashboard
+// Abastecimiento" se le renombra a "Dashboard Abastecimiento Detalle" (para
+// diferenciarlo del nuevo resumen general). Es un ajuste SOLO para este rol:
+// coordinador, admin y cualquier otro siguen viendo el orden y los nombres
+// originales — ver ordenarSubmodulosParaRol() y etiquetaSubmodulo() más abajo.
+const ORDEN_DASHBOARD_DIRECTIVA = ["resumen-directiva", "dashboard-aba", "dashboard-inv"];
+const ETIQUETAS_PERSONALIZADAS_POR_ROL = {
+  directiva: { "dashboard-aba": "Dashboard Abastecimiento Detalle" }
+};
+
+/** Nombre a mostrar de un submódulo para el rol actual (respeta ETIQUETAS_PERSONALIZADAS_POR_ROL; si no hay override, es sm.label de siempre). */
+function etiquetaSubmodulo(sm, rol) {
+  return ETIQUETAS_PERSONALIZADAS_POR_ROL[rol]?.[sm.id] || sm.label;
+}
+
+/** Reordena los submódulos visibles de un módulo para el rol actual (por ahora solo aplica a "Dashboard" + "directiva"; para todos los demás casos deja el orden original tal cual). */
+function ordenarSubmodulosParaRol(mod, submodsVisibles, rol) {
+  if (mod.id === "dashboard" && rol === "directiva") {
+    const porId = Object.fromEntries(submodsVisibles.map(sm => [sm.id, sm]));
+    return ORDEN_DASHBOARD_DIRECTIVA.filter(id => porId[id]).map(id => porId[id]);
+  }
+  return submodsVisibles;
+}
+
 // Módulo/submódulo con el que arranca cada rol al iniciar sesión.
 // Ajusta libremente este mapa según cómo KACOSA quiera enrutar cada rol.
 const HOME_POR_ROL = {
@@ -157,7 +182,10 @@ const HOME_POR_ROL = {
   compras: "dashboard-aba",
   coordinador: "dashboard-inv",
   supervisor: "dashboard-inv",
-  directiva: "dashboard-inv",
+  // "directiva" apunta a "Resumen Directiva" (no a "Dashboard Inventario" como
+  // el resto): es el dashboard pensado específicamente para este rol, así que
+  // es lo primero que debe ver al presionar "Ir a mi Dashboard".
+  directiva: "resumen-directiva",
   admin: "dashboard-inv"
 };
 const HOME_POR_DEFECTO = "dashboard-inv";
@@ -424,7 +452,8 @@ function construirSidebar(rol) {
   sidebarModules.innerHTML = "";
 
   MODULES.forEach(mod => {
-    const submodsVisibles = mod.submodules.filter(sm => !sm.roles || sm.roles.includes(rol) || rol === "admin");
+    const submodsVisiblesSinOrdenar = mod.submodules.filter(sm => !sm.roles || sm.roles.includes(rol) || rol === "admin");
+    const submodsVisibles = ordenarSubmodulosParaRol(mod, submodsVisiblesSinOrdenar, rol);
     if (submodsVisibles.length === 0) return;
 
     const wrap = document.createElement("div");
@@ -446,7 +475,7 @@ function construirSidebar(rol) {
       const subBtn = document.createElement("button");
       subBtn.className = "sap-submodule-btn";
       subBtn.dataset.submoduleId = sm.id;
-      subBtn.innerHTML = `<i class="fa-solid ${sm.icon}"></i><span>${sm.label}</span>`;
+      subBtn.innerHTML = `<i class="fa-solid ${sm.icon}"></i><span>${etiquetaSubmodulo(sm, rol)}</span>`;
       subBtn.addEventListener("click", () => abrirSubmodulo(sm.id, { actualizarUrl: true }));
       subwrap.appendChild(subBtn);
     });
@@ -502,7 +531,7 @@ function abrirSubmodulo(id, { actualizarUrl = false } = {}) {
   const { mod, sm } = encontrado;
 
   submoduloActivoId = id;
-  headerModuleLabel.textContent = mod.label + " · " + sm.label;
+  headerModuleLabel.textContent = mod.label + " · " + etiquetaSubmodulo(sm, rolActual);
 
   moduleWelcome.classList.add("oculto");
   moduleFrame.classList.remove("hidden");
