@@ -2074,4 +2074,6 @@ document.addEventListener("kacosa:vista-cambiada", (e) => {
 // si el usuario sigue en esta vista.
 document.addEventListener("kacosa:usuario-listo", () => {
   estado = estadoInicial();
-  const vista = document.getElementById("vis
+  const vista = document.getElementById("vista-nuevo-analisis");
+  if (vista && vista.classList.contains("activa")) render();
+});
