@@ -381,6 +381,12 @@ onAuthStateChanged(auth, async (user) => {
     localStorage.removeItem(CLAVE_HUBO_SESION);
     loginStatus.classList.remove("text-kacosa-600");
     loginStatus.textContent = "";
+    // Se limpia el hash (#nuevo-analisis, #resumen-directiva, etc.) al perder
+    // la sesión, para que la PRÓXIMA vez que se inicie sesión arranque en la
+    // pantalla de bienvenida en vez de reabrir la última vista de la sesión
+    // anterior (ver el bloque de abajo, que si respeta el hash al recargar
+    // la página CON sesión activa).
+    history.replaceState(null, "", location.pathname);
     mostrarPantalla("login");
     return;
   }
@@ -417,7 +423,22 @@ onAuthStateChanged(auth, async (user) => {
 
   construirSidebar(rolActual);
   mostrarPantalla("app");
-  mostrarBienvenida();
+
+  // Si al recargar la página el hash ya apunta a un submódulo válido y
+  // visible para este rol (ej. el usuario estaba en "#nuevo-analisis" y
+  // presionó F5), se reabre esa misma vista en vez de mandarlo siempre a la
+  // pantalla de bienvenida. Si no hay hash o no corresponde a nada accesible
+  // para este rol, se comporta igual que antes (bienvenida).
+  const idDesdeHash = location.hash.replace("#", "");
+  const encontradoDesdeHash = idDesdeHash ? buscarSubmodulo(idDesdeHash) : null;
+  const tieneAccesoDesdeHash = encontradoDesdeHash
+    && (!encontradoDesdeHash.sm.roles || encontradoDesdeHash.sm.roles.includes(rolActual) || rolActual === "admin");
+
+  if (tieneAccesoDesdeHash) {
+    abrirSubmodulo(idDesdeHash);
+  } else {
+    mostrarBienvenida();
+  }
 });
 
 // Salvaguarda: si por algo Firebase nunca resuelve el estado de sesión, no
