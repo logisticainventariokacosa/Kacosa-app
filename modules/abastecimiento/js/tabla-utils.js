@@ -31,6 +31,15 @@ export function crearTablaPaginada(container, columnas, itemsPorPagina = 50, opc
   }
 
   function renderizarTabla() {
+    // Se guarda el scroll horizontal ANTES de reconstruir el HTML: como
+    // container.innerHTML reemplaza por completo el <div class="table-responsive">
+    // de la vez anterior (junto con su scrollLeft) por uno nuevo (que arranca
+    // en 0), sin esto la tabla "saltaba" a la primera columna cada vez que se
+    // repintaba (ej. al excluir/restaurar un material desde un botón que
+    // queda a la derecha, fuera de la vista, en una tabla con scroll lateral).
+    const scrollContenedorPrevio = container.querySelector('.table-responsive');
+    const scrollLeftPrevio = scrollContenedorPrevio ? scrollContenedorPrevio.scrollLeft : 0;
+
     // Aplicar ordenamiento
     const datosOrdenados = ordenarDatos(datosFiltrados);
     
@@ -122,6 +131,11 @@ export function crearTablaPaginada(container, columnas, itemsPorPagina = 50, opc
     `;
 
     container.innerHTML = html;
+
+    // Restaurar el scroll horizontal justo después de reconstruir el HTML,
+    // sobre el nuevo <div class="table-responsive"> (ver comentario arriba).
+    const scrollContenedorNuevo = container.querySelector('.table-responsive');
+    if (scrollContenedorNuevo) scrollContenedorNuevo.scrollLeft = scrollLeftPrevio;
 
     // Eventos de paginación
     container.querySelectorAll('.btn-pagina').forEach(btn => {
