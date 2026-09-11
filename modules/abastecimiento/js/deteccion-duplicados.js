@@ -62,6 +62,18 @@ function colorDetectado(textoNormalizado) {
   return COLORES_CONOCIDOS.find(c => textoNormalizado.includes(c)) || null;
 }
 
+// Presentaciones/envases conocidos: si dos descripciones mencionan
+// presentaciones DISTINTAS de esta lista (ej. una dice "Cuñete" y la otra
+// "Galón"), nunca se consideran duplicados, aunque el resto del texto sea
+// idéntico — son unidades de venta distintas, no el mismo material.
+// "CUÑETE" queda como "CUNETE" después de normalizar() (se le quita la tilde).
+const PRESENTACIONES_CONOCIDAS = ["CUNETE", "GALON"];
+
+/** Devuelve la primera presentación/envase conocido mencionado en el texto normalizado, o null si no hay ninguno. */
+function presentacionDetectada(textoNormalizado) {
+  return PRESENTACIONES_CONOCIDAS.find(p => textoNormalizado.includes(p)) || null;
+}
+
 // Categorías donde el color SIEMPRE distingue el material, aunque el resto de
 // la descripción sea idéntico: pinturas, congeladores y equipos de línea
 // blanca. Para el resto de categorías (tornillería, motores, filtros, etc.),
@@ -87,11 +99,19 @@ function esCategoriaColorEstricto(textoNormalizado) {
 // Categorías que el usuario pidió tratar SIEMPRE como materiales distintos,
 // sin importar qué tan parecida sea el resto de la descripción: la marca
 // Exceline (línea de protectores/accesorios que se confundían entre sí, ej.
-// "Protector d/Nevera Exceline GSM-NP120" vs "...GSM-N120") y pinturas (donde
-// además de color, la presentación —Galón vs Cuñete, etc.— cambia el SKU).
-// Estos nunca se agrupan automáticamente, ni siquiera si el resto del texto
-// es idéntico letra por letra.
-const CATEGORIAS_NUNCA_AGRUPAR = ["EXCELINE", "PINTURA", "PINTU"];
+// "Protector d/Nevera Exceline GSM-NP120" vs "...GSM-N120"), pinturas y
+// afines (donde además de color, la presentación —Galón vs Cuñete, etc.—
+// cambia el SKU), y equipos de refrigeración/aire acondicionado (donde
+// capacidad/modelo distinguen el material aunque el resto del texto sea
+// parecido).
+// Nota sobre "A A VENTANA": así queda "A/A Ventana" después de normalizar()
+// (la barra se convierte en espacio) — ver normalizar() más arriba.
+const CATEGORIAS_NUNCA_AGRUPAR = [
+  "EXCELINE", "PINTURA", "PINTU",
+  "FONDO", "ESMALTE", "MANTO", "SELLADOR",
+  "PRIMER", "FLEXI PRIMER", "BARNIZ", "SPRAY", "PASTA",
+  "CONGELADOR", "MINI SPLIT", "AIRE ACONDICIONADO", "A A VENTANA", "LAVADORA",
+];
 
 /** true si la descripción normalizada pertenece a una categoría que nunca debe fusionarse automáticamente. */
 function esCategoriaNuncaAgrupar(textoNormalizado) {
@@ -158,6 +178,61 @@ function difierenPorConSin(textoConBarraA, textoConBarraB) {
   for (const palabra of a.con) if (b.sin.has(palabra)) return true;
   for (const palabra of a.sin) if (b.con.has(palabra)) return true;
   return false;
+}
+
+// Grupos de atributo mutuamente excluyente: "Interno"/"Externo" y
+// "Soldable"/"Roscable" (con sus abreviaturas). A diferencia de la guardia de
+// color (que en categorías normales solo bloquea si AMBAS mencionan un color
+// y son distintos), aquí la sola AUSENCIA también cuenta como diferencia: si
+// una descripción dice "Sol" (soldable) y la otra no dice ni "Sol" ni "Rosc",
+// igual se consideran materiales distintos — el usuario indicó que omitir el
+// dato no es lo mismo que confirmar que es de un tipo u otro.
+// Se compara por TOKEN exacto (palabra completa separada por espacios), no
+// por substring, para no confundir "SOL" con palabras como "CONSOLA".
+const GRUPOS_ATRIBUTO_EXCLUYENTE = [
+  {
+    nombre: "interno/externo",
+    valores: {
+      EXTERNO: ["EXTERNO", "EXTER"],
+      INTERNO: ["INTERNO", "INTER"]
+    }
+  },
+  {
+    nombre: "soldable/roscable",
+    valores: {
+      SOLDABLE: ["SOL", "SOLD", "SOLDABLE"],
+      ROSCABLE: ["ROSC", "ROSCABLE"]
+    }
+  }
+];
+
+/** true si algún token del texto normalizado (separado por espacios) coincide EXACTAMENTE con alguna de las palabras dadas. */
+function tieneTokenExacto(textoNormalizado, palabras) {
+  const tokens = textoNormalizado.split(" ");
+  return palabras.some(p => tokens.includes(p));
+}
+
+/** Para un grupo de atributo excluyente, devuelve qué valor (si alguno) menciona el texto normalizado, o null si no menciona ninguno de sus valores. */
+function valorDeGrupoExcluyente(textoNormalizado, grupo) {
+  for (const [valor, palabras] of Object.entries(grupo.valores)) {
+    if (tieneTokenExacto(textoNormalizado, palabras)) return valor;
+  }
+  return null;
+}
+
+/**
+ * true si, para algún grupo de GRUPOS_ATRIBUTO_EXCLUYENTE, dos descripciones
+ * normalizadas difieren: mencionan valores distintos del grupo (ej. una
+ * "Externo" y la otra "Interno"), o una lo menciona y la otra no dice nada al
+ * respecto (ver comentario de GRUPOS_ATRIBUTO_EXCLUYENTE arriba).
+ */
+function difierenPorAtributoExcluyente(normA, normB) {
+  return GRUPOS_ATRIBUTO_EXCLUYENTE.some(grupo => {
+    const valorA = valorDeGrupoExcluyente(normA, grupo);
+    const valorB = valorDeGrupoExcluyente(normB, grupo);
+    if (!valorA && !valorB) return false; // ninguna menciona este atributo: no aplica
+    return valorA !== valorB;
+  });
 }
 
 // Reglas de palabra distintiva por categoría: aunque el resto de la descripción
@@ -240,9 +315,21 @@ export function detectarCandidatosLocal(materiales) {
           continue;
         }
 
+        // Guardia de presentación/envase: "Cuñete" vs "Galón" (u otra
+        // combinación de PRESENTACIONES_CONOCIDAS) son unidades de venta
+        // distintas, sin importar qué tan parecido sea el resto del texto.
+        const presentacionI = presentacionDetectada(grupo[i].norm);
+        const presentacionJ = presentacionDetectada(grupo[j].norm);
+        if (presentacionI && presentacionJ && presentacionI !== presentacionJ) continue;
+
         // Guardia con/sin: "C/Rejilla" vs "S/Rejilla" (o cualquier "C/palabra"
         // vs "S/palabra" para la misma palabra) son variantes distintas.
         if (difierenPorConSin(grupo[i].normBarra, grupo[j].normBarra)) continue;
+
+        // Guardia de atributo excluyente: interno/externo, soldable/roscable
+        // (ver GRUPOS_ATRIBUTO_EXCLUYENTE arriba) — incluye el caso en que
+        // solo una de las dos descripciones menciona el atributo.
+        if (difierenPorAtributoExcluyente(grupo[i].norm, grupo[j].norm)) continue;
 
         // Guardia de palabra distintiva (ej. "Sold" en filtros secadores, "C/Pr" en
         // motores de ventilador): si una la menciona y la otra no, son variantes distintas.
