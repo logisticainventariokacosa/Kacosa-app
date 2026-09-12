@@ -59,6 +59,18 @@ function mostrarError(msg) {
   if (el) { el.textContent = msg; el.style.display = "block"; }
 }
 
+// (11-sep-2026) Navega "a prueba de caché": agrega un parámetro único a la
+// URL y usa location.replace() (no deja entrada en el historial) para que
+// el navegador NUNCA pueda reutilizar o restaurar una versión anterior de
+// esta página (por bfcache, por el caché normal de HTTP, o por cualquier
+// otro motivo) con datos de la sesión que se acaba de cerrar/abrir. Este es
+// el único punto de navegación entre index.html <-> app.html: úsalo siempre
+// en vez de asignar window.location.href directamente.
+function irA(url) {
+  const separador = url.includes("?") ? "&" : "?";
+  window.location.replace(url + separador + "_=" + Date.now());
+}
+
 async function validarYRedirigir(user) {
   mostrarLoader("Verificando acceso...");
   const autorizado = await correoAutorizado(user.email);
@@ -69,7 +81,7 @@ async function validarYRedirigir(user) {
     return;
   }
   mostrarLoader("Entrando...");
-  window.location.href = "app.html";
+  irA("app.html");
 }
 
 // --- Si ya hay sesión activa (ej. viniendo del portal), entra directo sin mostrar el login ---
@@ -128,7 +140,7 @@ export function protegerPagina() {
   const irAlLogin = () => {
     if (yaRedirigido) return;
     yaRedirigido = true;
-    window.location.href = "index.html";
+    irA("index.html");
   };
 
   onAuthStateChanged(auth, async (user) => {
@@ -154,5 +166,13 @@ export function protegerPagina() {
 }
 
 export function cerrarSesion() {
-  signOut(auth).then(() => window.location.href = "index.html");
+  // Limpieza defensiva del estado en memoria de ESTA página ANTES de
+  // navegar — por si algo llegara a sobrevivir la navegación (ver nota de
+  // irA() arriba), que no quede nada de la cuenta que se está cerrando.
+  if (window.KACOSA) {
+    window.KACOSA.usuario = null;
+    window.KACOSA.tiendas = [];
+    window.KACOSA.tiendaActiva = null;
+  }
+  signOut(auth).finally(() => irA("index.html"));
 }
