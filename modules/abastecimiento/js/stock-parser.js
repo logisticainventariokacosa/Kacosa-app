@@ -1,5 +1,6 @@
 // js/stock-parser.js
 import { aNumero } from "./mht-parser.js";
+import { supabaseSelectTodo } from "./supabase-client.js";
 
 /**
  * Agrupa las filas de un archivo de stock (tienda o Kacosa) por material,
@@ -50,6 +51,66 @@ export function agruparStock(filas, centrosFiltro, opciones = {}) {
         // NUEVO: desglose de stock por centro SAP, ej. { "1000": 5, "3000": 2 }.
         // Permite mostrar Stock Kacosa 1000 / Stock Kacosa 3000 por separado,
         // sin afectar el cálculo (que sigue usando la suma en stockDisponible).
+        stockPorCentro: {}
+      };
+    }
+    mapa[codigo].stockDisponible += disponible;
+    mapa[codigo].stockPorCentro[centro] = (mapa[codigo].stockPorCentro[centro] || 0) + disponible;
+  });
+
+  return mapa;
+}
+
+/**
+ * Igual que agruparStock(), pero leyendo directo de la tabla "stock" de
+ * Supabase en vez de un archivo .MHT subido a mano — la tabla ya la
+ * mantiene actualizada un middleware aparte, así que Nuevo Análisis ya no
+ * necesita que el usuario suba "Stock de la tienda" ni "Stock de Kacosa".
+ *
+ * Mismo criterio de "disponible" que agruparStock() (ver comentario ahí
+ * arriba): Libre utilización + Trans./Trasl. + Devoluciones para tienda, o
+ * solo Libre utilización si opciones.soloLibreUtilizacion=true (Kacosa).
+ *
+ * @param {Array<string>} centros - centros SAP a incluir (ej. ["1300"] o ["1000","3000"])
+ * @param {Array<string>} almacenesPermitidos - almacenes SAP a incluir (general + exhibición del/los centro(s))
+ * @param {Object} [opciones]
+ * @param {boolean} [opciones.soloLibreUtilizacion]
+ * @returns {Promise<Object>} codigo -> { codigo, descripcion, unidadBase, stockDisponible, stockPorCentro } (misma forma que agruparStock)
+ */
+export async function obtenerStockDesdeSupabase(centros, almacenesPermitidos, opciones = {}) {
+  const soloLibreUtilizacion = !!opciones.soloLibreUtilizacion;
+  const mapa = {};
+  if (!centros || centros.length === 0) return mapa;
+
+  const listaCentros = centros.map(c => `"${c}"`).join(",");
+  const listaAlmacenes = (almacenesPermitidos || []).map(a => `"${a}"`).join(",");
+  const columnas = "material,centro,libre_utilizacion,trans_trasl,devoluciones,texto_breve,unidad_medida_base";
+  let query = `select=${columnas}&centro=in.(${listaCentros})`;
+  if (listaAlmacenes) query += `&almacen=in.(${listaAlmacenes})`;
+
+  const filas = await supabaseSelectTodo("stock", query);
+
+  filas.forEach(f => {
+    const centro = String(f.centro || "").trim();
+    const codigo = String(f.material || "").trim();
+    if (!codigo) return;
+
+    const libreUtilizacion = aNumero(f.libre_utilizacion);
+    let disponible;
+    if (soloLibreUtilizacion) {
+      disponible = libreUtilizacion;
+    } else {
+      const transTrasl = aNumero(f.trans_trasl);
+      const devoluciones = aNumero(f.devoluciones);
+      disponible = libreUtilizacion + transTrasl + devoluciones;
+    }
+
+    if (!mapa[codigo]) {
+      mapa[codigo] = {
+        codigo,
+        descripcion: f.texto_breve || "",
+        unidadBase: f.unidad_medida_base || "UN",
+        stockDisponible: 0,
         stockPorCentro: {}
       };
     }
