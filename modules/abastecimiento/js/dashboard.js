@@ -1,5 +1,5 @@
 // js/dashboard.js
-import { callBridge } from "./bridge.js";
+import { supabaseSelect, supabaseSelectTodo } from "./supabase-client.js";
 import { TIENDAS, nombrePorId, centrosDeTienda } from "./tiendas.js";
 import { crearTablaPaginada } from "./tabla-utils.js";
 import { notificarExito } from "./notificaciones.js";
@@ -79,7 +79,65 @@ async function cargarAnalisis() {
   const esPrivilegiado = ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS.includes(rolNormalizado);
   const filtroUsuario = esPrivilegiado ? {} : { usuarioEmail: window.KACOSA?.usuario?.email || "" };
 
-  const resp = await callBridge("leerAnalisis", { tienda: tiendaSeleccionada, ...filtroUsuario });
+  // Lee el ÚLTIMO análisis guardado de esta tienda (y, si aplica, de este
+  // usuario específico) directo de Supabase, en dos pasos — igual que hacía
+  // leerAnalisis_() en Apps Script: primero encuentra el run_id más reciente,
+  // luego trae todas las filas de ese run_id (paginado, puede haber más de 1000).
+  let resp;
+  try {
+    let filtro = `tienda=eq.${encodeURIComponent(tiendaSeleccionada)}`;
+    if (filtroUsuario.usuarioEmail) {
+      filtro += `&usuario_email=eq.${encodeURIComponent(filtroUsuario.usuarioEmail)}`;
+    }
+    filtro += `&select=run_id,fecha_analisis,creado_en,usuario_email,usuario_nombre&order=creado_en.desc&limit=1`;
+
+    const ultimo = await supabaseSelect("analisis", filtro);
+
+    if (!ultimo || ultimo.length === 0) {
+      resp = { ok: true, materiales: [], fechaAnalisis: null };
+    } else {
+      const runId = ultimo[0].run_id;
+      const filas = await supabaseSelectTodo("analisis", `run_id=eq.${encodeURIComponent(runId)}&select=*`);
+
+      const materiales = filas.map(f => ({
+        codigo: f.codigo,
+        descripcion: f.descripcion || "",
+        umb: f.umb || "UN",
+        unidadVenta: f.unidad_venta || "UN",
+        materialesFusionados: f.materiales_fusionados || "",
+        clase: f.clase || "",
+        totalVentas: Number(f.total_ventas) || 0,
+        promedioVentasPeriodo: Number(f.promedio_ventas_periodo) || 0,
+        stockTienda: Number(f.stock_tienda) || 0,
+        stockKacosa1000: Number(f.stock_kacosa_1000) || 0,
+        stockKacosa3000: Number(f.stock_kacosa_3000) || 0,
+        stockKacosa: Number(f.stock_kacosa) || 0,
+        ubicacionKacosa: f.ubicacion_kacosa || "",
+        aPedir: Number(f.a_pedir) || 0,
+        aPedirIdeal: Number(f.a_pedir_ideal) || 0,
+        pendiente: Number(f.pendiente) || 0,
+        porDespacho: Number(f.por_despacho) || 0,
+        enNotasKacosa: Number(f.en_notas_kacosa) || 0,
+        porSincronizar: Number(f.por_sincronizar) || 0,
+        numeroDeNota: f.numero_de_nota || "",
+        fechaDeNota: f.fecha_de_nota || "",
+        periodoVentas: f.periodo_ventas || "",
+        periodoAbastecimiento: f.periodo_abastecimiento || "",
+        rangoSeguridadUsado: f.rango_seguridad_usado || "",
+        tienda: tiendaSeleccionada
+      }));
+
+      resp = {
+        ok: true,
+        materiales,
+        fechaAnalisis: ultimo[0].fecha_analisis || null,
+        usuarioEmail: ultimo[0].usuario_email || "",
+        usuarioNombre: ultimo[0].usuario_nombre || ""
+      };
+    }
+  } catch (err) {
+    resp = { ok: false, error: err.message };
+  }
 
   if (!resp.ok) {
     resultadoDiv.innerHTML = `<p class="vista-sub">Error al cargar: ${resp.error}</p>`;
