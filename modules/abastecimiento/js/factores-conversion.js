@@ -28,9 +28,18 @@ let cargaEnCurso = null;
  * detección de "unidad distinta a la UMB" cuando en realidad es la MISMA
  * unidad pero escrita distinto entre el archivo de ventas, el de stock, o lo
  * cargado en Supabase (ej. "Un" vs "UN ", "un" vs "UN").
+ *
+ * "ST" (Stück, el código nativo de SAP) y "UN" (unidad) son la MISMA unidad
+ * de medida (11-sep-2026): desde que el stock se lee directo de Supabase
+ * (alimentado por el middleware), la UMB llega tal cual la maneja SAP
+ * internamente ("ST"), mientras que el archivo de ventas y los factores
+ * configurados en Supabase siguen usando "UN". Se unifican acá para que no
+ * se traten como unidades distintas en ningún punto (ni en el chequeo de
+ * "unidad de venta distinta a su UMB", ni en la búsqueda de factores).
  */
 function normalizarUnidad(u) {
-  return String(u || "").trim().toUpperCase();
+  const limpio = String(u || "").trim().toUpperCase();
+  return limpio === "ST" ? "UN" : limpio;
 }
 export { normalizarUnidad };
 
