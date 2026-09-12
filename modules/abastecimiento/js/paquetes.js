@@ -3,7 +3,7 @@
 // por material) una sola vez y la deja en caché en memoria. Antes venía de un
 // archivo estático (data/paquetes.json); ahora se administra directamente en
 // Supabase (tabla "paquetes", Table Editor) sin tocar código ni redesplegar.
-import { callBridge } from "./bridge.js";
+import { supabaseSelectTodo } from "./supabase-client.js";
 
 let cachePaquetes = null;
 let cargaEnCurso = null;
@@ -23,13 +23,10 @@ export async function cargarPaquetes() {
 
   cargaEnCurso = (async () => {
     try {
-      const resp = await callBridge("leerPaquetes", {});
-      if (!resp.ok) {
-        throw new Error("No se pudo cargar la lista de paquetes: " + (resp.error || "error desconocido"));
-      }
+      const filas = await supabaseSelectTodo("paquetes", "select=material,umb,empaque,descripcion", 1000);
       const mapa = {};
-      (resp.paquetes || []).forEach(p => {
-        mapa[String(p.material)] = { umb: p.umb, empaque: p.empaque, descripcion: p.descripcion };
+      filas.forEach(p => {
+        mapa[String(p.material)] = { umb: p.umb || "", empaque: Number(p.empaque) || 1, descripcion: p.descripcion || "" };
       });
       cachePaquetes = mapa;
       return mapa;
