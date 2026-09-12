@@ -4,7 +4,7 @@
 // así se pueden agregar/quitar códigos sin tocar ni redesplegar archivos, y el
 // frontend y el backend (Code.gs) siempre ven exactamente la misma lista (antes
 // estaban duplicadas a mano en dos archivos distintos y se desincronizaron).
-import { callBridge } from "./bridge.js";
+import { supabaseSelectTodo } from "./supabase-client.js";
 
 let cache = null;
 let cargaEnCurso = null;
@@ -25,11 +25,8 @@ export async function cargarCodigosExcluidos() {
 
   cargaEnCurso = (async () => {
     try {
-      const resp = await callBridge("leerCodigosExcluidos", {});
-      if (!resp.ok) {
-        throw new Error("No se pudieron cargar los códigos excluidos: " + (resp.error || "error desconocido"));
-      }
-      cache = new Set((resp.codigos || []).map(c => String(c).trim()));
+      const filas = await supabaseSelectTodo("codigos_excluidos", "select=codigo");
+      cache = new Set(filas.map(c => String(c.codigo).trim()));
     } catch (err) {
       cache = null;
       throw err;
