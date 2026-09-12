@@ -3,7 +3,7 @@ import { parsearMHT, aNumero } from "./mht-parser.js";
 import { procesarVentas, calcularRangoFechasVentas } from "./ventas-parser.js";
 import { cargarFactoresConversion } from "./factores-conversion.js";
 import { cargarCodigosExcluidos } from "./exclusiones.js";
-import { agruparStock, procesarNotasPendientes, restarNotasPendientesDeKacosa } from "./stock-parser.js";
+import { procesarNotasPendientes, restarNotasPendientesDeKacosa, obtenerStockDesdeSupabase } from "./stock-parser.js";
 import { cargarPaquetes } from "./paquetes.js";
 import { cargarUbicaciones, obtenerUbicacion } from "./ubicaciones.js";
 import { calcularAbastecimiento } from "./calculo-abastecimiento.js";
@@ -17,17 +17,14 @@ import { procesarPendientesSync, restarPendientesSync } from "./pendientes-sync-
 
 const CENTROS_KACOSA = ["1000", "3000"];
 
-// Filas ya parseadas de los archivos de stock (tienda/Kacosa), guardadas para
-// poder re-validar Centro/Almacén sin releer el archivo si el usuario cambia
-// la tienda DESPUÉS de haber subido los archivos.
-const cacheFilasStock = {};
-
 // Configuración de cada input de archivo (se usa al construir el formulario
 // y también para limpiarlo por completo con "Limpiar datos").
+// NOTA (11-sep-2026): "Stock de la tienda" y "Stock de Kacosa" YA NO se
+// suben como archivo — se leen directo de la tabla "stock" de Supabase
+// (ver obtenerStockDesdeSupabase en ejecutarAnalisis), porque esa tabla ya
+// la mantiene actualizada un middleware aparte.
 const CONFIG_ARCHIVOS = [
   { id: 'na-ventas', nameId: 'file-name-ventas', statusId: 'file-status-ventas', wrapperId: 'file-wrapper-ventas', validId: 'validacion-ventas', clearId: 'file-clear-ventas', tipo: 'ventas', opcional: false },
-  { id: 'na-stock-tienda', nameId: 'file-name-stock-tienda', statusId: 'file-status-stock-tienda', wrapperId: 'file-wrapper-stock-tienda', validId: 'validacion-stock-tienda', clearId: 'file-clear-stock-tienda', tipo: 'stock', opcional: false },
-  { id: 'na-stock-kacosa', nameId: 'file-name-stock-kacosa', statusId: 'file-status-stock-kacosa', wrapperId: 'file-wrapper-stock-kacosa', validId: 'validacion-stock-kacosa', clearId: 'file-clear-stock-kacosa', tipo: 'stock', opcional: false },
   { id: 'na-notas-pendientes', nameId: 'file-name-notas-pendientes', statusId: 'file-status-notas-pendientes', wrapperId: 'file-wrapper-notas-pendientes', validId: 'validacion-notas-pendientes', clearId: 'file-clear-notas-pendientes', tipo: 'notas', opcional: false },
   { id: 'na-pendientes-sync', nameId: 'file-name-pendientes-sync', statusId: 'file-status-pendientes-sync', wrapperId: 'file-wrapper-pendientes-sync', validId: 'validacion-pendientes-sync', clearId: 'file-clear-pendientes-sync', tipo: 'pendientes-sync', opcional: true }
 ];
@@ -35,7 +32,7 @@ const CONFIG_ARCHIVOS = [
 // IDs de todos los campos del formulario que deben bloquearse mientras se procesa
 // un análisis (para evitar cargas o cambios a mitad de proceso).
 const IDS_CAMPOS_FORMULARIO = [
-  'na-tienda', 'na-ventas', 'na-stock-tienda', 'na-stock-kacosa',
+  'na-tienda', 'na-ventas',
   'na-notas-pendientes', 'na-pendientes-sync', 'na-periodo', 'na-meses-cantidad', 'na-margen'
 ];
 
@@ -48,28 +45,19 @@ function bloquearFormulario(bloquear) {
 }
 
 // ============================================================
-//  SINCRONIZACIÓN CON SUPABASE (stock y movimientos)
+//  SINCRONIZACIÓN CON SUPABASE (movimientos)
 // ============================================================
 /**
- * Envía las filas crudas de stock (tienda + Kacosa) y de movimientos (archivo de ventas)
- * a las tablas "stock" y "movimientos" de Supabase, vía el bridge (Apps Script).
+ * Envía las filas crudas de movimientos (archivo de ventas) a la tabla
+ * "movimientos" de Supabase, vía el bridge (Apps Script).
  * Se ejecuta en segundo plano: si falla, solo se registra en consola y no interrumpe el análisis.
+ *
+ * NOTA (11-sep-2026): antes esta función también enviaba "stock" (tienda +
+ * Kacosa) a Supabase — se quitó porque esa tabla ya la mantiene actualizada
+ * un middleware aparte, y Nuevo Análisis ahora la LEE en vez de subirla
+ * (ver obtenerStockDesdeSupabase en ejecutarAnalisis).
  */
-function sincronizarStockYMovimientos(filasVentas, filasStockTienda, filasStockKacosa) {
-  const filasStock = [...filasStockTienda, ...filasStockKacosa].map(f => ({
-    material: String(f["Material"] || "").trim(),
-    centro: String(f["Centro"] || "").trim(),
-    almacen: String(f["Almacén"] || "").trim(),
-    textoBreve: f["Texto breve de material"] || "",
-    unidadMedidaBase: f["Unidad medida base"] || "",
-    denominacionAlmacen: f["Denominación-almacén"] || "",
-    libreUtilizacion: aNumero(f["Libre utilización"]),
-    transTrasl: aNumero(f["Trans./Trasl."]),
-    enControlCalidad: aNumero(f["En control calidad"]),
-    bloqueado: aNumero(f["Bloqueado"]),
-    devoluciones: aNumero(f["Devoluciones"])
-  })).filter(f => f.material && f.centro);
-
+function sincronizarMovimientos(filasVentas) {
   const filasMovimientos = filasVentas.map(f => ({
     material: String(f["Material"] || "").trim(),
     textoBreve: f["Texto breve de material"] || "",
@@ -86,11 +74,6 @@ function sincronizarStockYMovimientos(filasVentas, filasStockTienda, filasStockK
     textoCabDocumento: f["Texto cab.documento"] || ""
   })).filter(f => f.material && f.centro);
 
-  if (filasStock.length > 0) {
-    callBridge("guardarStock", { filas: filasStock }).catch(err =>
-      console.error("No se pudo sincronizar el stock con Supabase:", err)
-    );
-  }
   if (filasMovimientos.length > 0) {
     callBridge("guardarMovimientos", { filas: filasMovimientos }).catch(err =>
       console.error("No se pudo sincronizar los movimientos con Supabase:", err)
@@ -178,82 +161,10 @@ function almacenesPermitidosParaCentros(centros) {
 // stock en Kacosa.
 const CENTROS_SIN_ANEXO_ALTA_ROTACION = ["1020"];
 
-/**
- * Revisa que la columna "Almacén" de los archivos de stock (tienda y Kacosa)
- * solo contenga los códigos que corresponden a los centros de la tienda
- * seleccionada (y, para el stock de Kacosa, a los centros 1000/3000).
- * Devuelve un mensaje de error (string) si encuentra alguno no permitido, o
- * null si todo está bien.
- * @param {string[]} centrosTienda - centros de la tienda seleccionada (centrosDeTienda(tienda))
- */
-function validarAlmacenes(filasStockTienda, filasStockKacosa, centrosTienda) {
-  const almacenesTiendaPermitidos = almacenesPermitidosParaCentros(centrosTienda);
-  const almacenesKacosaPermitidos = almacenesPermitidosParaCentros(CENTROS_KACOSA);
-
-  const tieneAlmacenNoPermitido = (filas, permitidos) =>
-    filas.some(f => {
-      const almacen = String(f["Almacén"] || "").trim();
-      return almacen !== "" && !permitidos.includes(almacen);
-    });
-
-  if (tieneAlmacenNoPermitido(filasStockTienda, almacenesTiendaPermitidos)) {
-    return `Tu archivo tiene stock de almacenes no permitidos, solo se admiten para el stock de la tienda los almacenes del general y exhibición (${almacenesTiendaPermitidos.join(", ")})`;
-  }
-  if (tieneAlmacenNoPermitido(filasStockKacosa, almacenesKacosaPermitidos)) {
-    return `Tu archivo tiene stock de almacenes no permitidos, solo se admiten para el stock de Kacosa los almacenes ${almacenesKacosaPermitidos.join(", ")}`;
-  }
-  return null;
-}
-
 /** Centros de la tienda actualmente seleccionada en el formulario (o [] si aún no se ha elegido). */
 function obtenerCentrosTiendaSeleccionada() {
   const tiendaEl = document.getElementById("na-tienda");
   return tiendaEl && tiendaEl.value ? centrosDeTienda(tiendaEl.value) : [];
-}
-
-/**
- * Validación INMEDIATA de un archivo de stock recién cargado (antes de hacer
- * clic en "Analizar"): revisa que su Centro y sus Almacenes correspondan a la
- * tienda seleccionada (o a Kacosa, si esArchivoDeKacosa=true). Devuelve:
- *   - null: todavía no se puede validar (no se ha elegido tienda)
- *   - { valido:false, mensaje }: el archivo no corresponde, con el motivo
- *   - { valido:true }: todo en orden
- * Esto es un chequeo adicional a favor de la experiencia del usuario — la
- * validación real y definitiva sigue ocurriendo también al analizar
- * (validarCentros / validarAlmacenes), como red de seguridad.
- */
-function validarCentroYAlmacenStock(filas, esArchivoDeKacosa) {
-  const centrosPermitidos = esArchivoDeKacosa ? CENTROS_KACOSA : obtenerCentrosTiendaSeleccionada();
-  if (centrosPermitidos.length === 0) return null; // aún no hay tienda elegida
-
-  const centrosEnArchivo = new Set(filas.map(f => String(f["Centro"] || "").trim()).filter(Boolean));
-  if (centrosEnArchivo.size === 0) {
-    return { valido: false, mensaje: '<i class="fa-solid fa-triangle-exclamation"></i> El archivo no tiene datos de Centro reconocibles.' };
-  }
-
-  const centrosInvalidos = [...centrosEnArchivo].filter(c => !centrosPermitidos.includes(c));
-  if (centrosInvalidos.length > 0) {
-    const nombreDestino = esArchivoDeKacosa ? "Kacosa" : "la tienda seleccionada";
-    return {
-      valido: false,
-      mensaje: `<i class="fa-solid fa-triangle-exclamation"></i> Este archivo es del centro ${[...centrosEnArchivo].join(", ")}, pero no corresponde a ${nombreDestino} (${centrosPermitidos.join(" o ")}). Verifica que subiste el archivo correcto.`
-    };
-  }
-
-  const almacenesPermitidos = almacenesPermitidosParaCentros(centrosPermitidos);
-  const almacenesInvalidos = new Set();
-  filas.forEach(f => {
-    const almacen = String(f["Almacén"] || "").trim();
-    if (almacen && !almacenesPermitidos.includes(almacen)) almacenesInvalidos.add(almacen);
-  });
-  if (almacenesInvalidos.size > 0) {
-    const mensajeBase = esArchivoDeKacosa
-      ? `Tu archivo tiene stock de almacenes no permitidos, solo se admiten para el stock de Kacosa los almacenes ${almacenesPermitidos.join(", ")}`
-      : `Tu archivo tiene stock de almacenes no permitidos, solo se admiten para el stock de la tienda los almacenes del general y exhibición (${almacenesPermitidos.join(", ")})`;
-    return { valido: false, mensaje: '<i class="fa-solid fa-triangle-exclamation"></i> ' + mensajeBase };
-  }
-
-  return { valido: true };
 }
 
 // ============================================================
@@ -397,37 +308,11 @@ function render() {
         <div id="validacion-ventas" class="estado-texto" style="color:var(--verde-kpi); font-size:12px; margin-top:4px"></div>
       </div>
 
-      <!-- Stock de la tienda -->
-      <div style="margin-top:16px">
-        <label class="form-label" for="na-stock-tienda">Stock de la tienda <span class="required">*</span></label>
-        <div class="file-input-wrapper" id="file-wrapper-stock-tienda">
-          <span class="file-icon"><i class="fa-solid fa-store"></i></span>
-          <div class="file-info">
-            <div class="file-name" id="file-name-stock-tienda">Seleccionar archivo</div>
-            <div class="file-hint">.MHT de SAP · Stock tienda</div>
-          </div>
-          <span class="file-status empty" id="file-status-stock-tienda">Pendiente</span>
-          <button type="button" class="file-clear-btn" id="file-clear-stock-tienda" title="Quitar archivo" style="display:none"><i class="fa-solid fa-xmark"></i></button>
-          <input type="file" id="na-stock-tienda" accept=".mht,.MHT">
-        </div>
-        <div id="validacion-stock-tienda" class="estado-texto" style="color:var(--verde-kpi); font-size:12px; margin-top:4px"></div>
-      </div>
-
-      <!-- Stock de Kacosa -->
-      <div style="margin-top:16px">
-        <label class="form-label" for="na-stock-kacosa">Stock de Kacosa <span class="required">*</span></label>
-        <div class="file-input-wrapper" id="file-wrapper-stock-kacosa">
-          <span class="file-icon"><i class="fa-solid fa-building"></i></span>
-          <div class="file-info">
-            <div class="file-name" id="file-name-stock-kacosa">Seleccionar archivo</div>
-            <div class="file-hint">.MHT de SAP · Stock Kacosa</div>
-          </div>
-          <span class="file-status empty" id="file-status-stock-kacosa">Pendiente</span>
-          <button type="button" class="file-clear-btn" id="file-clear-stock-kacosa" title="Quitar archivo" style="display:none"><i class="fa-solid fa-xmark"></i></button>
-          <input type="file" id="na-stock-kacosa" accept=".mht,.MHT">
-        </div>
-        <div id="validacion-stock-kacosa" class="estado-texto" style="color:var(--verde-kpi); font-size:12px; margin-top:4px"></div>
-      </div>
+      <!-- (11-sep-2026) "Stock de la tienda" y "Stock de Kacosa" ya no se
+           suben aquí: se leen directo de la tabla "stock" de Supabase
+           (ver obtenerStockDesdeSupabase), filtrando por los centros de la
+           tienda elegida arriba. La tabla la mantiene actualizada un
+           middleware aparte. -->
 
       <!-- Notas pendientes por despacho (obligatorio) -->
       <div style="margin-top:16px">
@@ -533,7 +418,6 @@ function render() {
         input.dataset.valido = 'false';
       }
       if (clearBtn) clearBtn.style.display = 'none';
-      delete cacheFilasStock[id];
     };
 
     if (clearBtn) {
@@ -558,11 +442,8 @@ function render() {
             try {
               const filas = parsearMHT(await input.files[0].text());
 
-              if (tipo === 'stock') cacheFilasStock[id] = filas;
-
               let columnasRequeridas;
               if (tipo === 'ventas') columnasRequeridas = COLUMNAS_VENTAS;
-              else if (tipo === 'stock') columnasRequeridas = COLUMNAS_STOCK;
               else if (tipo === 'notas') columnasRequeridas = COLUMNAS_NOTAS_PENDIENTES;
               else if (tipo === 'pendientes-sync') columnasRequeridas = COLUMNAS_PENDIENTES_SYNC;
               else columnasRequeridas = [];
@@ -570,17 +451,6 @@ function render() {
 
               let mensajeFinal = resultado.mensaje;
               let validoFinal = resultado.valido;
-
-              // Si las columnas están OK y es un archivo de stock, se valida también
-              // de inmediato que el Centro/Almacén correspondan a la tienda elegida
-              // (o a Kacosa), en vez de esperar hasta el clic en "Analizar".
-              if (validoFinal && (id === 'na-stock-tienda' || id === 'na-stock-kacosa')) {
-                const chequeo = validarCentroYAlmacenStock(filas, id === 'na-stock-kacosa');
-                if (chequeo && !chequeo.valido) {
-                  mensajeFinal = chequeo.mensaje;
-                  validoFinal = false;
-                }
-              }
 
               validEl.innerHTML = mensajeFinal;
               validEl.style.color = validoFinal ? 'var(--verde-kpi)' : 'var(--rojo-alerta)';
@@ -624,30 +494,10 @@ function render() {
     document.getElementById("na-margen-valor").textContent = e.target.value + "%";
   });
 
-  // Si el usuario cambia de tienda DESPUÉS de haber subido el stock de la
-  // tienda, hay que re-validar ese archivo contra la nueva tienda (el stock
-  // de Kacosa no depende de la tienda, así que no hace falta re-chequearlo).
-  const tiendaEl = document.getElementById("na-tienda");
-  if (tiendaEl && tiendaEl.tagName === "SELECT") {
-    tiendaEl.addEventListener("change", () => {
-      const filas = cacheFilasStock["na-stock-tienda"];
-      const validEl = document.getElementById("validacion-stock-tienda");
-      const inputStockTienda = document.getElementById("na-stock-tienda");
-      if (!filas || !validEl || !inputStockTienda) return;
-
-      const chequeo = validarCentroYAlmacenStock(filas, false);
-      if (chequeo && !chequeo.valido) {
-        validEl.innerHTML = chequeo.mensaje;
-        validEl.style.color = 'var(--rojo-alerta)';
-        inputStockTienda.dataset.valido = 'false';
-      } else {
-        validEl.innerHTML = `<i class="fa-solid fa-circle-check"></i> Archivo válido: contiene todas las columnas requeridas (${COLUMNAS_STOCK.length})`;
-        validEl.style.color = 'var(--verde-kpi)';
-        inputStockTienda.dataset.valido = 'true';
-      }
-      actualizarBotonAnalizar();
-    });
-  }
+  // (11-sep-2026): antes acá había un listener que re-validaba el archivo de
+  // "stock de la tienda" si el usuario cambiaba de tienda después de
+  // subirlo — ya no aplica, ese stock ahora se lee directo de Supabase con
+  // la tienda que esté seleccionada AL MOMENTO de analizar.
 
   actualizarBotonAnalizar(); // estado inicial: sin archivos cargados, debe empezar deshabilitado
 
@@ -685,8 +535,6 @@ function validarColumnasArchivo(filas, columnasRequeridas, tipo) {
 function verificarArchivosValidos() {
   const requeridos = [
     { id: 'na-ventas', nombre: 'ventas' },
-    { id: 'na-stock-tienda', nombre: 'stock de tienda' },
-    { id: 'na-stock-kacosa', nombre: 'stock de Kacosa' },
     { id: 'na-notas-pendientes', nombre: 'notas pendientes por despacho' }
   ];
   const opcionales = [
@@ -758,7 +606,6 @@ function limpiarAnalisis() {
     if (wrapper) wrapper.classList.remove("loaded");
     if (validEl) validEl.innerHTML = "";
     if (clearBtn) clearBtn.style.display = "none";
-    delete cacheFilasStock[id];
   });
 
   // Restaura período y margen a sus valores por defecto
@@ -879,8 +726,6 @@ async function ejecutarAnalisis() {
 
   const tienda = document.getElementById("na-tienda").value;
   const archivoVentas = document.getElementById("na-ventas").files[0];
-  const archivoStockTienda = document.getElementById("na-stock-tienda").files[0];
-  const archivoStockKacosa = document.getElementById("na-stock-kacosa").files[0];
   const archivoNotasPendientes = document.getElementById("na-notas-pendientes").files[0];
   const periodo = document.getElementById("na-periodo").value;
   const mesesCantidad = Number(document.getElementById("na-meses-cantidad").value) || 1;
@@ -1004,16 +849,8 @@ async function ejecutarAnalisis() {
       return;
     }
 
-    estadoTexto.textContent = "Leyendo stock de la tienda...";
-    const filasStockTienda = parsearMHT(await archivoStockTienda.text());
-    if (fueCancelado()) return;
-
-    estadoTexto.textContent = "Leyendo stock de Kacosa...";
-    const filasStockKacosa = parsearMHT(await archivoStockKacosa.text());
-    if (fueCancelado()) return;
-
-    estadoTexto.textContent = "Validando centros de los archivos...";
-    const errorValidacion = validarCentros(filasVentas, filasStockTienda, filasStockKacosa, centrosValidos);
+    estadoTexto.textContent = "Validando centro del archivo de ventas...";
+    const errorValidacion = validarCentros(filasVentas, centrosValidos);
     if (errorValidacion) {
       estadoTexto.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' + errorValidacion;
       btnAnalizar.disabled = false;
@@ -1024,10 +861,29 @@ async function ejecutarAnalisis() {
       return;
     }
 
-    estadoTexto.textContent = "Validando almacenes de los archivos de stock...";
-    const errorAlmacenes = validarAlmacenes(filasStockTienda, filasStockKacosa, centrosValidos);
-    if (errorAlmacenes) {
-      estadoTexto.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' + errorAlmacenes;
+    // (11-sep-2026): el stock de la tienda y el de Kacosa ya NO se suben como
+    // archivo — se leen directo de la tabla "stock" de Supabase (la mantiene
+    // actualizada un middleware aparte), filtrando por los centros SAP
+    // correspondientes. Si esto falla (p.ej. la sesión de Supabase no está
+    // lista todavía), se avisa igual que cualquier otro error del análisis.
+    estadoTexto.textContent = "Leyendo stock de la tienda desde Supabase...";
+    let stockTienda, stockKacosa;
+    try {
+      stockTienda = await obtenerStockDesdeSupabase(
+        centrosValidos,
+        almacenesPermitidosParaCentros(centrosValidos)
+      );
+      if (fueCancelado()) return;
+
+      estadoTexto.textContent = "Leyendo stock de Kacosa desde Supabase...";
+      stockKacosa = await obtenerStockDesdeSupabase(
+        CENTROS_KACOSA,
+        almacenesPermitidosParaCentros(CENTROS_KACOSA),
+        { soloLibreUtilizacion: true }
+      );
+      if (fueCancelado()) return;
+    } catch (err) {
+      estadoTexto.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> No se pudo leer el stock desde Supabase: ' + err.message;
       btnAnalizar.disabled = false;
       btnAnalizar.innerHTML = '<i class="fa-solid fa-bolt"></i> Analizar';
       bloquearFormulario(false);
@@ -1035,10 +891,6 @@ async function ejecutarAnalisis() {
       if (btnDetener) btnDetener.style.display = "none";
       return;
     }
-
-    estadoTexto.textContent = "Agrupando stock por material...";
-    const stockTienda = agruparStock(filasStockTienda, centrosValidos);
-    const stockKacosa = agruparStock(filasStockKacosa, CENTROS_KACOSA);
 
     // Mapa código -> UMB (unidad de medida base), tomado del stock: Kacosa primero,
     // stock tienda como respaldo si el material no aparece ahí — mismo criterio que
@@ -1058,9 +910,10 @@ async function ejecutarAnalisis() {
     if (fueCancelado()) return;
     const ventasProcesadas = procesarVentas(filasVentas, mapaUMBPorMaterial);
 
-    // Alimenta las tablas de Stock y Movimientos en Supabase con los datos crudos
-    // de los archivos que se acaban de subir. No bloquea el análisis si falla.
-    sincronizarStockYMovimientos(filasVentas, filasStockTienda, filasStockKacosa);
+    // Alimenta la tabla de Movimientos en Supabase con los datos crudos del
+    // archivo de ventas que se acaba de subir. No bloquea el análisis si falla.
+    // (el stock ya no se sincroniza desde acá — ver nota más arriba)
+    sincronizarMovimientos(filasVentas);
 
     // Archivo de notas pendientes por despacho (obligatorio — verificarArchivosValidos()
     // ya garantizó arriba que está presente y es válido antes de llegar acá).
@@ -1713,7 +1566,14 @@ function mostrarResultados(resultado, sugerencias) {
 // ============================================================
 //  FUNCIONES AUXILIARES
 // ============================================================
-function validarCentros(filasVentas, filasStockTienda, filasStockKacosa, centrosValidos) {
+/**
+ * Valida que el archivo de ventas corresponda a la tienda seleccionada.
+ * (11-sep-2026): antes esta función también validaba los archivos de stock
+ * tienda/Kacosa — ya no aplica, ese stock ahora se LEE de Supabase filtrado
+ * exactamente por los centros correctos (ver obtenerStockDesdeSupabase), así
+ * que no hay archivo del usuario que pueda venir del centro equivocado.
+ */
+function validarCentros(filasVentas, centrosValidos) {
   const extraerCentros = (filas) =>
     new Set(filas.map(f => String(f["Centro"] || "").trim()).filter(Boolean));
 
@@ -1724,24 +1584,6 @@ function validarCentros(filasVentas, filasStockTienda, filasStockKacosa, centros
   const centrosVentasInvalidos = [...centrosVentas].filter(c => !centrosValidos.includes(c));
   if (centrosVentasInvalidos.length > 0 || centrosVentas.size > centrosValidos.length) {
     return `El archivo de ventas contiene el/los centro(s) ${[...centrosVentas].join(", ")}, pero la tienda seleccionada corresponde a ${centrosValidos.join(" o ")}. Verifica que subiste el archivo correcto.`;
-  }
-
-  const centrosStockTienda = extraerCentros(filasStockTienda);
-  if (centrosStockTienda.size === 0) {
-    return "El archivo de stock de la tienda no tiene datos de Centro reconocibles.";
-  }
-  const centrosStockInvalidos = [...centrosStockTienda].filter(c => !centrosValidos.includes(c));
-  if (centrosStockInvalidos.length > 0 || centrosStockTienda.size > centrosValidos.length) {
-    return `El archivo de stock de tienda contiene el/los centro(s) ${[...centrosStockTienda].join(", ")}, pero la tienda seleccionada corresponde a ${centrosValidos.join(" o ")}. Verifica que subiste el archivo correcto.`;
-  }
-
-  const centrosStockKacosa = extraerCentros(filasStockKacosa);
-  if (centrosStockKacosa.size === 0) {
-    return "El archivo de stock de Kacosa no tiene datos de Centro reconocibles.";
-  }
-  const centrosInvalidos = [...centrosStockKacosa].filter(c => !CENTROS_KACOSA.includes(c));
-  if (centrosInvalidos.length > 0) {
-    return `El archivo de stock de Kacosa contiene centro(s) que no pertenecen a Kacosa (${centrosInvalidos.join(", ")}). Kacosa solo puede ser 1000 y/o 3000.`;
   }
 
   return null;
