@@ -3,18 +3,14 @@
 // columna "Material" para relacionar) y se administra ahí directamente — agregar
 // o editar una ubicación no requiere tocar código ni volver a desplegar.
 //
-// NOTA: requiere una acción nueva en el Apps Script (bridge), "leerUbicaciones",
-// análoga a "leerFactoresConversion" / "leerPaquetes", que lea la tabla
-// "UBICACIONES" de Supabase y devuelva { ok: true, ubicaciones: [{ material, ubicacion }, ...] }.
-//
 // (11-sep-2026) Antes, si esta llamada fallaba (timeout, arranque en frío de
 // Apps Script, etc.) se daba por vencida al primer intento y quedaba en
 // silencio total: el caché quedaba vacío y obtenerUbicacion() devolvía ""
-// para todo el análisis, sin que nadie se enterara — eso explicaba que a
-// veces las ubicaciones cargaran y otras veces no. Ahora reintenta un par de
-// veces antes de rendirse, y expone huboErrorUbicaciones() para que quien
-// llame pueda avisarle al usuario si de verdad no se pudo cargar.
-import { callBridge } from "./bridge.js";
+// para todo el análisis, sin que nadie se enterara. Ahora reintenta un par de
+// veces antes de rendirse (expone huboErrorUbicaciones() para avisar si al
+// final no se pudo), y además ya lee directo de Supabase en vez de pasar por
+// Apps Script.
+import { supabaseSelectTodo } from "./supabase-client.js";
 
 let cache = null; // Map material -> ubicación, una vez cargada desde Supabase
 let cargaEnCurso = null;
@@ -42,14 +38,12 @@ export async function cargarUbicaciones() {
     let ultimoError = null;
     for (let intento = 1; intento <= INTENTOS_MAXIMOS; intento++) {
       try {
-        const resp = await callBridge("leerUbicaciones", {});
-        if (!resp.ok) throw new Error(resp.error || "Respuesta sin ok:true");
+        const filas = await supabaseSelectTodo("UBICACIONES", "select=material,ubicacion", 1000);
 
         const mapa = new Map();
-        (resp.ubicaciones || []).forEach(u => {
-          const material = String(u.material ?? u.Material ?? "").trim();
-          const ubicacion = u.ubicacion ?? u.Ubicacion ?? u["Ubicación"] ?? "";
-          if (material) mapa.set(material, ubicacion);
+        filas.forEach(u => {
+          const material = String(u.material ?? "").trim();
+          if (material) mapa.set(material, u.ubicacion || "");
         });
         cache = mapa;
         ultimaCargaFallo = false;
