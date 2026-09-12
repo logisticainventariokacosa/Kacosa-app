@@ -5,6 +5,21 @@ import { protegerPagina, cerrarSesion, obtenerPerfilPortal, ROLES_PERMITIDOS_ABA
 import { nombrePorId } from "./tiendas.js";
 import { mostrarLoader, ocultarLoader } from "./loader.js";
 
+// (11-sep-2026) Si el navegador restaura esta página desde el bfcache
+// (back-forward cache) — típico en Android al volver a app.html después de
+// pasar por index.html para cambiar de cuenta — TODO el estado de JS
+// (window.KACOSA con las tiendas/rol de la cuenta anterior, el formulario ya
+// dibujado en el DOM) se queda congelado tal cual estaba, sin que este
+// script vuelva a correr. Firebase sí detecta la cuenta nueva (por eso el
+// badge de rol se actualiza), pero el resto de la app sigue mostrando datos
+// de la sesión vieja hasta que el usuario refresca a mano. Se fuerza una
+// recarga real en ese caso para garantizar que todo arranque limpio.
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) {
+    window.location.reload();
+  }
+});
+
 mostrarLoader("Verificando sesión...");
 
 // Estado global simple de la app (accesible desde otros módulos vía window.KACOSA)
