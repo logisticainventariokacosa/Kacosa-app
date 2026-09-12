@@ -96,7 +96,7 @@ async function supabaseSelectTodo(tabla, queryString, tamanoPagina = 1000) {
       "GET",
       tabla + (queryString ? "?" + queryString : ""),
       undefined,
-      { Range: desde + "-" + hasta, Prefer: "count=exact" },
+      { Range: desde + "-" + hasta },
       token
     );
     if (!resp.ok) {
