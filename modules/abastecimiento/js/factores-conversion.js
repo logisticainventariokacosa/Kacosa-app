@@ -16,7 +16,7 @@
 //     Se usa como respaldo cuando no hay un factor específico por material.
 //
 // Si no se encuentra en ninguna de las dos, se usa 1 (sin conversión).
-import { callBridge } from "./bridge.js";
+import { supabaseSelectTodo } from "./supabase-client.js";
 
 let cache = null;    // Map "codigo|UNIDAD" -> factor (por material)
 let cacheUMB = null; // Map "UMB|UNIDAD" -> factor (genérico por UMB)
@@ -63,27 +63,20 @@ export async function cargarFactoresConversion() {
 
   cargaEnCurso = (async () => {
     try {
-      const [respMaterial, respUMB] = await Promise.all([
-        callBridge("leerFactoresConversion", {}),
-        callBridge("leerFactoresConversionUMB", {})
+      const [filasMaterial, filasUMB] = await Promise.all([
+        supabaseSelectTodo("factores_conversion", "select=material,unidad_venta,factor"),
+        supabaseSelectTodo("factores_conversion_umb", "select=umb,unidad_venta,factor")
       ]);
 
-      if (!respMaterial.ok) {
-        throw new Error("No se pudieron cargar los factores de conversión por material: " + (respMaterial.error || "error desconocido"));
-      }
-      if (!respUMB.ok) {
-        throw new Error("No se pudieron cargar los factores de conversión por UMB: " + (respUMB.error || "error desconocido"));
-      }
-
       const mapa = new Map();
-      (respMaterial.factores || []).forEach(f => {
-        mapa.set(`${f.material}|${normalizarUnidad(f.unidadVenta)}`, Number(f.factor) || 1);
+      filasMaterial.forEach(f => {
+        mapa.set(`${f.material}|${normalizarUnidad(f.unidad_venta)}`, Number(f.factor) || 1);
       });
       cache = mapa;
 
       const mapaUMB = new Map();
-      (respUMB.factoresUMB || []).forEach(f => {
-        mapaUMB.set(`${normalizarUnidad(f.umb)}|${normalizarUnidad(f.unidadVenta)}`, Number(f.factor) || 1);
+      filasUMB.forEach(f => {
+        mapaUMB.set(`${normalizarUnidad(f.umb)}|${normalizarUnidad(f.unidad_venta)}`, Number(f.factor) || 1);
       });
       cacheUMB = mapaUMB;
     } catch (err) {
