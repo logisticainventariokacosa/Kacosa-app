@@ -5,7 +5,7 @@ import { cargarFactoresConversion } from "./factores-conversion.js";
 import { cargarCodigosExcluidos } from "./exclusiones.js";
 import { procesarNotasPendientes, restarNotasPendientesDeKacosa, obtenerStockDesdeSupabase } from "./stock-parser.js";
 import { cargarPaquetes } from "./paquetes.js";
-import { cargarUbicaciones, obtenerUbicacion } from "./ubicaciones.js";
+import { cargarUbicaciones, obtenerUbicacion, huboErrorUbicaciones } from "./ubicaciones.js";
 import { calcularAbastecimiento } from "./calculo-abastecimiento.js";
 import { detectarCandidatosLocal, fusionarDuplicados } from "./deteccion-duplicados.js";
 import { TIENDAS, nombrePorId, centrosDeTienda } from "./tiendas.js";
@@ -797,14 +797,18 @@ async function ejecutarAnalisis() {
     }
   }
 
-  const MARGEN_UMBRAL_CONFIRMACION = 30;
-  if (margenPct > MARGEN_UMBRAL_CONFIRMACION) {
+  const MARGEN_HABITUAL = 20;
+  if (margenPct !== MARGEN_HABITUAL) {
+    const esAlto = margenPct > MARGEN_HABITUAL;
     const btnAnalizarPrevio = document.getElementById("btn-analizar");
     if (btnAnalizarPrevio) btnAnalizarPrevio.disabled = true; // evita doble clic mientras decide
+    const mensaje = esAlto
+      ? `Elegiste un margen de seguridad de <strong>${margenPct}%</strong>, por encima del ${MARGEN_HABITUAL}% habitual. Un margen tan alto puede inflar bastante las cantidades a pedir.<br><br>¿Quieres continuar de todas formas?`
+      : `Elegiste un margen de seguridad de <strong>${margenPct}%</strong>, por debajo del ${MARGEN_HABITUAL}% habitual. Un margen más bajo puede dejar corto el "a pedir" resultante.<br><br>¿Quieres continuar de todas formas?`;
     const continuar = await confirmarAccion(
-      `Elegiste un margen de seguridad de <strong>${margenPct}%</strong>, por encima del ${MARGEN_UMBRAL_CONFIRMACION}% habitual. Un margen tan alto puede inflar bastante las cantidades a pedir.<br><br>¿Quieres continuar de todas formas?`,
+      mensaje,
       {
-        titulo: "Margen de seguridad alto",
+        titulo: esAlto ? "Margen de seguridad alto" : "Margen de seguridad bajo",
         icono: '<i class="fa-solid fa-triangle-exclamation"></i>',
         textoConfirmar: `Sí, usar ${margenPct}%`,
         textoCancelar: "Cancelar y ajustar"
@@ -1340,6 +1344,15 @@ async function finalizarCalculo(gruposConfirmados) {
         fechaAnalisis: estado.fechaAnalisis,
         materiales: unicos
       }).catch(err => console.error("No se pudo enviar el correo de advertencias de factor:", err));
+    }
+
+    // Aviso no bloqueante si, pese a los reintentos, las ubicaciones de Kacosa
+    // no se pudieron cargar: el análisis igual se guardó bien, pero la columna
+    // "Ubicación" del reporte va a salir vacía para todos los materiales.
+    if (huboErrorUbicaciones()) {
+      mensajeNotif += `<br><br><strong><i class="fa-solid fa-triangle-exclamation"></i> Ubicaciones no disponibles:</strong> no se pudo cargar el mapa de ubicaciones de Kacosa (fallo de conexión tras varios intentos). El reporte quedó guardado igual, pero sin la columna de ubicación. Vuelve a intentar el análisis si la necesitas.`;
+      iconoNotif = iconoNotif || '<i class="fa-solid fa-triangle-exclamation"></i>';
+      opcionesExtra = { ...opcionesExtra, autoCerrar: false };
     }
 
     notificarExito(mensajeNotif, { titulo: "Análisis completado", icono: iconoNotif, ...opcionesExtra });
