@@ -1,3 +1,4 @@
+
 // js/factores-conversion.js
 // Factores de conversión de unidad de venta a unidad base (UMB), para poder
 // calcular el "a pedir" siempre en la UMB del material.
@@ -16,7 +17,7 @@
 //     Se usa como respaldo cuando no hay un factor específico por material.
 //
 // Si no se encuentra en ninguna de las dos, se usa 1 (sin conversión).
-import { supabaseSelectTodo } from "./supabase-client.js";
+import { supabaseSelectTodo } from "./supabase-client.js?v=1";
 
 let cache = null;    // Map "codigo|UNIDAD" -> factor (por material)
 let cacheUMB = null; // Map "UMB|UNIDAD" -> factor (genérico por UMB)
