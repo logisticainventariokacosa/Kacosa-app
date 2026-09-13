@@ -4,8 +4,8 @@
 // ROLES_ACCESO_RESUMEN_DIRECTIVA en auth.js — nav.js ya oculta el botón del
 // menú para cualquier otro rol; aquí se repite la verificación por si
 // alguien entra directo por URL/hash).
-import { callBridge } from "./bridge.js";
-import { TIENDAS, nombrePorId } from "./tiendas.js";
+import { supabaseSelect, supabaseSelectTodo } from "./supabase-client.js?v=1";
+import { TIENDAS, nombrePorId } from "./tiendas.js?v=1";
 import { crearTablaPaginada } from "./tabla-utils.js";
 import { ROLES_ACCESO_RESUMEN_DIRECTIVA } from "./auth.js";
 
@@ -94,30 +94,21 @@ async function render() {
   iniciarSyncAutomatico();
 }
 
-/** Trae los datos frescos del bridge y actualiza el caché. Devuelve true si salió bien. */
+/** Trae los datos frescos directo de Supabase y actualiza el caché. Devuelve true si salió bien. */
 async function cargarDatos() {
   const cont = document.getElementById("resumen-directiva-contenido");
+  const TOP_VENTAS_POR_TIENDA = 30; // margen suficiente para el "Top 10" global y para filtrar por tienda sin pedir de nuevo
+
   try {
-    const [respResumen, respAlertas] = await Promise.all([
-      callBridge("resumenAbastecimientoDirectiva", {}),
-      callBridge("leerUltimaAlertaKacosa", {}) // sin usuarioEmail: privilegiado, trae la última de cualquiera
+    const [resumenTiendas, filasAlerta] = await Promise.all([
+      resumirTodasLasTiendas(TOP_VENTAS_POR_TIENDA),
+      supabaseSelect("alertas_kacosa", "select=creado_en,alertas,usuario_nombre&order=creado_en.desc&limit=1")
     ]);
 
-    if (!respResumen.ok) {
-      if (cont) {
-        cont.innerHTML = `
-          <div class="card">
-            <p class="vista-sub" style="margin:0">
-              <i class="fa-solid fa-triangle-exclamation"></i> Error al cargar el resumen: ${respResumen.error}
-            </p>
-          </div>
-        `;
-      }
-      return false;
-    }
-
-    datosCache = respResumen;
-    alertasCache = respAlertas.ok ? respAlertas : { alertas: [], creadoEn: null, usuarioNombre: "" };
+    datosCache = { tiendas: resumenTiendas.tiendas, topVentas: resumenTiendas.topVentas };
+    alertasCache = (filasAlerta && filasAlerta.length > 0)
+      ? { alertas: filasAlerta[0].alertas || [], creadoEn: filasAlerta[0].creado_en || null, usuarioNombre: filasAlerta[0].usuario_nombre || "" }
+      : { alertas: [], creadoEn: null, usuarioNombre: "" };
     return true;
   } catch (err) {
     if (cont) {
@@ -131,6 +122,92 @@ async function cargarDatos() {
     }
     return false;
   }
+}
+
+/**
+ * Resume el último análisis guardado de CADA tienda — replica exactamente
+ * resumenAbastecimientoDirectiva_() (Apps Script), una consulta en paralelo
+ * por tienda en vez de secuencial (el original ya hacía tienda-por-tienda,
+ * solo que una a la vez).
+ */
+async function resumirTodasLasTiendas(topVentasPorTienda) {
+  const resumenTiendas = [];
+  const topVentas = [];
+
+  await Promise.all(TIENDAS.map(async (t) => {
+    const idTienda = t.id;
+    const ultimo = await supabaseSelect(
+      "analisis",
+      `tienda=eq.${encodeURIComponent(idTienda)}&select=run_id,fecha_analisis,creado_en,usuario_nombre&order=creado_en.desc&limit=1`
+    );
+
+    if (!ultimo || ultimo.length === 0) {
+      resumenTiendas.push({ tienda: idTienda, sinDatos: true });
+      return;
+    }
+
+    const runId = ultimo[0].run_id;
+    const filas = await supabaseSelectTodo(
+      "analisis",
+      `run_id=eq.${encodeURIComponent(runId)}&select=codigo,descripcion,unidad_venta,umb,total_ventas,promedio_ventas_periodo,a_pedir,a_pedir_ideal,pendiente`
+    );
+
+    let totalAPedir = 0;
+    let totalPendienteStockKacosa = 0;
+    let totalNoAmeritoPedido = 0;
+    let materialMayorVenta = null;
+    let maxVentas = 0;
+    const ventasTienda = [];
+
+    (filas || []).forEach(f => {
+      const aPedir = Number(f.a_pedir) || 0;
+      const aPedirIdeal = Number(f.a_pedir_ideal) || 0;
+      const pendiente = Number(f.pendiente) || 0;
+      const totalVentas = Number(f.total_ventas) || 0;
+
+      if (aPedir > 0) totalAPedir++;
+      if (pendiente > 0) totalPendienteStockKacosa++;
+      if (aPedirIdeal === 0) totalNoAmeritoPedido++;
+
+      if (totalVentas > maxVentas) {
+        maxVentas = totalVentas;
+        materialMayorVenta = { codigo: f.codigo, descripcion: f.descripcion || "", totalVentas };
+      }
+
+      if (totalVentas > 0) {
+        ventasTienda.push({
+          tienda: idTienda,
+          codigo: f.codigo,
+          descripcion: f.descripcion || "",
+          umv: f.unidad_venta || f.umb || "UN",
+          totalVentas,
+          promedioVentasPeriodo: Number(f.promedio_ventas_periodo) || 0
+        });
+      }
+    });
+
+    ventasTienda.sort((a, b) => b.totalVentas - a.totalVentas);
+    topVentas.push(...ventasTienda.slice(0, topVentasPorTienda));
+
+    resumenTiendas.push({
+      tienda: idTienda,
+      sinDatos: false,
+      fechaAnalisis: ultimo[0].fecha_analisis || null,
+      usuarioNombre: ultimo[0].usuario_nombre || "",
+      totalMaterialesAPedir: totalAPedir,
+      totalPendienteStockKacosa,
+      totalNoAmeritoPedido,
+      materialMayorVenta
+    });
+  }));
+
+  // Promise.all no garantiza el orden de llegada: se reordena para que quede
+  // igual que TIENDAS (mismo orden que antes, con el que ya calza PALETA_TIENDAS).
+  const ordenIdx = {};
+  TIENDAS.forEach((t, i) => { ordenIdx[t.id] = i; });
+  resumenTiendas.sort((a, b) => ordenIdx[a.tienda] - ordenIdx[b.tienda]);
+
+  return { tiendas: resumenTiendas, topVentas };
 }
 
 function pintarVista(cont) {
