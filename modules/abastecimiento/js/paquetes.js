@@ -3,7 +3,7 @@
 // por material) una sola vez y la deja en caché en memoria. Antes venía de un
 // archivo estático (data/paquetes.json); ahora se administra directamente en
 // Supabase (tabla "paquetes", Table Editor) sin tocar código ni redesplegar.
-import { supabaseSelectTodo } from "./supabase-client.js";
+import { supabaseSelectTodo } from "./supabase-client.js?v=1";
 
 let cachePaquetes = null;
 let cargaEnCurso = null;
