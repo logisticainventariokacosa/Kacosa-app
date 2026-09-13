@@ -1,11 +1,11 @@
 // js/alertas-kacosa.js
 import { callBridge } from "./bridge.js";
-import { supabaseSelect, supabaseSelectTodo, supabaseInsert, supabaseDelete } from "./supabase-client.js";
-import { cargarAltaRotacion } from "./alta-rotacion.js";
-import { obtenerStockDesdeSupabase } from "./stock-parser.js";
+import { supabaseSelect, supabaseSelectTodo, supabaseInsert, supabaseDelete } from "./supabase-client.js?v=1";
+import { cargarAltaRotacion } from "./alta-rotacion.js?v=1";
+import { obtenerStockDesdeSupabase } from "./stock-parser.js?v=1";
 import { crearTablaPaginada } from "./tabla-utils.js";
-import { nombrePorId, TIENDAS, almacenesPermitidosParaCentros } from "./tiendas.js";
-import { obtenerInfoPaquete, cargarPaquetes } from "./paquetes.js";
+import { nombrePorId, TIENDAS, almacenesPermitidosParaCentros } from "./tiendas.js?v=1";
+import { obtenerInfoPaquete, cargarPaquetes } from "./paquetes.js?v=1";
 import { notificarExito } from "./notificaciones.js";
 import { construirHojaEstilizada, construirHojaResumen } from "./excel-estilos.js";
 import { ROLES_CON_ACCESO_A_ALERTAS_DE_OTROS } from "./auth.js";
