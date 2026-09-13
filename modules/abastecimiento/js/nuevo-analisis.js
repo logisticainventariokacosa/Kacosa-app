@@ -1,14 +1,14 @@
 // js/nuevo-analisis.js
 import { parsearMHT, aNumero } from "./mht-parser.js";
-import { procesarVentas, calcularRangoFechasVentas } from "./ventas-parser.js?v=1";
-import { cargarFactoresConversion } from "./factores-conversion.js?v=1";
+import { procesarVentas, calcularRangoFechasVentas } from "./ventas-parser.js?v=2";
+import { cargarFactoresConversion } from "./factores-conversion.js?v=2";
 import { cargarCodigosExcluidos, esCodigoExcluido } from "./exclusiones.js?v=1";
 import { procesarNotasPendientes, restarNotasPendientesDeKacosa, obtenerStockDesdeSupabase } from "./stock-parser.js?v=1";
 import { cargarAltaRotacion, actualizarAltaRotacion } from "./alta-rotacion.js?v=1";
 import { cargarPaquetes } from "./paquetes.js?v=1";
 import { cargarUbicaciones, obtenerUbicacion, huboErrorUbicaciones } from "./ubicaciones.js?v=1";
 import { calcularAbastecimiento } from "./calculo-abastecimiento.js?v=1";
-import { detectarCandidatosLocal, fusionarDuplicados } from "./deteccion-duplicados.js?v=1";
+import { detectarCandidatosLocal, fusionarDuplicados } from "./deteccion-duplicados.js?v=2";
 import { TIENDAS, nombrePorId, centrosDeTienda, almacenesPermitidosParaCentros } from "./tiendas.js?v=1";
 import { callBridge } from "./bridge.js";
 import { supabaseInsert, supabaseDelete } from "./supabase-client.js?v=1";
