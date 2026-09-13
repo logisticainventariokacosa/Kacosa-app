@@ -1,6 +1,6 @@
 // js/calculo-abastecimiento.js
-import { obtenerEmpaque } from "./paquetes.js";
-import { obtenerUbicacion } from "./ubicaciones.js";
+import { obtenerEmpaque } from "./paquetes.js?v=1";
+import { obtenerUbicacion } from "./ubicaciones.js?v=1";
 
 /**
  * Clasifica un material según su tasa de venta (en unidad de venta, NO base),
