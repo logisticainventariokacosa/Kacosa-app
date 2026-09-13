@@ -1,6 +1,6 @@
 // js/chat.js
 import { callBridge } from "./bridge.js";
-import { nombrePorId } from "./tiendas.js";
+import { nombrePorId } from "./tiendas.js?v=1";
 
 let historial = []; // [{rol: "usuario"|"agente", texto}]
 let abierto = false;
