@@ -37,6 +37,17 @@ export function nombrePorId(id) {
   return t ? t.nombre : id;
 }
 
+/**
+ * Categoría de tienda para Alta Rotación ('Ferretools' | 'Kacosa' | 'Tiendas') —
+ * replica exactamente categoriaDeTienda_() de Apps Script.
+ */
+export function categoriaDeTienda(idTienda) {
+  const id = String(idTienda || "").toUpperCase();
+  if (id === "FERRETOOLS") return "Ferretools";
+  if (id === "KACOSA") return "Kacosa";
+  return "Tiendas";
+}
+
 // Almacenes SAP considerados "stock disponible de verdad" para cada centro
 // (general + exhibición) — usado para filtrar la tabla "stock" de Supabase
 // al leer stock directo (Nuevo Análisis y Alertas Kacosa comparten este mapa).
