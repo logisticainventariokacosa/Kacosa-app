@@ -10,10 +10,10 @@
 // tienda). Esta consulta por lo tanto NO es un histórico completo de todo lo
 // que se ha analizado alguna vez — solo encuentra lo que siga existiendo como
 // "último análisis guardado" de alguien a la fecha de la consulta.
-import { supabaseSelectTodo } from "./supabase-client.js";
-import { cargarCodigosExcluidos, esCodigoExcluido } from "./exclusiones.js";
+import { supabaseSelectTodo } from "./supabase-client.js?v=1";
+import { cargarCodigosExcluidos, esCodigoExcluido } from "./exclusiones.js?v=1";
 import { crearTablaPaginada } from "./tabla-utils.js";
-import { TIENDAS, centrosDeTienda, nombrePorId } from "./tiendas.js";
+import { TIENDAS, centrosDeTienda, nombrePorId } from "./tiendas.js?v=1";
 import { construirHojaEstilizada } from "./excel-estilos.js";
 import { notificarExito } from "./notificaciones.js";
 
