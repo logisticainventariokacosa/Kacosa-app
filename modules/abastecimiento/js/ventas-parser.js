@@ -1,7 +1,7 @@
 // js/ventas-parser.js
 import { aNumero } from "./mht-parser.js";
-import { obtenerFactor, tieneFactor, normalizarUnidad } from "./factores-conversion.js";
-import { esCodigoExcluido } from "./exclusiones.js";
+import { obtenerFactor, tieneFactor, normalizarUnidad } from "./factores-conversion.js?v=1";
+import { esCodigoExcluido } from "./exclusiones.js?v=1";
 
 // Clases de movimiento relevantes según SAP
 const CLASES_VENTA = ["909", "601"];        // salidas por venta (negativas)
