@@ -1,15 +1,15 @@
 // js/nuevo-analisis.js
 import { parsearMHT, aNumero } from "./mht-parser.js";
-import { procesarVentas, calcularRangoFechasVentas } from "./ventas-parser.js";
-import { cargarFactoresConversion } from "./factores-conversion.js";
-import { cargarCodigosExcluidos } from "./exclusiones.js";
-import { procesarNotasPendientes, restarNotasPendientesDeKacosa, obtenerStockDesdeSupabase } from "./stock-parser.js";
-import { cargarAltaRotacion } from "./alta-rotacion.js";
-import { cargarPaquetes } from "./paquetes.js";
-import { cargarUbicaciones, obtenerUbicacion, huboErrorUbicaciones } from "./ubicaciones.js";
-import { calcularAbastecimiento } from "./calculo-abastecimiento.js";
-import { detectarCandidatosLocal, fusionarDuplicados } from "./deteccion-duplicados.js";
-import { TIENDAS, nombrePorId, centrosDeTienda, almacenesPermitidosParaCentros } from "./tiendas.js";
+import { procesarVentas, calcularRangoFechasVentas } from "./ventas-parser.js?v=1";
+import { cargarFactoresConversion } from "./factores-conversion.js?v=1";
+import { cargarCodigosExcluidos } from "./exclusiones.js?v=1";
+import { procesarNotasPendientes, restarNotasPendientesDeKacosa, obtenerStockDesdeSupabase } from "./stock-parser.js?v=1";
+import { cargarAltaRotacion } from "./alta-rotacion.js?v=1";
+import { cargarPaquetes } from "./paquetes.js?v=1";
+import { cargarUbicaciones, obtenerUbicacion, huboErrorUbicaciones } from "./ubicaciones.js?v=1";
+import { calcularAbastecimiento } from "./calculo-abastecimiento.js?v=1";
+import { detectarCandidatosLocal, fusionarDuplicados } from "./deteccion-duplicados.js?v=1";
+import { TIENDAS, nombrePorId, centrosDeTienda, almacenesPermitidosParaCentros } from "./tiendas.js?v=1";
 import { callBridge } from "./bridge.js";
 import { crearTablaPaginada } from "./tabla-utils.js";
 import { notificarExito, confirmarAccion } from "./notificaciones.js";
