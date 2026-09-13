@@ -4,7 +4,7 @@
 // así se pueden agregar/quitar códigos sin tocar ni redesplegar archivos, y el
 // frontend y el backend (Code.gs) siempre ven exactamente la misma lista (antes
 // estaban duplicadas a mano en dos archivos distintos y se desincronizaron).
-import { supabaseSelectTodo } from "./supabase-client.js";
+import { supabaseSelectTodo } from "./supabase-client.js?v=1";
 
 let cache = null;
 let cargaEnCurso = null;
