@@ -1,6 +1,6 @@
 // js/ventas-parser.js
 import { aNumero } from "./mht-parser.js";
-import { obtenerFactor, tieneFactor, normalizarUnidad } from "./factores-conversion.js?v=1";
+import { obtenerFactor, tieneFactor, normalizarUnidad } from "./factores-conversion.js?v=2";
 import { esCodigoExcluido } from "./exclusiones.js?v=1";
 
 // Clases de movimiento relevantes según SAP
