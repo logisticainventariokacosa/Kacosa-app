@@ -36,3 +36,35 @@ export function nombrePorId(id) {
   const t = TIENDAS.find(t => t.id === id);
   return t ? t.nombre : id;
 }
+
+// Almacenes SAP considerados "stock disponible de verdad" para cada centro
+// (general + exhibición) — usado para filtrar la tabla "stock" de Supabase
+// al leer stock directo (Nuevo Análisis y Alertas Kacosa comparten este mapa).
+export const ALMACENES_POR_CENTRO = {
+  "1200": ["1200", "1203"],
+  "1300": ["1300", "1303"],
+  "1400": ["1400", "1403"],
+  "1500": ["1500", "1503"],
+  "1600": ["1600", "1603"],
+  "1700": ["1700", "1703"],
+  "1900": ["1900", "1903"],
+  "11A0": ["11A0", "11A3"],
+  "12A0": ["12A0", "12A3"],
+  "19A0": ["19A0", "19A3"],
+  "2010": ["2010", "2013", "2017"],
+  "2090": ["2090", "2093"],
+  // Ferretools (centro 1020): además de los almacenes generales (1020/1023),
+  // este centro también admite 1028 y 1029.
+  "1020": ["1020", "1023", "1028", "1029"],
+  // Kacosa (casa matriz): 1000/1029 = general, 1001 = exhibición (centro 1000);
+  // 3000/3029 = general, 3001 = exhibición (centro 3000).
+  "1000": ["1000", "1029", "1001"],
+  "3000": ["3000", "3029", "3001"]
+};
+
+/** Une los almacenes permitidos de una lista de centros, sin duplicados. */
+export function almacenesPermitidosParaCentros(centros) {
+  const set = new Set();
+  (centros || []).forEach(c => (ALMACENES_POR_CENTRO[c] || []).forEach(a => set.add(a)));
+  return [...set];
+}
