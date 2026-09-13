@@ -1,6 +1,6 @@
 // js/stock-parser.js
 import { aNumero } from "./mht-parser.js";
-import { supabaseSelectTodo } from "./supabase-client.js";
+import { supabaseSelectTodo } from "./supabase-client.js?v=1";
 
 /**
  * Agrupa las filas de un archivo de stock (tienda o Kacosa) por material,
