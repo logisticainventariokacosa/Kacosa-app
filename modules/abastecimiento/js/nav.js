@@ -2,7 +2,7 @@
 import { auth } from "./firebase-config.js?v=3";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import { protegerPagina, cerrarSesion, obtenerPerfilPortal, ROLES_PERMITIDOS_ABASTECIMIENTO, ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS, ROLES_ACCESO_RESUMEN_DIRECTIVA } from "./auth.js";
-import { nombrePorId } from "./tiendas.js";
+import { nombrePorId } from "./tiendas.js?v=1";
 import { mostrarLoader, ocultarLoader } from "./loader.js";
 
 // (11-sep-2026) Si el navegador restaura esta página desde el bfcache
