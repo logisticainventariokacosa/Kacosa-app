@@ -1,4 +1,3 @@
-
 // js/factores-conversion.js
 // Factores de conversión de unidad de venta a unidad base (UMB), para poder
 // calcular el "a pedir" siempre en la UMB del material.
@@ -30,17 +29,18 @@ let cargaEnCurso = null;
  * unidad pero escrita distinto entre el archivo de ventas, el de stock, o lo
  * cargado en Supabase (ej. "Un" vs "UN ", "un" vs "UN").
  *
- * "ST" (Stück, el código nativo de SAP) y "UN" (unidad) son la MISMA unidad
- * de medida (11-sep-2026): desde que el stock se lee directo de Supabase
- * (alimentado por el middleware), la UMB llega tal cual la maneja SAP
- * internamente ("ST"), mientras que el archivo de ventas y los factores
- * configurados en Supabase siguen usando "UN". Se unifican acá para que no
- * se traten como unidades distintas en ningún punto (ni en el chequeo de
- * "unidad de venta distinta a su UMB", ni en la búsqueda de factores).
+ * Equivalencias conocidas (mismo código SAP, escrito distinto según la
+ * fuente):
+ *  - "ST" (Stück, código nativo de SAP) = "UN" (unidad) — desde que el stock
+ *    se lee directo de Supabase (11-sep-2026).
+ *  - "KAR" (como lo manda el middleware hacia la tabla "stock") = "CAR"
+ *    (como aparece en el archivo de ventas) (13-sep-2026).
  */
 function normalizarUnidad(u) {
   const limpio = String(u || "").trim().toUpperCase();
-  return limpio === "ST" ? "UN" : limpio;
+  if (limpio === "ST") return "UN";
+  if (limpio === "KAR") return "CAR";
+  return limpio;
 }
 export { normalizarUnidad };
 
