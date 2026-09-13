@@ -1,5 +1,5 @@
 // js/deteccion-duplicados.js
-import { obtenerFactor } from "./factores-conversion.js?v=1";
+import { obtenerFactor } from "./factores-conversion.js?v=2";
 
 /** Normaliza texto para comparar: mayúsculas, sin acentos, sin espacios repetidos. */
 function normalizar(texto) {
