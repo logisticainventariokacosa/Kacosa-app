@@ -10,7 +10,8 @@
 // tienda). Esta consulta por lo tanto NO es un histórico completo de todo lo
 // que se ha analizado alguna vez — solo encuentra lo que siga existiendo como
 // "último análisis guardado" de alguien a la fecha de la consulta.
-import { callBridge } from "./bridge.js";
+import { supabaseSelectTodo } from "./supabase-client.js";
+import { cargarCodigosExcluidos, esCodigoExcluido } from "./exclusiones.js";
 import { crearTablaPaginada } from "./tabla-utils.js";
 import { TIENDAS, centrosDeTienda, nombrePorId } from "./tiendas.js";
 import { construirHojaEstilizada } from "./excel-estilos.js";
@@ -175,20 +176,66 @@ async function ejecutarConsulta() {
   document.getElementById("consulta-resultados").innerHTML = "";
 
   try {
-    const resp = await callBridge("consultarAnalisis", {
-      centros: [...new Set(centrosSeleccionados)],
-      materiales,
-      fechaDesde,
-      fechaHasta
-    });
+    // Arma el filtro exactamente igual que hacía consultarAnalisis_() en
+    // Apps Script: centro=in.(...), material(es) como código exacto (solo
+    // dígitos) O contenido en la descripción (ilike) combinados con OR, y
+    // rango de fecha sobre "creado_en".
+    const condiciones = [];
 
-    if (!resp.ok) {
-      estadoTexto.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' + (resp.error || "No se pudo consultar.");
-      estadoTexto.style.color = 'var(--rojo-alerta)';
-      return;
+    const centrosUnicos = [...new Set(centrosSeleccionados)];
+    if (centrosUnicos.length > 0) {
+      condiciones.push("centro=in.(" + centrosUnicos.map(c => encodeURIComponent(c)).join(",") + ")");
     }
 
-    ultimoResultado = dedupUltimoPorTiendaYMaterial(resp.materiales || []);
+    if (materiales.length > 0) {
+      const condicionesOr = materiales.map(m =>
+        /^\d+$/.test(m) ? "codigo.eq." + encodeURIComponent(m) : "descripcion.ilike.*" + encodeURIComponent(m) + "*"
+      );
+      condiciones.push("or=(" + condicionesOr.join(",") + ")");
+    }
+
+    if (fechaDesde) condiciones.push("creado_en=gte." + encodeURIComponent(fechaDesde + "T00:00:00"));
+    if (fechaHasta) condiciones.push("creado_en=lte." + encodeURIComponent(fechaHasta + "T23:59:59"));
+
+    condiciones.push("select=*");
+    condiciones.push("order=creado_en.desc");
+
+    await cargarCodigosExcluidos();
+    const filas = await supabaseSelectTodo("analisis", condiciones.join("&"), 1000);
+
+    const materialesResp = filas
+      .filter(f => !esCodigoExcluido(f.codigo))
+      .map(f => ({
+        runId: f.run_id,
+        centro: f.centro || "",
+        tienda: f.tienda || "",
+        usuarioEmail: f.usuario_email || "",
+        usuarioNombre: f.usuario_nombre || "",
+        codigo: f.codigo,
+        descripcion: f.descripcion || "",
+        umb: f.umb || "UN",
+        unidadVenta: f.unidad_venta || "UN",
+        clase: f.clase || "",
+        totalVentas: Number(f.total_ventas) || 0,
+        promedioVentasPeriodo: Number(f.promedio_ventas_periodo) || 0,
+        stockTienda: Number(f.stock_tienda) || 0,
+        stockKacosa1000: Number(f.stock_kacosa_1000) || 0,
+        stockKacosa3000: Number(f.stock_kacosa_3000) || 0,
+        stockKacosa: Number(f.stock_kacosa) || 0,
+        ubicacionKacosa: f.ubicacion_kacosa || "",
+        aPedir: Number(f.a_pedir) || 0,
+        aPedirIdeal: Number(f.a_pedir_ideal) || 0,
+        pendiente: Number(f.pendiente) || 0,
+        porDespacho: Number(f.por_despacho) || 0,
+        enNotasKacosa: Number(f.en_notas_kacosa) || 0,
+        porSincronizar: Number(f.por_sincronizar) || 0,
+        numeroDeNota: f.numero_de_nota || "",
+        fechaDeNota: f.fecha_de_nota || "",
+        fechaAnalisis: f.fecha_analisis || "",
+        creadoEn: f.creado_en || ""
+      }));
+
+    ultimoResultado = dedupUltimoPorTiendaYMaterial(materialesResp);
     modoConsulta = (document.querySelector('input[name="modo-consulta"]:checked') || {}).value || "general";
     vistaActual = "detalle";
     terminoBusquedaConsulta = "";
