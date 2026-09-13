@@ -2,15 +2,16 @@
 import { parsearMHT, aNumero } from "./mht-parser.js";
 import { procesarVentas, calcularRangoFechasVentas } from "./ventas-parser.js?v=1";
 import { cargarFactoresConversion } from "./factores-conversion.js?v=1";
-import { cargarCodigosExcluidos } from "./exclusiones.js?v=1";
+import { cargarCodigosExcluidos, esCodigoExcluido } from "./exclusiones.js?v=1";
 import { procesarNotasPendientes, restarNotasPendientesDeKacosa, obtenerStockDesdeSupabase } from "./stock-parser.js?v=1";
-import { cargarAltaRotacion } from "./alta-rotacion.js?v=1";
+import { cargarAltaRotacion, actualizarAltaRotacion } from "./alta-rotacion.js?v=1";
 import { cargarPaquetes } from "./paquetes.js?v=1";
 import { cargarUbicaciones, obtenerUbicacion, huboErrorUbicaciones } from "./ubicaciones.js?v=1";
 import { calcularAbastecimiento } from "./calculo-abastecimiento.js?v=1";
 import { detectarCandidatosLocal, fusionarDuplicados } from "./deteccion-duplicados.js?v=1";
 import { TIENDAS, nombrePorId, centrosDeTienda, almacenesPermitidosParaCentros } from "./tiendas.js?v=1";
 import { callBridge } from "./bridge.js";
+import { supabaseInsert, supabaseDelete } from "./supabase-client.js?v=1";
 import { crearTablaPaginada } from "./tabla-utils.js";
 import { notificarExito, confirmarAccion } from "./notificaciones.js";
 import { construirHojaEstilizada, construirHojaResumen } from "./excel-estilos.js";
@@ -59,26 +60,124 @@ function bloquearFormulario(bloquear) {
  * (ver obtenerStockDesdeSupabase en ejecutarAnalisis).
  */
 function sincronizarMovimientos(filasVentas) {
-  const filasMovimientos = filasVentas.map(f => ({
-    material: String(f["Material"] || "").trim(),
-    textoBreve: f["Texto breve de material"] || "",
-    centro: String(f["Centro"] || "").trim(),
-    almacen: String(f["Almacén"] || "").trim(),
-    claseMovimiento: String(f["Clase de movimiento"] || "").trim(),
-    documentoMaterial: String(f["Documento material"] || "").trim(),
-    fechaContabilizacion: String(f["Fe.contabilización"] || "").trim(),
-    horaEntrada: String(f["Hora de entrada"] || "").trim(),
-    cantidadUmEntrada: aNumero(f["Ctd.en UM entrada"]),
-    unidadMedidaEntrada: f["Un.medida de entrada"] || "",
-    cliente: f["Cliente"] || "",
-    nombreUsuario: f["Nombre del usuario"] || "",
-    textoCabDocumento: f["Texto cab.documento"] || ""
-  })).filter(f => f.material && f.centro);
+  // Cuenta, en el ORDEN en que llegan (el mismo orden del archivo original),
+  // cuántas veces se repite cada combinación material+documento+fecha+hora,
+  // y le asigna a cada fila su posición dentro de ese grupo (1, 2, 3...).
+  // "Hora de entrada" solo tiene precisión de segundo, así que SAP
+  // frecuentemente registra varias líneas distintas del mismo documento con
+  // exactamente la misma combinación — sin esta posición, esas filas se
+  // confundirían entre sí y se perderían al hacer upsert. Si se vuelve a
+  // subir el MISMO archivo, cada fila cae otra vez en la misma posición
+  // dentro de su grupo y el upsert la reescribe en vez de duplicarla.
+  const contadorPorGrupo = {};
 
-  if (filasMovimientos.length > 0) {
-    callBridge("guardarMovimientos", { filas: filasMovimientos }).catch(err =>
-      console.error("No se pudo sincronizar los movimientos con Supabase:", err)
-    );
+  const filasDb = filasVentas
+    .map(f => ({
+      material: String(f["Material"] || "").trim(),
+      texto_breve: f["Texto breve de material"] || "",
+      centro: String(f["Centro"] || "").trim(),
+      almacen: String(f["Almacén"] || "").trim(),
+      clase_movimiento: String(f["Clase de movimiento"] || "").trim(),
+      documento_material: String(f["Documento material"] || "").trim(),
+      fecha_contabilizacion: String(f["Fe.contabilización"] || "").trim(),
+      hora_entrada: String(f["Hora de entrada"] || "").trim(),
+      cantidad_um_entrada: aNumero(f["Ctd.en UM entrada"]),
+      unidad_medida_entrada: f["Un.medida de entrada"] || "",
+      cliente: f["Cliente"] || "",
+      nombre_usuario: f["Nombre del usuario"] || "",
+      texto_cab_documento: f["Texto cab.documento"] || ""
+    }))
+    .filter(f => f.material && f.centro)
+    .map(f => {
+      const clave = [f.material, f.documento_material, f.fecha_contabilizacion, f.hora_entrada].join("|");
+      contadorPorGrupo[clave] = (contadorPorGrupo[clave] || 0) + 1;
+      return { ...f, posicion_en_grupo: contadorPorGrupo[clave] };
+    });
+
+  if (filasDb.length > 0) {
+    // Upsert por la clave compuesta (incluye posicion_en_grupo): si vuelves a
+    // subir el mismo archivo, las filas idénticas se reescriben en vez de
+    // duplicarse. No borra filas viejas que ya no aparezcan en un archivo
+    // nuevo — "movimientos" sigue siendo un historial acumulado.
+    supabaseInsert("movimientos", filasDb, {
+      onConflict: "material,documento_material,fecha_contabilizacion,hora_entrada,posicion_en_grupo",
+      merge: true
+    }).catch(err => console.error("No se pudo sincronizar los movimientos con Supabase:", err));
+  }
+}
+
+/**
+ * Guarda el análisis directo en Supabase (antes vía Apps Script, acción
+ * "guardarAnalisis") — replica exactamente guardarAnalisis_(): borra el
+ * análisis anterior de este usuario para esta tienda, genera un run_id
+ * nuevo, inserta las filas, y alimenta Alta Rotación con los materiales
+ * Clase A/B nuevos. Devuelve la misma forma que devolvía el bridge
+ * ({ ok, error? , mensaje?, altaRotacionAgregados }) para no tener que
+ * tocar el código que lo consume.
+ */
+async function guardarAnalisisDirecto({ tienda, centro, fechaAnalisis, materiales, usuarioEmail, usuarioNombre }) {
+  if (!tienda || !materiales) return { ok: false, error: "Falta tienda o materiales" };
+
+  await cargarCodigosExcluidos();
+  // Respaldo: descarta cualquier código excluido que pudiera llegar (el resto
+  // del flujo ya los filtra antes de llegar aquí).
+  const materialesFiltrados = materiales.filter(m => !esCodigoExcluido(m.codigo));
+  if (materialesFiltrados.length === 0) return { ok: false, error: "No hay materiales válidos para guardar" };
+
+  try {
+    // Solo se conserva el ÚLTIMO análisis por usuario y por tienda: antes de
+    // insertar el nuevo, se borra el anterior de ESE MISMO usuario para ESA
+    // MISMA tienda (no toca los análisis de otros usuarios, ni los que este
+    // mismo usuario haya guardado para otras tiendas).
+    if (usuarioEmail) {
+      await supabaseDelete("analisis", `tienda=eq.${encodeURIComponent(tienda)}&usuario_email=eq.${encodeURIComponent(usuarioEmail)}`);
+    }
+
+    const runId = tienda + "_" + Date.now();
+    const primero = materialesFiltrados[0] || {};
+    const creadoEn = new Date().toISOString();
+
+    const filas = materialesFiltrados.map(m => ({
+      run_id: runId,
+      centro,
+      tienda,
+      usuario_email: usuarioEmail || "",
+      usuario_nombre: usuarioNombre || "",
+      codigo: String(m.codigo || "").trim(),
+      descripcion: String(m.descripcion || ""),
+      umb: String(m.umb || "UN"),
+      unidad_venta: String(m.unidadVenta || "UN"),
+      materiales_fusionados: String(m.materialesFusionados || ""),
+      clase: String(m.clase || ""),
+      total_ventas: Number(m.totalVentas) || 0,
+      promedio_ventas_periodo: Number(m.promedioVentasPeriodo) || 0,
+      stock_tienda: Number(m.stockTienda) || 0,
+      stock_kacosa_1000: Number(m.stockKacosa1000) || 0,
+      stock_kacosa_3000: Number(m.stockKacosa3000) || 0,
+      stock_kacosa: Number(m.stockKacosa) || 0,
+      ubicacion_kacosa: String(m.ubicacionKacosa || ""),
+      a_pedir: Number(m.aPedir) || 0,
+      a_pedir_ideal: Number(m.aPedirIdeal) || 0,
+      pendiente: Number(m.pendiente) || 0,
+      por_despacho: Number(m.porDespacho) || 0,
+      en_notas_kacosa: Number(m.enNotasKacosa) || 0,
+      por_sincronizar: Number(m.porSincronizar) || 0,
+      numero_de_nota: String(m.numeroDeNota || ""),
+      fecha_de_nota: String(m.fechaDeNota || ""),
+      fecha_analisis: String(fechaAnalisis || primero.fechaAnalisis || ""),
+      periodo_ventas: String(primero.periodoVentas || ""),
+      periodo_abastecimiento: String(primero.periodoAbastecimiento || ""),
+      rango_seguridad_usado: String(primero.rangoSeguridadUsado || ""),
+      creado_en: creadoEn
+    }));
+
+    await supabaseInsert("analisis", filas);
+
+    const resultadoRotacion = await actualizarAltaRotacion(materialesFiltrados, tienda);
+
+    return { ok: true, mensaje: `Análisis guardado en Supabase (${tienda})`, altaRotacionAgregados: resultadoRotacion.agregados };
+  } catch (err) {
+    return { ok: false, error: err.message };
   }
 }
 
@@ -1236,7 +1335,7 @@ async function finalizarCalculo(gruposConfirmados) {
     const resultadosDiv = document.getElementById("na-resultados");
     if (resultadosDiv) resultadosDiv.innerHTML = "";
 
-    const respGuardado = await callBridge("guardarAnalisis", {
+    const respGuardado = await guardarAnalisisDirecto({
       tienda: estado.tiendaSeleccionada,
       centro: centrosDeTienda(estado.tiendaSeleccionada).join(","),
       fechaAnalisis: estado.fechaAnalisis,
