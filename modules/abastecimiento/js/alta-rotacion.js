@@ -2,8 +2,8 @@
 // Lee la tabla "alta_rotacion" de Supabase directo (antes vía Apps Script,
 // acción "leerAltaRotacion"). Se usa desde Nuevo Análisis (sin filtro de
 // categoría) y desde Alertas Kacosa (filtrando por categoría de tienda).
-import { supabaseSelectTodo } from "./supabase-client.js";
-import { esCodigoExcluido, cargarCodigosExcluidos } from "./exclusiones.js";
+import { supabaseSelectTodo } from "./supabase-client.js?v=1";
+import { esCodigoExcluido, cargarCodigosExcluidos } from "./exclusiones.js?v=1";
 
 /**
  * @param {Array<string>} [categoriasExcluir] - categorías ('Ferretools'|'Kacosa'|'Tiendas')
