@@ -10,7 +10,7 @@
 // veces antes de rendirse (expone huboErrorUbicaciones() para avisar si al
 // final no se pudo), y además ya lee directo de Supabase en vez de pasar por
 // Apps Script.
-import { supabaseSelectTodo } from "./supabase-client.js";
+import { supabaseSelectTodo } from "./supabase-client.js?v=1";
 
 let cache = null; // Map material -> ubicación, una vez cargada desde Supabase
 let cargaEnCurso = null;
