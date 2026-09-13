@@ -1,20 +1,14 @@
 // js/alertas-kacosa.js
-import { parsearMHT, aNumero } from "./mht-parser.js";
 import { callBridge } from "./bridge.js";
+import { supabaseSelect, supabaseSelectTodo, supabaseInsert, supabaseDelete } from "./supabase-client.js";
+import { cargarAltaRotacion } from "./alta-rotacion.js";
+import { obtenerStockDesdeSupabase } from "./stock-parser.js";
 import { crearTablaPaginada } from "./tabla-utils.js";
-import { nombrePorId, TIENDAS } from "./tiendas.js";
+import { nombrePorId, TIENDAS, almacenesPermitidosParaCentros } from "./tiendas.js";
 import { obtenerInfoPaquete, cargarPaquetes } from "./paquetes.js";
 import { notificarExito } from "./notificaciones.js";
 import { construirHojaEstilizada, construirHojaResumen } from "./excel-estilos.js";
-import { esCodigoExcluido, cargarCodigosExcluidos } from "./exclusiones.js";
 import { ROLES_CON_ACCESO_A_ALERTAS_DE_OTROS } from "./auth.js";
-
-// Columnas requeridas para el archivo de stock
-const COLUMNAS_STOCK = [
-  "Material", "Texto breve de material", "Centro", "Almacén", "Unidad medida base",
-  "Denominación-almacén", "Libre utilización", "Trans./Trasl.", "En control calidad",
-  "Bloqueado", "Devoluciones"
-];
 
 // Centros permitidos para Kacosa
 const CENTROS_KACOSA = ["1000", "3000"];
@@ -23,8 +17,6 @@ let ultimasAlertas = [];
 let periodoSeleccionado = 1;
 let categoriaTiendaSeleccionada = "Tiendas"; // 'Ferretools' | 'Kacosa' | 'Tiendas'
 let mapaEmpaques = {};
-let archivoValido = false;
-let filasCache = null;
 
 function render() {
   const cont = document.getElementById("alertas-kacosa-contenido");
@@ -36,20 +28,9 @@ function render() {
         <span style="display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; background:var(--ambar-claro); border-radius:8px; font-size:14px"><i class="fa-solid fa-triangle-exclamation"></i></span>
         Analizar stock de Kacosa
       </h3>
-
-      <div style="margin-top:4px">
-        <label class="form-label" for="input-stock-kacosa">Archivo de stock de Kacosa <span class="required">*</span></label>
-        <div class="file-input-wrapper" id="file-wrapper-kacosa">
-          <span class="file-icon"><i class="fa-solid fa-building"></i></span>
-          <div class="file-info">
-            <div class="file-name" id="file-name-kacosa">Seleccionar archivo</div>
-            <div class="file-hint">.MHT de SAP · Stock Kacosa</div>
-          </div>
-          <span class="file-status empty" id="file-status-kacosa">Pendiente</span>
-          <input type="file" id="input-stock-kacosa" accept=".mht,.MHT">
-        </div>
-        <div id="validacion-stock-kacosa-alertas" class="estado-texto" style="color:var(--verde-kpi); font-size:12px; margin-top:4px"></div>
-      </div>
+      <p style="color:var(--texto-secundario); font-size:12px; margin:4px 0 0">
+        El stock de Kacosa (centros 1000 y 3000) se lee directo de la base de datos — ya no hace falta subir ningún archivo.
+      </p>
 
       <div style="margin-top:16px">
         <label class="form-label">Tienda a analizar <span class="required">*</span></label>
@@ -81,7 +62,7 @@ function render() {
       </div>
 
       <div class="btn-group" style="margin-top:16px">
-        <button id="btn-analizar-kacosa" class="btn-primario" style="min-width:200px" disabled>
+        <button id="btn-analizar-kacosa" class="btn-primario" style="min-width:200px">
           <i class="fa-solid fa-chart-column"></i> Analizar stock
         </button>
         <button id="btn-limpiar-kacosa" class="btn-secundario" style="display:none; min-width:160px">
@@ -93,8 +74,6 @@ function render() {
     <div id="resultado-alertas"></div>
   `;
 
-  archivoValido = false;
-  filasCache = null;
   categoriaTiendaSeleccionada = "Tiendas";
 
   document.querySelectorAll('.btn-categoria-tienda').forEach(btn => {
@@ -197,8 +176,6 @@ function render() {
     });
   }
 
-  setupFileInput();
-
   cargarPaquetes().then(pkg => {
     mapaEmpaques = pkg || {};
   });
@@ -228,17 +205,23 @@ async function cargarUltimaAlertaGuardada() {
     const rolNormalizado = window.KACOSA?.usuario?.rolNormalizado
       || (window.KACOSA?.usuario?.rol || "").toString().trim().toLowerCase();
     const esPrivilegiado = ROLES_CON_ACCESO_A_ALERTAS_DE_OTROS.includes(rolNormalizado);
-    const filtroUsuario = esPrivilegiado ? {} : { usuarioEmail: window.KACOSA?.usuario?.email || "" };
 
-    const resp = await callBridge("leerUltimaAlertaKacosa", filtroUsuario);
-    if (!resp.ok || !resp.alertas || resp.alertas.length === 0) return;
+    let filtro = "select=creado_en,periodo_meses,categoria_tienda,alertas,usuario_email,usuario_nombre";
+    if (!esPrivilegiado && window.KACOSA?.usuario?.email) {
+      filtro += "&usuario_email=eq." + encodeURIComponent(window.KACOSA.usuario.email);
+    }
+    filtro += "&order=creado_en.desc&limit=1";
 
-    mostrarAlertas(resp.alertas);
+    const filas = await supabaseSelect("alertas_kacosa", filtro);
+    if (!filas || filas.length === 0) return;
+    const fila = filas[0];
+
+    mostrarAlertas(fila.alertas || []);
 
     if (estado) {
-      const fecha = resp.creadoEn ? new Date(resp.creadoEn).toLocaleString("es-VE") : "";
-      const categoriaTxt = resp.categoriaTienda ? ` — tienda: ${resp.categoriaTienda}` : "";
-      const usuarioTxt = resp.usuarioNombre ? ` — realizado por ${resp.usuarioNombre}` : "";
+      const fecha = fila.creado_en ? new Date(fila.creado_en).toLocaleString("es-VE") : "";
+      const categoriaTxt = fila.categoria_tienda ? ` — tienda: ${fila.categoria_tienda}` : "";
+      const usuarioTxt = fila.usuario_nombre ? ` — realizado por ${fila.usuario_nombre}` : "";
       estado.innerHTML = `<i class="fa-solid fa-clock-rotate-left"></i> Mostrando el último análisis guardado${fecha ? " (" + fecha + ")" : ""}${categoriaTxt}${usuarioTxt}. Sube un archivo nuevo para recalcular.`;
     }
   } catch (err) {
@@ -246,139 +229,8 @@ async function cargarUltimaAlertaGuardada() {
   }
 }
 
-function setupFileInput() {
-  const input = document.getElementById("input-stock-kacosa");
-  const nameEl = document.getElementById("file-name-kacosa");
-  const statusEl = document.getElementById("file-status-kacosa");
-  const wrapper = document.getElementById("file-wrapper-kacosa");
-  const validEl = document.getElementById("validacion-stock-kacosa-alertas");
-  const btnAnalizar = document.getElementById("btn-analizar-kacosa");
-
-  if (!input) return;
-
-  input.removeEventListener('change', handleFileChange);
-  input.addEventListener('change', handleFileChange);
-
-  if (wrapper) {
-    wrapper.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      wrapper.classList.add('dragover');
-    });
-    wrapper.addEventListener('dragleave', () => {
-      wrapper.classList.remove('dragover');
-    });
-    wrapper.addEventListener('drop', (e) => {
-      e.preventDefault();
-      wrapper.classList.remove('dragover');
-      if (e.dataTransfer.files.length) {
-        input.files = e.dataTransfer.files;
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-    });
-  }
-
-  async function handleFileChange(e) {
-    const input = e.target;
-    archivoValido = false;
-    filasCache = null;
-    if (btnAnalizar) btnAnalizar.disabled = true;
-
-    if (input.files && input.files[0]) {
-      const file = input.files[0];
-      if (nameEl) nameEl.textContent = file.name;
-      if (statusEl) {
-        statusEl.innerHTML = '<i class="fa-solid fa-check"></i> Cargado';
-        statusEl.className = 'file-status loaded';
-      }
-      if (wrapper) wrapper.classList.add('loaded');
-
-      try {
-        const texto = await file.text();
-        const filas = parsearMHT(texto);
-        const resultado = validarArchivoStock(filas);
-        
-        if (validEl) {
-          validEl.innerHTML = resultado.mensaje;
-          validEl.style.color = resultado.valido ? 'var(--verde-kpi)' : 'var(--rojo-alerta)';
-        }
-        
-        if (resultado.valido) {
-          archivoValido = true;
-          filasCache = filas;
-          if (btnAnalizar) btnAnalizar.disabled = false;
-        } else {
-          archivoValido = false;
-          filasCache = null;
-          if (btnAnalizar) btnAnalizar.disabled = true;
-        }
-      } catch (err) {
-        if (validEl) {
-          validEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Error al leer el archivo: ' + err.message;
-          validEl.style.color = 'var(--rojo-alerta)';
-        }
-        archivoValido = false;
-        filasCache = null;
-        if (btnAnalizar) btnAnalizar.disabled = true;
-      }
-    } else {
-      if (nameEl) nameEl.textContent = 'Seleccionar archivo';
-      if (statusEl) {
-        statusEl.textContent = 'Pendiente';
-        statusEl.className = 'file-status empty';
-      }
-      if (wrapper) wrapper.classList.remove('loaded');
-      if (validEl) validEl.innerHTML = '';
-      archivoValido = false;
-      filasCache = null;
-      if (btnAnalizar) btnAnalizar.disabled = true;
-    }
-  }
-}
-
-function validarArchivoStock(filas) {
-  if (filas.length === 0) {
-    return { valido: false, mensaje: '<i class="fa-solid fa-triangle-exclamation"></i> El archivo está vacío o no tiene datos' };
-  }
-
-  const columnasExistentes = Object.keys(filas[0]);
-  const faltantes = COLUMNAS_STOCK.filter(col => !columnasExistentes.includes(col));
-
-  if (faltantes.length > 0) {
-    return { 
-      valido: false, 
-      mensaje: `<i class="fa-solid fa-triangle-exclamation"></i> El archivo no tiene las columnas correctas. Faltan: ${faltantes.join(', ')}`
-    };
-  }
-
-  const centros = new Set();
-  filas.forEach(f => {
-    const centro = String(f["Centro"] || "").trim();
-    if (centro) centros.add(centro);
-  });
-
-  const centrosInvalidos = [...centros].filter(c => !CENTROS_KACOSA.includes(c));
-  
-  if (centrosInvalidos.length > 0) {
-    return {
-      valido: false,
-      mensaje: `<i class="fa-solid fa-triangle-exclamation"></i> El archivo contiene centro(s) que no pertenecen a Kacosa (${centrosInvalidos.join(", ")}). Kacosa solo puede ser 1000 y/o 3000.`
-    };
-  }
-
-  if (centros.size === 0) {
-    return { valido: false, mensaje: '<i class="fa-solid fa-triangle-exclamation"></i> El archivo no tiene datos de Centro reconocibles.' };
-  }
-
-  return { 
-    valido: true, 
-    mensaje: `<i class="fa-solid fa-circle-check"></i> Archivo válido: contiene todas las columnas requeridas y solo centros Kacosa (${[...centros].join(", ")})`
-  };
-}
-
-/** Bloquea o desbloquea el input de archivo y los botones de período mientras se procesa. */
+/** Ya no hay input de archivo que (des)bloquear — solo los botones de período. */
 function bloquearFormularioKacosa(bloquear) {
-  const input = document.getElementById("input-stock-kacosa");
-  if (input) input.disabled = bloquear;
   document.querySelectorAll(".btn-periodo").forEach(btn => { btn.disabled = bloquear; });
   const personalizado = document.getElementById("periodo-personalizado");
   if (personalizado) personalizado.disabled = bloquear;
@@ -386,24 +238,6 @@ function bloquearFormularioKacosa(bloquear) {
 
 /** Limpia el archivo cargado y los resultados, dejando el módulo listo para un análisis nuevo. */
 function limpiarAlertasKacosa() {
-  const input = document.getElementById("input-stock-kacosa");
-  const nameEl = document.getElementById("file-name-kacosa");
-  const statusEl = document.getElementById("file-status-kacosa");
-  const wrapper = document.getElementById("file-wrapper-kacosa");
-  const validEl = document.getElementById("validacion-stock-kacosa-alertas");
-
-  if (input) input.value = "";
-  if (nameEl) nameEl.textContent = "Seleccionar archivo";
-  if (statusEl) {
-    statusEl.textContent = "Pendiente";
-    statusEl.className = "file-status empty";
-  }
-  if (wrapper) wrapper.classList.remove("loaded");
-  if (validEl) validEl.innerHTML = "";
-
-  archivoValido = false;
-  filasCache = null;
-
   // Restablece el período de abastecimiento a "1 Mes" por defecto
   const inputPersonalizado = document.getElementById("periodo-personalizado");
   const wrapPersonalizado = document.getElementById("periodo-personalizado-wrap");
@@ -442,7 +276,7 @@ function limpiarAlertasKacosa() {
 
   const btnAnalizar = document.getElementById("btn-analizar-kacosa");
   if (btnAnalizar) {
-    btnAnalizar.disabled = true; // vuelve a requerir un archivo válido
+    btnAnalizar.disabled = false; // ya no requiere ningún archivo
     btnAnalizar.innerHTML = '<i class="fa-solid fa-chart-column"></i> Analizar stock';
   }
   const btnLimpiar = document.getElementById("btn-limpiar-kacosa");
@@ -454,11 +288,6 @@ async function procesarArchivo() {
   const resultado = document.getElementById("resultado-alertas");
   if (resultado) resultado.innerHTML = "";
 
-  if (!archivoValido || !filasCache) {
-    if (estado) estado.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> El archivo no es válido. Verifica que tenga las columnas correctas y solo centros 1000/3000.';
-    return;
-  }
-
   try {
     const btnAnalizar = document.getElementById("btn-analizar-kacosa");
     if (btnAnalizar) {
@@ -466,36 +295,27 @@ async function procesarArchivo() {
       btnAnalizar.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analizando...';
     }
     bloquearFormularioKacosa(true);
-    if (estado) estado.textContent = "Procesando archivo...";
+    if (estado) estado.textContent = "Leyendo stock de Kacosa desde Supabase...";
 
-    const filas = filasCache;
-
-    if (estado) estado.textContent = "Agrupando stock por material...";
-    await cargarCodigosExcluidos(); // trae desde Supabase la lista de códigos a ignorar
-    const stockPorMaterial = agruparStockKacosa(filas);
+    // (11-sep-2026) El stock de Kacosa (centros 1000 y 3000, almacenes
+    // general+exhibición de cada uno) ya no se sube como archivo — se lee
+    // directo de la tabla "stock", igual que en Nuevo Análisis.
+    const stockPorMaterial = Object.values(
+      await obtenerStockDesdeSupabase(CENTROS_KACOSA, almacenesPermitidosParaCentros(CENTROS_KACOSA))
+    );
 
     if (estado) estado.textContent = "Cruzando contra Alta Rotación y los últimos análisis de las tiendas...";
-    const resp = await callBridge("alertasKacosa", { 
-      stockKacosa: stockPorMaterial,
-      periodoMeses: periodoSeleccionado,
-      categoriaTienda: categoriaTiendaSeleccionada,
-      mapaEmpaques: mapaEmpaques,
-      usuarioEmail: window.KACOSA?.usuario?.email || "",
-      usuarioNombre: window.KACOSA?.usuario?.nombre || window.KACOSA?.usuario?.email || ""
-    });
+    const alertas = await calcularAlertasKacosa(
+      stockPorMaterial,
+      periodoSeleccionado,
+      categoriaTiendaSeleccionada,
+      mapaEmpaques,
+      window.KACOSA?.usuario?.email || "",
+      window.KACOSA?.usuario?.nombre || window.KACOSA?.usuario?.email || ""
+    );
 
-    if (!resp.ok) {
-      if (estado) estado.textContent = "Error: " + resp.error;
-      if (btnAnalizar) {
-        btnAnalizar.disabled = false;
-        btnAnalizar.innerHTML = '<i class="fa-solid fa-chart-column"></i> Analizar stock';
-      }
-      bloquearFormularioKacosa(false);
-      return;
-    }
-
-    if (estado) estado.textContent = `Listo — ${resp.alertas.length} alerta(s) encontrada(s).`;
-    mostrarAlertas(resp.alertas);
+    if (estado) estado.textContent = `Listo — ${alertas.length} alerta(s) encontrada(s).`;
+    mostrarAlertas(alertas);
 
     // No se reactiva el formulario: evita volver a procesar el mismo archivo y
     // duplicar el cálculo guardado en Supabase. "Limpiar datos" permite reiniciar.
@@ -507,7 +327,7 @@ async function procesarArchivo() {
 
   } catch (err) {
     const estado = document.getElementById("estado-alertas");
-    if (estado) estado.textContent = "Error al procesar el archivo: " + err.message;
+    if (estado) estado.textContent = "Error al calcular las alertas: " + err.message;
     const btnAnalizar = document.getElementById("btn-analizar-kacosa");
     if (btnAnalizar) {
       btnAnalizar.disabled = false;
@@ -517,37 +337,133 @@ async function procesarArchivo() {
   }
 }
 
-function agruparStockKacosa(filas) {
-  const mapa = {};
+/**
+ * Calcula las Alertas Kacosa cruzando el stock subido, Alta Rotación y el
+ * "pendiente" del último análisis de cada tienda — replica exactamente la
+ * lógica que antes vivía en calcularAlertasKacosa_() (Apps Script), ahora
+ * corriendo en el navegador y hablando directo con Supabase. Al final borra
+ * la alerta anterior de este usuario y guarda la nueva (mismo comportamiento:
+ * solo se conserva la última por usuario).
+ */
+async function calcularAlertasKacosa(stockKacosa, periodoMeses, categoriaTienda, mapaEmpaquesParam, usuarioEmail, usuarioNombre) {
+  const mapaStock = {};
+  (stockKacosa || []).forEach(m => { mapaStock[String(m.codigo)] = m; });
 
-  filas.forEach(f => {
-    const centro = String(f["Centro"] || "").trim();
-    if (!CENTROS_KACOSA.includes(centro)) return;
+  const CATEGORIAS_TIENDA = ["Ferretools", "Kacosa", "Tiendas"];
+  const categoriasExcluir = categoriaTienda
+    ? CATEGORIAS_TIENDA.filter(c => c !== categoriaTienda)
+    : [];
 
-    const codigo = String(f["Material"] || "").trim();
-    if (!codigo) return;
-    if (esCodigoExcluido(codigo)) return; // código en lista de exclusión: se ignora por completo
+  const altaRotacion = await cargarAltaRotacion(categoriasExcluir);
 
-    const libreUtilizacion = aNumero(f["Libre utilización"]);
-    const transTrasl = aNumero(f["Trans./Trasl."]);
-    const devoluciones = aNumero(f["Devoluciones"]);
-    const disponible = libreUtilizacion + transTrasl + devoluciones;
+  // Trae el ÚLTIMO análisis guardado de cada tienda (una consulta por tienda)
+  // y suma "pendiente" por material — igual que el backend original.
+  const totalesAPedir = {};
+  const detallePorTienda = {};
 
-    if (!mapa[codigo]) {
-      mapa[codigo] = {
-        codigo: codigo,
-        descripcion: f["Texto breve de material"] || "",
-        // UMB (unidad de medida base): se extrae del archivo de stock Kacosa,
-        // igual que en Nuevo Análisis. Se usa para mostrar y guardar el umb
-        // de cada alerta, y como respaldo si el material no está en "paquetes".
-        unidadBase: f["Unidad medida base"] || "UN",
-        stockDisponible: 0
-      };
+  for (const t of TIENDAS) {
+    const idTienda = t.id;
+    const ultimo = await supabaseSelect(
+      "analisis",
+      `tienda=eq.${encodeURIComponent(idTienda)}&select=run_id&order=creado_en.desc&limit=1`
+    );
+    if (!ultimo || ultimo.length === 0) continue;
+    const runId = ultimo[0].run_id;
+
+    const filas = await supabaseSelectTodo("analisis", `run_id=eq.${encodeURIComponent(runId)}&select=codigo,pendiente`);
+    filas.forEach(f => {
+      const codigo = f.codigo;
+      const pendiente = Number(f.pendiente) || 0;
+      totalesAPedir[codigo] = (totalesAPedir[codigo] || 0) + pendiente;
+      if (!detallePorTienda[codigo]) detallePorTienda[codigo] = {};
+      detallePorTienda[codigo][idTienda] = (detallePorTienda[codigo][idTienda] || 0) + pendiente;
+    });
+  }
+
+  const mapaEmpaques = mapaEmpaquesParam || {};
+  const alertas = [];
+
+  altaRotacion.forEach(m => {
+    const codigo = String(m.codigo);
+    const stockInfo = mapaStock[codigo];
+    const stockDisponible = stockInfo ? Number(stockInfo.stockDisponible) || 0 : 0;
+    const totalAPedir = totalesAPedir[codigo] || 0;
+
+    const umb = (stockInfo && stockInfo.unidadBase) || (mapaEmpaques[codigo] && mapaEmpaques[codigo].umb) || "UN";
+    const empaque = Number(mapaEmpaques[codigo]?.empaque) || 1;
+    const proyeccionBruta = totalAPedir * periodoMeses;
+    const proyeccionCompra = empaque > 1 ? Math.ceil(proyeccionBruta / empaque) * empaque : Math.ceil(proyeccionBruta);
+
+    let tipo = null;
+    if (stockDisponible <= 0) {
+      tipo = "SIN_STOCK";
+    } else if (proyeccionCompra > stockDisponible) {
+      tipo = "STOCK_BAJO";
     }
-    mapa[codigo].stockDisponible += disponible;
+
+    if (tipo) {
+      const distribucion = {};
+      const detalle = detallePorTienda[codigo] || {};
+      let totalDistribuido = 0;
+      const tiendasConPedido = Object.keys(detalle).filter(t => detalle[t] > 0);
+
+      if (tiendasConPedido.length > 0) {
+        const proporciones = {};
+        tiendasConPedido.forEach(t => { proporciones[t] = detalle[t] / totalAPedir; });
+
+        tiendasConPedido.forEach(t => {
+          let cantidad = Math.round(proyeccionCompra * proporciones[t]);
+          if (empaque > 1) cantidad = Math.ceil(cantidad / empaque) * empaque;
+          distribucion[t] = cantidad;
+          totalDistribuido += cantidad;
+        });
+
+        if (totalDistribuido !== proyeccionCompra && tiendasConPedido.length > 0) {
+          const diferencia = proyeccionCompra - totalDistribuido;
+          const tiendaMayor = tiendasConPedido.reduce((a, b) => (proporciones[a] || 0) > (proporciones[b] || 0) ? a : b);
+          distribucion[tiendaMayor] = (distribucion[tiendaMayor] || 0) + diferencia;
+        }
+      }
+
+      alertas.push({
+        codigo,
+        descripcion: m.descripcion,
+        umb,
+        clase: m.clase,
+        stockKacosa: stockDisponible,
+        totalAPedir,
+        proyeccionCompra,
+        empaque,
+        distribucionPorTienda: distribucion,
+        tipo,
+        periodoDeAbastecimiento: `${periodoMeses} mes(es)`
+      });
+    }
   });
 
-  return Object.values(mapa);
+  const ordenClase = { A: 0, B: 1, C: 2, D: 3 };
+  alertas.sort((a, b) => {
+    if (a.tipo !== b.tipo) return a.tipo === "SIN_STOCK" ? -1 : 1;
+    return (ordenClase[a.clase] ?? 9) - (ordenClase[b.clase] ?? 9);
+  });
+
+  // Solo se conserva la ÚLTIMA alerta calculada por usuario: se borra la
+  // anterior de ESE MISMO usuario antes de guardar la nueva (no toca las de
+  // otros usuarios).
+  if (usuarioEmail) {
+    await supabaseDelete("alertas_kacosa", `usuario_email=eq.${encodeURIComponent(usuarioEmail)}`);
+  }
+
+  await supabaseInsert("alertas_kacosa", [{
+    creado_en: new Date().toISOString(),
+    periodo_meses: periodoMeses,
+    categoria_tienda: categoriaTienda || null,
+    usuario_email: usuarioEmail,
+    usuario_nombre: usuarioNombre,
+    alertas
+  }]);
+
+  return alertas;
 }
 
 function mostrarAlertas(alertas) {
