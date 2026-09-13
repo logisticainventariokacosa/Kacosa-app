@@ -4,11 +4,12 @@ import { procesarVentas, calcularRangoFechasVentas } from "./ventas-parser.js";
 import { cargarFactoresConversion } from "./factores-conversion.js";
 import { cargarCodigosExcluidos } from "./exclusiones.js";
 import { procesarNotasPendientes, restarNotasPendientesDeKacosa, obtenerStockDesdeSupabase } from "./stock-parser.js";
+import { cargarAltaRotacion } from "./alta-rotacion.js";
 import { cargarPaquetes } from "./paquetes.js";
 import { cargarUbicaciones, obtenerUbicacion, huboErrorUbicaciones } from "./ubicaciones.js";
 import { calcularAbastecimiento } from "./calculo-abastecimiento.js";
 import { detectarCandidatosLocal, fusionarDuplicados } from "./deteccion-duplicados.js";
-import { TIENDAS, nombrePorId, centrosDeTienda } from "./tiendas.js";
+import { TIENDAS, nombrePorId, centrosDeTienda, almacenesPermitidosParaCentros } from "./tiendas.js";
 import { callBridge } from "./bridge.js";
 import { crearTablaPaginada } from "./tabla-utils.js";
 import { notificarExito, confirmarAccion } from "./notificaciones.js";
@@ -119,34 +120,8 @@ const COLUMNAS_PENDIENTES_SYNC = [
 // almacenes DE ESA tienda, no los de cualquier otra (antes se validaba contra
 // una lista global de todas las tiendas juntas, lo que dejaba colar, por
 // ejemplo, el stock de Kacosa como si fuera el de una tienda cualquiera).
-const ALMACENES_POR_CENTRO = {
-  "1200": ["1200", "1203"],
-  "1300": ["1300", "1303"],
-  "1400": ["1400", "1403"],
-  "1500": ["1500", "1503"],
-  "1600": ["1600", "1603"],
-  "1700": ["1700", "1703"],
-  "1900": ["1900", "1903"],
-  "11A0": ["11A0", "11A3"],
-  "12A0": ["12A0", "12A3"],
-  "19A0": ["19A0", "19A3"],
-  "2010": ["2010", "2013", "2017"],
-  "2090": ["2090", "2093"],
-  // Ferretools (centro 1020): además de los almacenes generales (1020/1023),
-  // este centro también admite 1028 y 1029.
-  "1020": ["1020", "1023", "1028", "1029"],
-  // Kacosa (casa matriz): 1000/1029 = general, 1001 = exhibición (centro 1000);
-  // 3000/3029 = general, 3001 = exhibición (centro 3000).
-  "1000": ["1000", "1029", "1001"],
-  "3000": ["3000", "3029", "3001"]
-};
-
-/** Une los almacenes permitidos de una lista de centros (una tienda puede tener más de uno, ej. Kacosa). */
-function almacenesPermitidosParaCentros(centros) {
-  const set = new Set();
-  centros.forEach(c => (ALMACENES_POR_CENTRO[c] || []).forEach(a => set.add(a)));
-  return [...set];
-}
+// (11-sep-2026) ALMACENES_POR_CENTRO y almacenesPermitidosParaCentros ahora
+// viven en tiendas.js, compartidos con Alertas Kacosa — ver import arriba.
 
 // ============================================================
 //  EXCEPCIÓN: CENTROS DONDE NO SE ANEXAN MATERIALES DE ALTA
@@ -1192,8 +1167,7 @@ async function finalizarCalculo(gruposConfirmados) {
   }
 
   estadoTexto.textContent = "Revisando base de alta rotación...";
-  const respAltaRotacion = await callBridge("leerAltaRotacion", {});
-  const altaRotacion = respAltaRotacion.ok ? respAltaRotacion.materiales : [];
+  const altaRotacion = await cargarAltaRotacion();
 
   // Excepción para el centro 1020 (tienda Ferretools): no se anexan al "a
   // pedir" materiales de Alta Rotación que no tuvieron movimientos detectados
