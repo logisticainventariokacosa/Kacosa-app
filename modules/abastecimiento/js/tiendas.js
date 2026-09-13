@@ -58,8 +58,8 @@ export const ALMACENES_POR_CENTRO = {
   "1020": ["1020", "1023", "1028", "1029"],
   // Kacosa (casa matriz): 1000/1029 = general, 1001 = exhibición (centro 1000);
   // 3000/3029 = general, 3001 = exhibición (centro 3000).
-  "1000": ["1000", "1029", "1001"],
-  "3000": ["3000", "3029", "3001"]
+  "1000": ["1000", "1029"],
+  "3000": ["3000", "3029"]
 };
 
 /** Une los almacenes permitidos de una lista de centros, sin duplicados. */
