@@ -1,6 +1,6 @@
 // js/dashboard.js
-import { supabaseSelect, supabaseSelectTodo } from "./supabase-client.js";
-import { TIENDAS, nombrePorId, centrosDeTienda } from "./tiendas.js";
+import { supabaseSelect, supabaseSelectTodo } from "./supabase-client.js?v=1";
+import { TIENDAS, nombrePorId, centrosDeTienda } from "./tiendas.js?v=1";
 import { crearTablaPaginada } from "./tabla-utils.js";
 import { notificarExito } from "./notificaciones.js";
 import { construirHojaEstilizada, construirHojaResumen } from "./excel-estilos.js";
