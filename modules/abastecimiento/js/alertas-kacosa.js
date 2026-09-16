@@ -189,7 +189,31 @@ function render() {
     btnLimpiar.addEventListener("click", limpiarAlertasKacosa);
   }
 
-  cargarUltimaAlertaGuardada();
+  esperarUsuarioListo().then(cargarUltimaAlertaGuardada);
+}
+
+/**
+ * Resuelve en cuanto window.KACOSA.usuario ya está poblado (nav.js lo llena
+ * dentro de su onAuthStateChanged y luego dispara "kacosa:usuario-listo").
+ *
+ * Por qué hace falta (13-sep-2026): cuando esta vista es la vista inicial
+ * (ej. el shell abre app.html directo en "#vista=vista-alertas-kacosa", o el
+ * usuario recarga/"sincroniza" la página estando en esta vista), nav.js
+ * dispara "kacosa:vista-cambiada" en el evento "load" de la ventana — pero
+ * la restauración de sesión de Firebase (onAuthStateChanged) es asíncrona y
+ * puede no haber terminado todavía en ese momento. Sin esta espera,
+ * cargarUltimaAlertaGuardada() llamaba a Supabase sin sesión: la petición
+ * fallaba (o corría con window.KACOSA.usuario aún vacío, calculando mal el
+ * privilegio del rol) y el error solo quedaba en consola — el usuario veía
+ * la vista vacía y sin ningún aviso. Al navegar normalmente desde otra vista
+ * ya cargada, window.KACOSA.usuario ya está listo, así que esto resuelve al
+ * instante y no cambia el comportamiento anterior en ese caso.
+ */
+function esperarUsuarioListo() {
+  return new Promise((resolve) => {
+    if (window.KACOSA?.usuario) { resolve(); return; }
+    document.addEventListener("kacosa:usuario-listo", () => resolve(), { once: true });
+  });
 }
 
 /**
@@ -226,6 +250,9 @@ async function cargarUltimaAlertaGuardada() {
     }
   } catch (err) {
     console.error("No se pudo cargar el último dashboard de Alertas Kacosa:", err);
+    if (estado) {
+      estado.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> No se pudo cargar el último análisis guardado (${err.message}). Vuelve a intentarlo.`;
+    }
   }
 }
 
