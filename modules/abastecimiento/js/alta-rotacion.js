@@ -8,13 +8,23 @@ import { supabaseSelectTodo, supabaseInsert } from "./supabase-client.js?v=1";
 import { esCodigoExcluido, cargarCodigosExcluidos } from "./exclusiones.js?v=1";
 import { categoriaDeTienda } from "./tiendas.js?v=1";
 
+// Categorías de tienda usadas para clasificar Alta Rotación y Alertas Kacosa
+const CATEGORIAS_TIENDA = ["Ferretools", "Kacosa", "Tiendas"];
+
 /**
- * @param {Array<string>} [categoriasExcluir] - categorías ('Ferretools'|'Kacosa'|'Tiendas')
- *   cuyos materiales NO se deben incluir. Los materiales sin categoría asignada
- *   (columna "tienda" vacía en alta_rotacion) nunca se excluyen.
+ * @param {string} [categoriaTienda] - categoría seleccionada ('Ferretools'|'Kacosa'|'Tiendas').
+ *   Sin valor (o vacío): no filtra, trae TODO — así lo usa Nuevo Análisis.
+ *   'Ferretools' | 'Kacosa': cada una tiene su propio almacén surtidor
+ *   (Ferretools: centro 1020 · Kacosa: centros 1000/3000), separado del
+ *   resto, así que se incluyen SOLO los materiales insertados con esa
+ *   categoría exacta — se excluye todo lo demás, INCLUYENDO los materiales
+ *   sin categoría asignada.
+ *   'Tiendas': se excluyen Ferretools y Kacosa, pero los materiales sin
+ *   categoría asignada (columna "tienda" vacía en alta_rotacion) se
+ *   conservan siempre — comportamiento histórico, sin cambios.
  * @returns {Promise<Array<{codigo,descripcion,clase,empaque,tienda}>>}
  */
-export async function cargarAltaRotacion(categoriasExcluir) {
+export async function cargarAltaRotacion(categoriaTienda) {
   await cargarCodigosExcluidos();
   const filas = await supabaseSelectTodo("alta_rotacion", "select=codigo,descripcion,clase,empaque,tienda");
 
@@ -22,7 +32,10 @@ export async function cargarAltaRotacion(categoriasExcluir) {
     .map(f => ({ codigo: f.codigo, descripcion: f.descripcion || "", clase: f.clase || "", empaque: f.empaque || 1, tienda: f.tienda || "" }))
     .filter(m => !esCodigoExcluido(m.codigo)); // por si quedaron códigos que se excluyeron después
 
-  if (categoriasExcluir && categoriasExcluir.length > 0) {
+  if (categoriaTienda === "Ferretools" || categoriaTienda === "Kacosa") {
+    materiales = materiales.filter(m => m.tienda === categoriaTienda);
+  } else if (categoriaTienda) {
+    const categoriasExcluir = CATEGORIAS_TIENDA.filter(c => c !== categoriaTienda);
     materiales = materiales.filter(m => !m.tienda || !categoriasExcluir.includes(m.tienda));
   }
 
