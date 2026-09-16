@@ -171,7 +171,7 @@ async function resumirTodasLasTiendas(topVentasPorTienda) {
 
       if (totalVentas > maxVentas) {
         maxVentas = totalVentas;
-        materialMayorVenta = { codigo: f.codigo, descripcion: f.descripcion || "", totalVentas };
+        materialMayorVenta = { codigo: f.codigo, descripcion: f.descripcion || "", totalVentas, umv: f.unidad_venta || f.umb || "UN" };
       }
 
       if (totalVentas > 0) {
@@ -382,7 +382,7 @@ function abrirModalTienda(t) {
             ${mv ? `
               ${mv.codigo}<br>
               <span style="font-weight:400; color:var(--texto-secundario); font-size:12px">${mv.descripcion}</span><br>
-              <strong style="color:#8B6BAE">${Math.round(mv.totalVentas)} und.</strong>
+              <strong style="color:#8B6BAE">${Math.round(mv.totalVentas)} ${mv.umv || "UN"}</strong>
             ` : "—"}
           </div>
         </div>
