@@ -1,7 +1,7 @@
 // js/alertas-kacosa.js
 import { callBridge } from "./bridge.js";
 import { supabaseSelect, supabaseSelectTodo, supabaseInsert, supabaseDelete } from "./supabase-client.js?v=1";
-import { cargarAltaRotacion } from "./alta-rotacion.js?v=1";
+import { cargarAltaRotacion } from "./alta-rotacion.js?v=3";
 import { obtenerStockDesdeSupabase } from "./stock-parser.js?v=1";
 import { crearTablaPaginada } from "./tabla-utils.js";
 import { nombrePorId, TIENDAS, almacenesPermitidosParaCentros } from "./tiendas.js?v=1";
@@ -10,12 +10,21 @@ import { notificarExito } from "./notificaciones.js";
 import { construirHojaEstilizada, construirHojaResumen } from "./excel-estilos.js";
 import { ROLES_CON_ACCESO_A_ALERTAS_DE_OTROS } from "./auth.js";
 
-// Centros permitidos para Kacosa
+// Centros permitidos según la categoría de tienda seleccionada: Kacosa/Tiendas
+// leen de Casa Matriz (1000/3000); Ferretools tiene su propio almacén (1020).
 const CENTROS_KACOSA = ["1000", "3000"];
+const CENTRO_FERRETOOLS = ["1020"];
+
+/** Nombre del almacén surtidor para las etiquetas en pantalla ("Stock Kacosa" / "Stock Ferretools"). */
+function nombreAlmacenPorCategoria(categoria) {
+  return categoria === "Ferretools" ? "Ferretools" : "Kacosa";
+}
 
 let ultimasAlertas = [];
 let periodoSeleccionado = 1;
-let categoriaTiendaSeleccionada = "Tiendas"; // 'Ferretools' | 'Kacosa' | 'Tiendas'
+let categoriaTiendaSeleccionada = "Tiendas"; // 'Ferretools' | 'Kacosa' | 'Tiendas' — categoría del formulario "Analizar stock"
+let categoriaUltimaAlertaMostrada = "Tiendas"; // 'Ferretools' | 'Kacosa' | 'Tiendas' — categoría elegida en el selector "Ver último análisis de"
+let categoriaAlertaMostrada = "Tiendas"; // categoría de las alertas actualmente EN PANTALLA (se sincroniza con categoriaUltimaAlertaMostrada al cargar, o con la del análisis recién calculado)
 let mapaEmpaques = {};
 
 function render() {
@@ -23,13 +32,21 @@ function render() {
   if (!cont) return;
 
   cont.innerHTML = `
+    <div class="tienda-selector">
+      <span class="label"><i class="fa-solid fa-clock-rotate-left"></i> Ver último análisis de</span>
+      <select id="alertas-ultima-categoria">
+        <option value="Tiendas">Tiendas</option>
+        <option value="Ferretools">Ferretools</option>
+        <option value="Kacosa">Kacosa</option>
+      </select>
+    </div>
     <div class="card">
       <h3 style="margin-top:0; font-size:15px; color:var(--azul-base); display:flex; align-items:center; gap:10px">
         <span style="display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; background:var(--ambar-claro); border-radius:8px; font-size:14px"><i class="fa-solid fa-triangle-exclamation"></i></span>
         Analizar stock de Kacosa
       </h3>
       <p style="color:var(--texto-secundario); font-size:12px; margin:4px 0 0">
-        El stock de Kacosa (centros 1000 y 3000) se lee directo de la base de datos — ya no hace falta subir ningún archivo.
+        El stock se lee directo de la base de datos según la categoría elegida abajo (Kacosa/Tiendas: centros 1000 y 3000 · Ferretools: centro 1020) — ya no hace falta subir ningún archivo.
       </p>
 
       <div style="margin-top:16px">
@@ -75,6 +92,7 @@ function render() {
   `;
 
   categoriaTiendaSeleccionada = "Tiendas";
+  categoriaUltimaAlertaMostrada = "Tiendas";
 
   document.querySelectorAll('.btn-categoria-tienda').forEach(btn => {
     btn.addEventListener('click', function() {
@@ -189,7 +207,16 @@ function render() {
     btnLimpiar.addEventListener("click", limpiarAlertasKacosa);
   }
 
-  esperarUsuarioListo().then(cargarUltimaAlertaGuardada);
+  const selectorUltimaCategoria = document.getElementById("alertas-ultima-categoria");
+  if (selectorUltimaCategoria) {
+    selectorUltimaCategoria.value = categoriaUltimaAlertaMostrada;
+    selectorUltimaCategoria.addEventListener("change", (e) => {
+      categoriaUltimaAlertaMostrada = e.target.value;
+      cargarUltimaAlertaGuardada(categoriaUltimaAlertaMostrada);
+    });
+  }
+
+  esperarUsuarioListo().then(() => cargarUltimaAlertaGuardada(categoriaUltimaAlertaMostrada));
 }
 
 /**
@@ -217,30 +244,46 @@ function esperarUsuarioListo() {
 }
 
 /**
- * Al entrar al módulo, muestra automáticamente el último cálculo de Alertas Kacosa
- * guardado en Supabase (tabla "alertas_kacosa"), sin necesidad de subir un archivo.
+ * Al entrar al módulo (o al cambiar el selector "Ver último análisis de"),
+ * muestra automáticamente el último cálculo de Alertas Kacosa guardado en
+ * Supabase (tabla "alertas_kacosa") para la categoría elegida, sin necesidad
+ * de subir un archivo.
+ * @param {string} categoria - 'Ferretools' | 'Kacosa' | 'Tiendas'
  */
-async function cargarUltimaAlertaGuardada() {
+async function cargarUltimaAlertaGuardada(categoria) {
   const estado = document.getElementById("estado-alertas");
+  const resultado = document.getElementById("resultado-alertas");
   try {
-    // Roles admin/coordinador/directiva ven la última alerta sin importar quién
-    // la haya generado. Cualquier otro rol solo ve la última que él mismo generó
-    // (aunque otro usuario haya calculado una más reciente).
+    // Roles admin/coordinador/directiva ven la última alerta de esa categoría
+    // sin importar quién la haya generado. Cualquier otro rol solo ve la
+    // última que él mismo generó para esa categoría (aunque otro usuario haya
+    // calculado una más reciente).
     const rolNormalizado = window.KACOSA?.usuario?.rolNormalizado
       || (window.KACOSA?.usuario?.rol || "").toString().trim().toLowerCase();
     const esPrivilegiado = ROLES_CON_ACCESO_A_ALERTAS_DE_OTROS.includes(rolNormalizado);
 
     let filtro = "select=creado_en,periodo_meses,categoria_tienda,alertas,usuario_email,usuario_nombre";
+    if (categoria) {
+      filtro += "&categoria_tienda=eq." + encodeURIComponent(categoria);
+    }
     if (!esPrivilegiado && window.KACOSA?.usuario?.email) {
       filtro += "&usuario_email=eq." + encodeURIComponent(window.KACOSA.usuario.email);
     }
     filtro += "&order=creado_en.desc&limit=1";
 
     const filas = await supabaseSelect("alertas_kacosa", filtro);
-    if (!filas || filas.length === 0) return;
+    if (!filas || filas.length === 0) {
+      // Sin análisis guardado para esta categoría todavía: limpia cualquier
+      // resultado de la categoría anterior que hubiera quedado en pantalla.
+      if (resultado) resultado.innerHTML = "";
+      if (estado) {
+        estado.innerHTML = `<i class="fa-regular fa-circle-question"></i> Todavía no hay ningún análisis guardado para "${categoria}".`;
+      }
+      return;
+    }
     const fila = filas[0];
 
-    mostrarAlertas(fila.alertas || []);
+    mostrarAlertas(fila.alertas || [], fila.categoria_tienda);
 
     if (estado) {
       const fecha = fila.creado_en ? new Date(fila.creado_en).toLocaleString("es-VE") : "";
@@ -322,13 +365,16 @@ async function procesarArchivo() {
       btnAnalizar.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analizando...';
     }
     bloquearFormularioKacosa(true);
-    if (estado) estado.textContent = "Leyendo stock de Kacosa desde Supabase...";
+    const nombreAlmacen = nombreAlmacenPorCategoria(categoriaTiendaSeleccionada);
+    if (estado) estado.textContent = `Leyendo stock de ${nombreAlmacen} desde Supabase...`;
 
-    // (11-sep-2026) El stock de Kacosa (centros 1000 y 3000, almacenes
-    // general+exhibición de cada uno) ya no se sube como archivo — se lee
-    // directo de la tabla "stock", igual que en Nuevo Análisis.
+    // (11-sep-2026) El stock ya no se sube como archivo — se lee directo de
+    // la tabla "stock", igual que en Nuevo Análisis. (16-sep-2026) Ferretools
+    // tiene su propio almacén (centro 1020), separado de Casa Matriz Kacosa
+    // (1000/3000): se elige el centro según la categoría seleccionada.
+    const centrosStock = categoriaTiendaSeleccionada === "Ferretools" ? CENTRO_FERRETOOLS : CENTROS_KACOSA;
     const stockPorMaterial = Object.values(
-      await obtenerStockDesdeSupabase(CENTROS_KACOSA, almacenesPermitidosParaCentros(CENTROS_KACOSA))
+      await obtenerStockDesdeSupabase(centrosStock, almacenesPermitidosParaCentros(centrosStock))
     );
 
     if (estado) estado.textContent = "Cruzando contra Alta Rotación y los últimos análisis de las tiendas...";
@@ -342,7 +388,14 @@ async function procesarArchivo() {
     );
 
     if (estado) estado.textContent = `Listo — ${alertas.length} alerta(s) encontrada(s).`;
-    mostrarAlertas(alertas);
+    mostrarAlertas(alertas, categoriaTiendaSeleccionada);
+
+    // Mantiene el selector "Ver último análisis de" en sintonía con lo que se
+    // acaba de calcular y guardar, para que no quede mostrando una categoría
+    // distinta a la que el usuario ve en pantalla.
+    categoriaUltimaAlertaMostrada = categoriaTiendaSeleccionada;
+    const selectorUltimaCategoria = document.getElementById("alertas-ultima-categoria");
+    if (selectorUltimaCategoria) selectorUltimaCategoria.value = categoriaUltimaAlertaMostrada;
 
     // No se reactiva el formulario: evita volver a procesar el mismo archivo y
     // duplicar el cálculo guardado en Supabase. "Limpiar datos" permite reiniciar.
@@ -376,12 +429,7 @@ async function calcularAlertasKacosa(stockKacosa, periodoMeses, categoriaTienda,
   const mapaStock = {};
   (stockKacosa || []).forEach(m => { mapaStock[String(m.codigo)] = m; });
 
-  const CATEGORIAS_TIENDA = ["Ferretools", "Kacosa", "Tiendas"];
-  const categoriasExcluir = categoriaTienda
-    ? CATEGORIAS_TIENDA.filter(c => c !== categoriaTienda)
-    : [];
-
-  const altaRotacion = await cargarAltaRotacion(categoriasExcluir);
+  const altaRotacion = await cargarAltaRotacion(categoriaTienda);
 
   // Trae el ÚLTIMO análisis guardado de cada tienda (una consulta por tienda)
   // y suma "pendiente" por material — igual que el backend original.
@@ -493,8 +541,10 @@ async function calcularAlertasKacosa(stockKacosa, periodoMeses, categoriaTienda,
   return alertas;
 }
 
-function mostrarAlertas(alertas) {
+function mostrarAlertas(alertas, categoria) {
   ultimasAlertas = alertas;
+  categoriaAlertaMostrada = categoria || categoriaTiendaSeleccionada;
+  const nombreAlmacen = nombreAlmacenPorCategoria(categoriaAlertaMostrada);
 
   // Se exponen las alertas globalmente para que el chat con Gemini
   // pueda usarlas como contexto adicional (ver js/chat.js).
@@ -536,7 +586,7 @@ function mostrarAlertas(alertas) {
       <div class="kpi-grid">
         <div class="kpi-card rojo">
           <div class="kpi-icono"><i class="fa-solid fa-triangle-exclamation"></i></div>
-          <div class="label">Sin stock en Kacosa</div>
+          <div class="label">Sin stock en ${nombreAlmacen}</div>
           <div class="valor">${sinStock.length}</div>
         </div>
         <div class="kpi-card ambar">
@@ -583,7 +633,7 @@ function mostrarAlertas(alertas) {
       { key: 'descripcion', label: 'Descripción' },
       { key: 'umb', label: 'UMB' },
       { key: 'clase', label: 'Clase' },
-      { key: 'stockKacosa', label: 'Stock Kacosa', numeric: true },
+      { key: 'stockKacosa', label: `Stock ${nombreAlmacen}`, numeric: true },
       { key: 'totalAPedir', label: 'A pedir (todas)', numeric: true },
       { key: 'proyeccionCompra', label: 'Proyección compra', numeric: true },
       { key: 'empaque', label: 'Empaque', numeric: true },
@@ -718,6 +768,7 @@ function mostrarDistribucion(alerta) {
 
 /** Construye el workbook de Excel de Alertas Kacosa (Resumen + detalle). Se reutiliza para descargar y para enviar por correo. */
 function construirWorkbookAlertas_(alertas) {
+  const nombreAlmacen = nombreAlmacenPorCategoria(categoriaAlertaMostrada);
   const filas = alertas.map(a => ({
     codigo: a.codigo,
     descripcion: a.descripcion,
@@ -745,7 +796,7 @@ function construirWorkbookAlertas_(alertas) {
     "Alertas Kacosa — Materiales de Alta Rotación",
     [
       { label: "Total de alertas", valor: filas.length, color: "FF1B2A41" },
-      { label: "Sin stock en Kacosa", valor: sinStock, color: "FFC4432B" },
+      { label: `Sin stock en ${nombreAlmacen}`, valor: sinStock, color: "FFC4432B" },
       { label: "Stock insuficiente", valor: stockBajo, color: "FFE8A03D" },
       { label: "Proyección de compra total", valor: totalProyeccion, color: "FF2F8F6E" }
     ],
@@ -762,7 +813,7 @@ function construirWorkbookAlertas_(alertas) {
     { key: 'descripcion', label: 'Descripción', ancho: 36 },
     { key: 'umb', label: 'UMB', ancho: 10 },
     { key: 'clase', label: 'Clase', ancho: 8 },
-    { key: 'stockKacosa', label: 'Stock Kacosa', ancho: 12 },
+    { key: 'stockKacosa', label: `Stock ${nombreAlmacen}`, ancho: 12 },
     { key: 'totalAPedir', label: 'A Pedir (todas)', ancho: 14 },
     { key: 'proyeccionCompra', label: 'Proyección Compra', ancho: 16 },
     { key: 'empaque', label: 'Empaque', ancho: 10 },
