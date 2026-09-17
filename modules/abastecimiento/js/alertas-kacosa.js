@@ -15,9 +15,9 @@ import { ROLES_CON_ACCESO_A_ALERTAS_DE_OTROS } from "./auth.js";
 const CENTROS_KACOSA = ["1000", "3000"];
 const CENTRO_FERRETOOLS = ["1020"];
 
-/** Nombre del almacén surtidor para las etiquetas en pantalla ("Stock Kacosa" / "Stock Ferretools"). */
+/** Nombre del almacén surtidor para las etiquetas en pantalla ("Stock Kacosa" / "Stock Ferretools/Kacosa"). */
 function nombreAlmacenPorCategoria(categoria) {
-  return categoria === "Ferretools" ? "Ferretools" : "Kacosa";
+  return categoria === "Ferretools" ? "Ferretools/Kacosa" : "Kacosa";
 }
 
 let ultimasAlertas = [];
@@ -46,7 +46,7 @@ function render() {
         Analizar stock de Kacosa
       </h3>
       <p style="color:var(--texto-secundario); font-size:12px; margin:4px 0 0">
-        El stock se lee directo de la base de datos según la categoría elegida abajo (Kacosa/Tiendas: centros 1000 y 3000 · Ferretools: centro 1020) — ya no hace falta subir ningún archivo.
+        El stock se lee directo de la base de datos según la categoría elegida abajo (Kacosa/Tiendas: centros 1000 y 3000 · Ferretools: centro 1020 + 1000/3000 combinados) — ya no hace falta subir ningún archivo.
       </p>
 
       <div style="margin-top:16px">
@@ -371,8 +371,14 @@ async function procesarArchivo() {
     // (11-sep-2026) El stock ya no se sube como archivo — se lee directo de
     // la tabla "stock", igual que en Nuevo Análisis. (16-sep-2026) Ferretools
     // tiene su propio almacén (centro 1020), separado de Casa Matriz Kacosa
-    // (1000/3000): se elige el centro según la categoría seleccionada.
-    const centrosStock = categoriaTiendaSeleccionada === "Ferretools" ? CENTRO_FERRETOOLS : CENTROS_KACOSA;
+    // (1000/3000). Ajuste del mismo día: varios materiales de alta rotación
+    // categoría Ferretools SÍ pueden tener stock en Kacosa además del propio,
+    // así que para Ferretools se suma el stock de AMBOS orígenes (1020 +
+    // 1000/3000) para ser más precisos; Kacosa/Tiendas siguen leyendo solo
+    // 1000/3000 como siempre.
+    const centrosStock = categoriaTiendaSeleccionada === "Ferretools"
+      ? [...CENTRO_FERRETOOLS, ...CENTROS_KACOSA]
+      : CENTROS_KACOSA;
     const stockPorMaterial = Object.values(
       await obtenerStockDesdeSupabase(centrosStock, almacenesPermitidosParaCentros(centrosStock))
     );
@@ -638,12 +644,31 @@ function mostrarAlertas(alertas, categoria) {
       { key: 'proyeccionCompra', label: 'Proyección compra', numeric: true },
       { key: 'empaque', label: 'Empaque', numeric: true },
       { key: 'periodoDeAbastecimiento', label: 'Periodo de abastecimiento' },
-      { key: 'tipo', label: 'Alerta' }
+      { key: 'tipo', label: 'Alerta' },
+      {
+        key: 'accionDistribucion',
+        label: '',
+        render: (item) => (item.distribucion && Object.keys(item.distribucion).length > 0)
+          ? `<button data-fila-accion="ver-distribucion" style="padding:4px 12px; border:none; border-radius:4px; background:var(--azul-base); color:#fff; cursor:pointer; font-size:11px"><i class="fa-solid fa-chart-column"></i> Ver distribución</button>`
+          : ''
+      }
     ];
 
     const container = document.getElementById('alertas-tabla-container');
     if (container) {
-      const { renderizar } = crearTablaPaginada(container, columnas, 50);
+      // El botón "Ver distribución" se dibuja como parte de la fila (columna
+      // 'accionDistribucion' de arriba, vía render()) y su clic se maneja con
+      // onAccionFila, que crearTablaPaginada vuelve a conectar en cada
+      // renderizarTabla() — así el botón sobrevive a ordenar, filtrar y
+      // paginar (antes se inyectaba una sola vez con un setTimeout por
+      // índice de fila, y desaparecía en cuanto la tabla se reconstruía).
+      const { renderizar } = crearTablaPaginada(container, columnas, 50, {
+        onAccionFila: (clave, item, accion) => {
+          if (accion === 'ver-distribucion') {
+            mostrarDistribucion({ ...item, distribucionPorTienda: item.distribucion });
+          }
+        }
+      });
       
       // Guardar referencia para el filtro
       let renderizarTabla = renderizar;
@@ -682,22 +707,6 @@ function mostrarAlertas(alertas, categoria) {
     if (enviarCorreoBtn) {
       enviarCorreoBtn.addEventListener('click', () => enviarCorreoAlertas(alertas));
     }
-
-    setTimeout(() => {
-      document.querySelectorAll('#alertas-tabla-container tbody tr').forEach((row, index) => {
-        const alerta = alertas[index];
-        if (alerta && Object.keys(alerta.distribucionPorTienda || {}).length > 0) {
-          const td = row.querySelector('td:last-child');
-          if (td) {
-            const btn = document.createElement('button');
-            btn.innerHTML = '<i class="fa-solid fa-chart-column"></i> Ver distribución';
-            btn.style.cssText = 'padding:4px 12px; border:none; border-radius:4px; background:var(--azul-base); color:#fff; cursor:pointer; font-size:11px';
-            btn.addEventListener('click', () => mostrarDistribucion(alerta));
-            td.appendChild(btn);
-          }
-        }
-      });
-    }, 100);
   }
 }
 
