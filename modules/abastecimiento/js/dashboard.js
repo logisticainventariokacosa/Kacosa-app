@@ -294,7 +294,7 @@ function mostrarDashboard(analisis) {
               ${materialMayorVenta.descripcion.substring(0, 25)}${materialMayorVenta.descripcion.length > 25 ? '...' : ''}
             </span>
             <span style="display:block; font-size:18px; font-weight:700; color:#6B4A8A; margin-top:4px;">
-              ${Math.round(maxVentas)} und.
+              ${Math.round(maxVentas)} ${materialMayorVenta.unidadVenta || 'UN'}
             </span>
           ` : '—'}
         </div>
