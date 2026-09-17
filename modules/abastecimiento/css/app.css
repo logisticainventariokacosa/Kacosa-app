@@ -791,6 +791,19 @@ tbody tr:hover {
     width: 180px;
     min-width: 180px;
     max-width: 180px;
+    /* La columna 2 (Descripción) va con ancho fijo + sticky: sin recortar el
+       texto, una descripción larga se salía de su caja y quedaba flotando
+       visualmente ENCIMA de la columna siguiente (ej. tapaba el badge de
+       Clase A/B/C/D en la tabla "Materiales Clase A/B" del resumen
+       directiva) en vez de quedarse dentro de su propio ancho. Se recorta
+       con "..." (mismo patrón que ya se usa en otros textos truncados de
+       este archivo) — el texto completo se sigue viendo entero en cualquier
+       modal/detalle que lo muestre aparte.
+       Aplica a TODA tabla generada por crearTablaPaginada(), no solo la del
+       resumen directiva. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     background: var(--blanco);
     /* Línea sutil para marcar dónde termina el área fija */
     box-shadow: 2px 0 4px -2px rgba(15, 26, 46, 0.15);
