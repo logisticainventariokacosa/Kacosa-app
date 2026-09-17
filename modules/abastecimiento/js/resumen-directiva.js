@@ -35,6 +35,7 @@ const PALETA_TIENDAS = [
 
 let datosCache = null;    // { tiendas, topVentas } — respuesta de resumenAbastecimientoDirectiva
 let alertasCache = null;  // { alertas, creadoEn, usuarioNombre } — respuesta de leerUltimaAlertaKacosa
+let categoriaAlertaABSeleccionada = "Tiendas"; // 'Ferretools' | 'Kacosa' | 'Tiendas' — categoría de la tarjeta "Materiales Clase A/B"
 let vistaConstruida = false;
 let tablaVentas = null;
 let ventasFiltroTienda = "";
@@ -100,15 +101,13 @@ async function cargarDatos() {
   const TOP_VENTAS_POR_TIENDA = 30; // margen suficiente para el "Top 10" global y para filtrar por tienda sin pedir de nuevo
 
   try {
-    const [resumenTiendas, filasAlerta] = await Promise.all([
+    const [resumenTiendas, alertaAB] = await Promise.all([
       resumirTodasLasTiendas(TOP_VENTAS_POR_TIENDA),
-      supabaseSelect("alertas_kacosa", "select=creado_en,alertas,usuario_nombre&order=creado_en.desc&limit=1")
+      obtenerUltimaAlertaKacosa(categoriaAlertaABSeleccionada)
     ]);
 
     datosCache = { tiendas: resumenTiendas.tiendas, topVentas: resumenTiendas.topVentas };
-    alertasCache = (filasAlerta && filasAlerta.length > 0)
-      ? { alertas: filasAlerta[0].alertas || [], creadoEn: filasAlerta[0].creado_en || null, usuarioNombre: filasAlerta[0].usuario_nombre || "" }
-      : { alertas: [], creadoEn: null, usuarioNombre: "" };
+    alertasCache = alertaAB;
     return true;
   } catch (err) {
     if (cont) {
@@ -122,6 +121,30 @@ async function cargarDatos() {
     }
     return false;
   }
+}
+
+/** Trae la última Alerta Kacosa guardada para una categoría (Ferretools/Kacosa/Tiendas). Sin filtro de usuario: este resumen ya está restringido a roles admin/coordinador/directiva. */
+async function obtenerUltimaAlertaKacosa(categoria) {
+  const filasAlerta = await supabaseSelect(
+    "alertas_kacosa",
+    `select=creado_en,alertas,usuario_nombre,categoria_tienda&categoria_tienda=eq.${encodeURIComponent(categoria)}&order=creado_en.desc&limit=1`
+  );
+  return (filasAlerta && filasAlerta.length > 0)
+    ? { alertas: filasAlerta[0].alertas || [], creadoEn: filasAlerta[0].creado_en || null, usuarioNombre: filasAlerta[0].usuario_nombre || "" }
+    : { alertas: [], creadoEn: null, usuarioNombre: "" };
+}
+
+/** Se dispara al cambiar el selector de categoría de la tarjeta "Materiales Clase A/B": solo recarga esa tarjeta, sin tocar el resto del resumen. */
+async function cambiarCategoriaAlertaAB(categoria) {
+  categoriaAlertaABSeleccionada = categoria;
+  try {
+    alertasCache = await obtenerUltimaAlertaKacosa(categoria);
+  } catch (err) {
+    console.error("No se pudo cargar la última Alerta Kacosa para el resumen directiva:", err);
+    alertasCache = { alertas: [], creadoEn: null, usuarioNombre: "" };
+  }
+  pintarAlertasSubtitulo();
+  pintarTablaAlertasAB();
 }
 
 /**
@@ -249,6 +272,14 @@ function pintarVista(cont) {
         <span style="display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; background:var(--ambar-claro); border-radius:8px; font-size:14px"><i class="fa-solid fa-layer-group"></i></span>
         Materiales Clase A / B — Última Alerta Kacosa
       </h3>
+      <div class="tienda-selector" style="margin-top:10px">
+        <span class="label"><i class="fa-solid fa-filter"></i> Categoría</span>
+        <select id="alertas-ab-categoria">
+          <option value="Tiendas">Tiendas</option>
+          <option value="Ferretools">Ferretools</option>
+          <option value="Kacosa">Kacosa</option>
+        </select>
+      </div>
       <div id="alertas-ab-subtitulo"></div>
       <div id="tabla-alertas-ab-container" style="margin-top:14px"></div>
     </div>
@@ -266,6 +297,14 @@ function pintarVista(cont) {
     aplicarFiltroVentas();
   });
   document.getElementById("btn-resumen-directiva-refrescar").addEventListener("click", () => sincronizar(true));
+
+  const selectorAlertaAB = document.getElementById("alertas-ab-categoria");
+  if (selectorAlertaAB) {
+    selectorAlertaAB.value = categoriaAlertaABSeleccionada;
+    selectorAlertaAB.addEventListener("change", (e) => {
+      cambiarCategoriaAlertaAB(e.target.value);
+    });
+  }
 }
 
 /** Repinta solo el CONTENIDO con lo que haya en caché (no reconstruye el shell ni los filtros). */
