@@ -5,6 +5,7 @@ import {
   sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { iniciarCampanitaNotificaciones, detenerCampanitaNotificaciones } from "./notificaciones-bell.js?v=1";
 
 /* =====================================================================
    ÁRBOL DE MÓDULOS TIPO SAP
@@ -115,6 +116,30 @@ const MODULES = [
         src: "modules/abastecimiento/app.html#vista=vista-consultas",
         // Igual que Alertas Kacosa: todos los roles de Abastecimiento menos "gerente".
         roles: ROLES_ABASTECIMIENTO.filter(r => r !== "gerente")
+      },
+      {
+        id: "solicitud-traslado",
+        label: "Solicitud de Traslado",
+        icon: "fa-dolly",
+        src: "modules/abastecimiento/app.html#vista=vista-traslados",
+        // TEMPORAL (17-sep-2026): oculto para todos excepto admin mientras se
+        // prueba (construirSidebar() más abajo siempre deja pasar a "admin",
+        // sin importar esta lista). Cuando esté listo para producción, poner
+        // aquí ["gerente"] (o ROLES_ABASTECIMIENTO si aplica a más roles) — y
+        // revisar también ROLES_ACCESO_SOLICITUD_TRASLADO en
+        // modules/abastecimiento/js/auth.js, que hace la misma comprobación
+        // dentro del módulo embebido.
+        roles: []
+      },
+      {
+        id: "notificaciones-abastecimiento",
+        label: "Notificaciones",
+        icon: "fa-bell",
+        src: "modules/abastecimiento/app.html#vista=vista-notificaciones",
+        // TEMPORAL (17-sep-2026): mismo caso que arriba. Producción: agregar
+        // ["abastecimiento","directiva","coordinador"] aquí y en
+        // ROLES_ACCESO_NOTIFICACIONES (auth.js).
+        roles: []
       }
     ]
   },
@@ -388,6 +413,7 @@ onAuthStateChanged(auth, async (user) => {
     // la página CON sesión activa).
     history.replaceState(null, "", location.pathname);
     mostrarPantalla("login");
+    detenerCampanitaNotificaciones();
     return;
   }
 
@@ -423,6 +449,7 @@ onAuthStateChanged(auth, async (user) => {
 
   construirSidebar(rolActual);
   mostrarPantalla("app");
+  iniciarCampanitaNotificaciones(rolActual);
 
   // Si al recargar la página el hash ya apunta a un submódulo válido y
   // visible para este rol (ej. el usuario estaba en "#nuevo-analisis" y
@@ -545,6 +572,11 @@ function buscarSubmodulo(id) {
   }
   return null;
 }
+
+// Puente para que notificaciones-bell.js (fuera de este módulo, sin acceso a
+// abrirSubmodulo) pueda llevar al usuario directo al submódulo Notificaciones
+// al hacer clic en la campanita, sin duplicar aquí la lógica del sidebar.
+window.KACOSA_abrirNotificaciones = () => abrirSubmodulo("notificaciones-abastecimiento", { actualizarUrl: true });
 
 function abrirSubmodulo(id, { actualizarUrl = false } = {}) {
   const encontrado = buscarSubmodulo(id);
