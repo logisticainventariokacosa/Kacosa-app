@@ -2021,3 +2021,39 @@ tbody tr.fila-excluida:hover {
   color: var(--azul-base);
   background: var(--fondo);
 }
+
+/* =====================================================================
+   Solicitud de Traslado / Notificaciones (17-sep-2026)
+   ===================================================================== */
+.btn-tipo-solicitud {
+  padding: 8px 20px;
+  border: 2px solid var(--borde);
+  border-radius: var(--radio-peq);
+  background: var(--blanco);
+  color: var(--texto-principal);
+  cursor: pointer;
+  font-weight: 600;
+  transition: var(--transicion);
+}
+.btn-tipo-solicitud.activo {
+  border-color: var(--azul-base);
+  background: var(--azul-base);
+  color: #fff;
+}
+
+.estado-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 12px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.estado-pendiente { background: var(--ambar-claro); color: #B8860B; }
+.estado-aceptada { background: #DCEBFF; color: var(--azul-medio); }
+.estado-procesada { background: var(--verde-claro); color: var(--verde-kpi); }
+.estado-rechazada { background: var(--rojo-claro); color: var(--rojo-alerta); }
+
+.st-linea .input-modern { margin-bottom: 0; }
