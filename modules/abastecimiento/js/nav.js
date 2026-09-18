@@ -1,7 +1,7 @@
 // js/nav.js
 import { auth } from "./firebase-config.js?v=3";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-import { protegerPagina, cerrarSesion, obtenerPerfilPortal, ROLES_PERMITIDOS_ABASTECIMIENTO, ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS, ROLES_ACCESO_RESUMEN_DIRECTIVA } from "./auth.js";
+import { protegerPagina, cerrarSesion, obtenerPerfilPortal, ROLES_PERMITIDOS_ABASTECIMIENTO, ROLES_CON_ACCESO_A_TODAS_LAS_TIENDAS, ROLES_ACCESO_RESUMEN_DIRECTIVA, ROLES_ACCESO_SOLICITUD_TRASLADO, ROLES_ACCESO_NOTIFICACIONES } from "./auth.js";
 import { nombrePorId } from "./tiendas.js?v=1";
 import { mostrarLoader, ocultarLoader } from "./loader.js";
 
@@ -103,6 +103,20 @@ onAuthStateChanged(auth, async (user) => {
   const btnResumenDirectiva = document.querySelector('[data-vista="vista-resumen-directiva"]');
   if (btnResumenDirectiva && !ROLES_ACCESO_RESUMEN_DIRECTIVA.includes(rolNormalizado)) {
     btnResumenDirectiva.style.display = "none";
+  }
+
+  // "Solicitud de Traslado" y "Notificaciones" (17-sep-2026): en pruebas,
+  // solo "admin" los ve (ver ROLES_ACCESO_SOLICITUD_TRASLADO/NOTIFICACIONES
+  // en auth.js). El sidebar de esta página está oculto siempre que el
+  // módulo vive dentro del shell (ver app.html), así que esto es más que
+  // nada por si se abre este archivo suelto para pruebas.
+  const btnTraslados = document.querySelector('[data-vista="vista-traslados"]');
+  if (btnTraslados && !ROLES_ACCESO_SOLICITUD_TRASLADO.includes(rolNormalizado)) {
+    btnTraslados.style.display = "none";
+  }
+  const btnNotificaciones = document.querySelector('[data-vista="vista-notificaciones"]');
+  if (btnNotificaciones && !ROLES_ACCESO_NOTIFICACIONES.includes(rolNormalizado)) {
+    btnNotificaciones.style.display = "none";
   }
 
   // Aviso si un gerente no tiene tienda asignada (no debería pasar, pero evita confusión)
