@@ -328,10 +328,9 @@ async function generarNumeroNota() {
 }
 
 /**
- * Avisa al gerente que hizo la solicitud (PENDIENTE integrar en Code.gs, ver
- * nota igual en traslados.js/enviarAvisoCorreo). Payload esperado:
- * { action:"notificarResultadoSolicitud", solicitudId, resultado, destinatario,
- *   tipoSolicitud, numeroNota, claveDescarga, motivoRechazo }
+ * Avisa al gerente que hizo la solicitud (acción "notificarResultadoSolicitud"
+ * en Bridge.gs, agregada el 18-sep-2026). Best-effort: si Gmail falla, el
+ * cambio de estado ya quedó guardado en Supabase, solo se pierde el correo.
  */
 async function enviarAvisoResultado(solicitud, resultado) {
   if (!solicitud) return;
@@ -346,7 +345,7 @@ async function enviarAvisoResultado(solicitud, resultado) {
       motivoRechazo: solicitud.motivo_rechazo || null
     });
     if (!resp || !resp.ok) {
-      console.warn("No se pudo notificar al gerente (acción de Apps Script pendiente de integrar):", resp && resp.error);
+      console.warn("No se pudo notificar al gerente por correo:", resp && resp.error);
     }
   } catch (err) {
     console.warn("No se pudo notificar al gerente:", err.message);
