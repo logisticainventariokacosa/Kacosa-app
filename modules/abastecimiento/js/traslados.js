@@ -492,21 +492,11 @@ async function enviarSolicitud() {
 }
 
 /**
- * Intenta avisar por correo vía Apps Script (GmailApp). PENDIENTE: la acción
- * del lado de Code.gs ("notificarSolicitudTraslado") todavía no existe —
- * Derwin la agregará cuando comparta su Code.gs. Mientras tanto esto falla
- * en silencio (no bloquea el guardado, que ya quedó en Supabase) y solo deja
- * un aviso en consola.
- *
- * Payload esperado por el backend:
- * {
- *   action: "notificarSolicitudTraslado",
- *   solicitudId, tipoSolicitud, tiendaSolicitante, usuarioNombre, prioridad,
- *   materiales: [{codigo, descripcion, cantidad, unidad}],
- *   // a quién avisar: el propio Code.gs decide leyendo equipo_notificaciones,
- *   // o se le puede pasar resuelto desde aquí si se prefiere:
- *   destinatarios: ["correo1@kacosa.com", ...]
- * }
+ * Avisa por correo vía Apps Script (acción "notificarSolicitudTraslado" en
+ * Bridge.gs, agregada el 18-sep-2026). Sigue siendo best-effort a propósito:
+ * si Gmail falla o equipo_notificaciones está vacío, la solicitud YA quedó
+ * guardada en Supabase, así que solo se avisa por consola en vez de romper
+ * el flujo de "Enviar solicitud" para el gerente.
  */
 async function enviarAvisoCorreo(solicitud) {
   if (!solicitud) return;
@@ -524,7 +514,7 @@ async function enviarAvisoCorreo(solicitud) {
       destinatarios
     });
     if (!resp || !resp.ok) {
-      console.warn("No se pudo enviar el aviso por correo (acción de Apps Script pendiente de integrar):", resp && resp.error);
+      console.warn("No se pudo enviar el aviso por correo:", resp && resp.error);
     }
   } catch (err) {
     console.warn("No se pudo enviar el aviso por correo:", err.message);
