@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="css/styles.css?v=1" />
-  <link rel="stylesheet" href="css/app.css?v=5" />
+  <link rel="stylesheet" href="css/app.css?v=6" />
   <link rel="stylesheet" href="css/loader.css?v=2" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
   <style>
@@ -132,6 +132,12 @@
       <button type="button" class="nav-item" data-vista="vista-consultas">
         <span class="icono"><i class="fa-solid fa-magnifying-glass-chart"></i></span> Consultas
       </button>
+      <button type="button" class="nav-item" data-vista="vista-traslados">
+        <span class="icono"><i class="fa-solid fa-dolly"></i></span> Solicitud de Traslado
+      </button>
+      <button type="button" class="nav-item" data-vista="vista-notificaciones">
+        <span class="icono"><i class="fa-solid fa-bell"></i></span> Notificaciones
+      </button>
     </nav>
 
     <!-- SECCIÓN DE USUARIO AL FINAL DEL SIDEBAR (sin espacio extra) -->
@@ -209,6 +215,24 @@
           <p class="vista-sub">Cargando módulo...</p>
         </div>
       </section>
+
+      <!-- VISTA: SOLICITUD DE TRASLADO (nuevo, 17-sep-2026 — en pruebas, solo admin) -->
+      <section class="vista" id="vista-traslados">
+        <h2>Solicitud de Traslado</h2>
+        <p class="vista-sub">Solicita materiales por Nota de traslado o Extra SAP</p>
+        <div id="traslados-contenido">
+          <p class="vista-sub">Cargando módulo...</p>
+        </div>
+      </section>
+
+      <!-- VISTA: NOTIFICACIONES (nuevo, 17-sep-2026 — en pruebas, solo admin) -->
+      <section class="vista" id="vista-notificaciones">
+        <h2>Notificaciones</h2>
+        <p class="vista-sub">Procesa las solicitudes de traslado pendientes</p>
+        <div id="notificaciones-contenido">
+          <p class="vista-sub">Cargando módulo...</p>
+        </div>
+      </section>
     </div>
 
     <!-- FOOTER -->
@@ -224,8 +248,11 @@
   </div>
 
   <!-- Módulos JS -->
+  <!-- jsPDF (usado solo por pdf-nota-traslado.js para generar la Nota de Traslado) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
   <script src="js/tema-classic.js?v=2"></script>
-  <script type="module" src="js/nav.js?v=7"></script>
+  <script type="module" src="js/nav.js?v=8"></script>
   <script type="module" src="js/dashboard.js?v=4"></script>
   <script type="module" src="js/resumen-directiva.js?v=5"></script>
   <script type="module" src="js/alertas-kacosa.js?v=7"></script>
@@ -233,5 +260,8 @@
   <script type="module" src="js/nuevo-analisis.js?v=8"></script>
   <script type="module" src="js/chat.js?v=2"></script>
   <script type="module" src="js/footer-reloj.js?v=1"></script>
+  <script type="module" src="js/pdf-nota-traslado.js?v=1"></script>
+  <script type="module" src="js/traslados.js?v=1"></script>
+  <script type="module" src="js/notificaciones-abastecimiento.js?v=1"></script>
 </body>
 </html>
