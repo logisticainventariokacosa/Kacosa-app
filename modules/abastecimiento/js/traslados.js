@@ -1,18 +1,20 @@
 // js/traslados.js
-// Submódulo "Solicitud de Traslado" (17-sep-2026, ajustes 18-sep-2026). Acceso
-// real controlado por ROLES_ACCESO_SOLICITUD_TRASLADO en auth.js — mientras se
-// prueba, solo "admin" (nav.js ya oculta el botón del menú para cualquier otro
-// rol; aquí se repite la verificación por si alguien entra directo por
-// URL/hash, mismo patrón que resumen-directiva.js).
+// Submódulo "Solicitud de Traslado" (17-sep-2026, ajustes 18 y 19-sep-2026).
+// Acceso real controlado por ROLES_ACCESO_SOLICITUD_TRASLADO en auth.js —
+// mientras se prueba, solo "admin" (nav.js ya oculta el botón del menú para
+// cualquier otro rol; aquí se repite la verificación por si alguien entra
+// directo por URL/hash, mismo patrón que resumen-directiva.js).
 //
-// Flujo: el usuario arma un "cuaderno de línea" de códigos + cantidad, elige
-// tipo de solicitud (Nota de traslado | Extra SAP), el centro correspondiente,
-// motivo y prioridad. Al presionar "Solicitar" se consulta stock/en_notas_kacosa
-// de cada código y se muestra una tabla de confirmación donde puede ajustar o
-// quitar líneas antes de enviar (bloqueada si alguna cantidad supera lo
-// disponible). Al enviar se guarda en Supabase (solicitudes_traslado) y se
-// avisa por correo (callBridge, ya integrado en Bridge.gs) sin esperar la
-// respuesta, para no demorar la confirmación al usuario.
+// Flujo "Con código SAP" (por defecto): cuaderno de línea de códigos +
+// cantidad → al presionar "Solicitar" se consulta stock de AMBOS centros (el
+// solicitante/emisor y el solicitado/receptor) + en_notas_kacosa → tabla de
+// confirmación editable (bloqueada si alguna cantidad supera lo disponible
+// en el centro de origen) → enviar.
+// Flujo "Sin código SAP" (19-sep-2026): líneas de Descripción libre (20-100
+// caracteres) + cantidad, SIN consulta de stock — se confirma con un diálogo
+// simple y se envía directo.
+// Mientras hay una consulta o una confirmación pendiente, el botón
+// "Solicitar" queda bloqueado hasta que se cancele o se envíe esa solicitud.
 import { supabaseSelect, supabaseSelectTodo, supabaseInsert, supabaseUpdate } from "./supabase-client.js?v=1";
 import { obtenerStockDesdeSupabase } from "./stock-parser.js?v=1";
 import { TIENDAS, nombrePorId, almacenesPermitidosParaCentros, CENTROS_KACOSA } from "./tiendas.js?v=1";
@@ -20,14 +22,18 @@ import { crearTablaPaginada } from "./tabla-utils.js";
 import { notificarExito, confirmarAccion } from "./notificaciones.js";
 import { callBridge } from "./bridge.js";
 import { ROLES_ACCESO_SOLICITUD_TRASLADO } from "./auth.js";
-import { descargarNotaDeTraslado } from "./pdf-nota-traslado.js?v=1";
+import { descargarNotaDeTraslado } from "./pdf-nota-traslado.js?v=2";
 
 const MOTIVOS = ["Venta puntual", "Complemento de stock", "Otro"];
 const DURACION_CLAVE_MS = 5 * 60 * 1000; // 5 minutos, igual que en notificaciones-abastecimiento.js
 const INTERVALO_SYNC_MS = 15000; // 15s — "Mis solicitudes" se refresca sola mientras la vista está activa
+const CANTIDAD_REGEX = /^\d{1,5}(\.\d{1,3})?$/; // hasta 5 dígitos enteros, hasta 3 decimales
+const CODIGO_REGEX = /^\d{3,10}$/; // solo números, 3 a 10 dígitos
+const DESCRIPCION_MIN = 20, DESCRIPCION_MAX = 100;
 
-let lineas = [ nuevaLinea() ]; // [{codigo, cantidad}]
+let lineas = [ nuevaLinea() ]; // [{codigo, cantidad, descripcion}]
 let tipoActual = "nota_traslado"; // 'nota_traslado' | 'extra_sap'
+let modoMaterial = "con_codigo"; // 'con_codigo' | 'sin_codigo'
 let tiendaEmisoraSeleccionada = null; // solo aplica si el usuario ve "TODAS"
 let confirmacion = null; // {materiales:[...], ...datosFormulario} mientras se revisa antes de enviar
 let tablaMisSolicitudes = null;
@@ -35,7 +41,7 @@ let vistaConstruida = false;
 let intervaloSync = null;
 
 function nuevaLinea() {
-  return { codigo: "", cantidad: "" };
+  return { codigo: "", cantidad: "", descripcion: "" };
 }
 
 function rolActual() {
@@ -147,8 +153,12 @@ function render() {
 
       <div style="margin-top:20px">
         <label class="form-label">Materiales <span class="required">*</span></label>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px">
+          <button type="button" class="btn-tipo-solicitud ${modoMaterial === "con_codigo" ? "activo" : ""}" data-modo="con_codigo">Con código SAP</button>
+          <button type="button" class="btn-tipo-solicitud ${modoMaterial === "sin_codigo" ? "activo" : ""}" data-modo="sin_codigo">Sin código SAP</button>
+        </div>
         <div id="st-lineas"></div>
-        <button type="button" id="st-agregar-linea" class="btn-secundario" style="margin-top:8px"><i class="fa-solid fa-plus"></i> Agregar código</button>
+        <button type="button" id="st-agregar-linea" class="btn-secundario" style="margin-top:8px"><i class="fa-solid fa-plus"></i> Agregar ${modoMaterial === "con_codigo" ? "código" : "material"}</button>
       </div>
 
       <div id="st-error" style="color:var(--rojo-alerta); font-size:13px; margin-top:12px; display:none"></div>
@@ -178,13 +188,24 @@ function render() {
     });
   }
 
-  cont.querySelectorAll(".btn-tipo-solicitud").forEach(btn => {
+  cont.querySelectorAll(".btn-tipo-solicitud[data-tipo]").forEach(btn => {
     btn.addEventListener("click", () => {
       tipoActual = btn.dataset.tipo;
-      cont.querySelectorAll(".btn-tipo-solicitud").forEach(b => b.classList.toggle("activo", b === btn));
+      cont.querySelectorAll(".btn-tipo-solicitud[data-tipo]").forEach(b => b.classList.toggle("activo", b === btn));
       document.getElementById("st-label-centro").innerHTML =
         `${tipoActual === "extra_sap" ? "Centro de destino" : "Centro del que se solicita"} <span class="required">*</span>`;
       actualizarCentroDestino();
+    });
+  });
+
+  cont.querySelectorAll(".btn-tipo-solicitud[data-modo]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      modoMaterial = btn.dataset.modo;
+      cont.querySelectorAll(".btn-tipo-solicitud[data-modo]").forEach(b => b.classList.toggle("activo", b === btn));
+      lineas = [nuevaLinea()];
+      document.getElementById("st-agregar-linea").innerHTML =
+        `<i class="fa-solid fa-plus"></i> Agregar ${modoMaterial === "con_codigo" ? "código" : "material"}`;
+      pintarLineas();
     });
   });
 
@@ -197,7 +218,10 @@ function render() {
     pintarLineas();
   });
 
-  document.getElementById("st-buscar").addEventListener("click", buscarDisponibilidad);
+  document.getElementById("st-buscar").addEventListener("click", () => {
+    if (modoMaterial === "sin_codigo") manejarSolicitudSinCodigo();
+    else buscarDisponibilidad();
+  });
 
   cargarMisSolicitudes();
   iniciarSyncAutomatico();
@@ -216,27 +240,52 @@ function actualizarCentroDestino() {
   if (hint) {
     hint.textContent = tipoActual === "extra_sap"
       ? "La mercancía sale de tu tienda hacia el centro que elijas aquí."
-      : "Se mostrará la disponibilidad (libre utilización) de este centro.";
+      : "Se mostrará la disponibilidad de tu tienda y de este centro.";
   }
 }
 
 function pintarLineas() {
   const cont = document.getElementById("st-lineas");
   if (!cont) return;
-  cont.innerHTML = lineas.map((l, idx) => `
-    <div class="st-linea" data-idx="${idx}" style="display:flex; gap:8px; margin-bottom:8px; align-items:center">
-      <input type="text" class="input-modern st-linea-codigo" placeholder="Código" value="${(l.codigo || "").replace(/"/g, "&quot;")}" style="flex:2">
-      <input type="number" min="0.01" step="0.01" class="input-modern st-linea-cantidad" placeholder="Cantidad" value="${l.cantidad}" style="flex:1">
-      ${lineas.length > 1 ? `<button type="button" class="btn-sutil-peligro st-linea-quitar" title="Quitar"><i class="fa-solid fa-trash"></i></button>` : ""}
-    </div>
-  `).join("");
 
-  cont.querySelectorAll(".st-linea-codigo").forEach(inp => {
-    inp.addEventListener("input", (e) => {
-      const idx = Number(e.target.closest(".st-linea").dataset.idx);
-      lineas[idx].codigo = e.target.value.trim();
+  if (modoMaterial === "con_codigo") {
+    cont.innerHTML = lineas.map((l, idx) => `
+      <div class="st-linea" data-idx="${idx}" style="display:flex; gap:8px; margin-bottom:8px; align-items:center">
+        <input type="text" inputmode="numeric" class="input-modern st-linea-codigo" placeholder="Código (solo números, 3-10 dígitos)" maxlength="10" value="${(l.codigo || "").replace(/"/g, "&quot;")}" style="flex:2">
+        <input type="text" inputmode="decimal" class="input-modern st-linea-cantidad" placeholder="Cantidad" value="${l.cantidad}" style="flex:1">
+        ${lineas.length > 1 ? `<button type="button" class="btn-sutil-peligro st-linea-quitar" title="Quitar"><i class="fa-solid fa-trash"></i></button>` : ""}
+      </div>
+    `).join("");
+
+    cont.querySelectorAll(".st-linea-codigo").forEach(inp => {
+      inp.addEventListener("input", (e) => {
+        e.target.value = e.target.value.replace(/\D/g, "").slice(0, 10);
+        const idx = Number(e.target.closest(".st-linea").dataset.idx);
+        lineas[idx].codigo = e.target.value;
+      });
     });
-  });
+  } else {
+    cont.innerHTML = lineas.map((l, idx) => `
+      <div class="st-linea" data-idx="${idx}" style="display:flex; gap:8px; margin-bottom:8px; align-items:flex-start">
+        <div style="flex:2">
+          <input type="text" class="input-modern st-linea-descripcion" placeholder="Descripción del material (20 a 100 caracteres)" maxlength="${DESCRIPCION_MAX}" value="${(l.descripcion || "").replace(/"/g, "&quot;")}">
+          <div class="st-linea-contador" style="font-size:11px; color:var(--texto-claro); margin-top:2px">${(l.descripcion || "").length}/${DESCRIPCION_MAX} (mínimo ${DESCRIPCION_MIN})</div>
+        </div>
+        <input type="text" inputmode="decimal" class="input-modern st-linea-cantidad" placeholder="Cantidad" value="${l.cantidad}" style="flex:1">
+        ${lineas.length > 1 ? `<button type="button" class="btn-sutil-peligro st-linea-quitar" title="Quitar"><i class="fa-solid fa-trash"></i></button>` : ""}
+      </div>
+    `).join("");
+
+    cont.querySelectorAll(".st-linea-descripcion").forEach(inp => {
+      inp.addEventListener("input", (e) => {
+        const idx = Number(e.target.closest(".st-linea").dataset.idx);
+        lineas[idx].descripcion = e.target.value;
+        e.target.closest(".st-linea").querySelector(".st-linea-contador").textContent =
+          `${e.target.value.length}/${DESCRIPCION_MAX} (mínimo ${DESCRIPCION_MIN})`;
+      });
+    });
+  }
+
   cont.querySelectorAll(".st-linea-cantidad").forEach(inp => {
     inp.addEventListener("input", (e) => {
       const idx = Number(e.target.closest(".st-linea").dataset.idx);
@@ -262,9 +311,10 @@ function mostrarErrorFormulario(msg) {
 
 /**
  * Habilita/deshabilita TODOS los campos del formulario principal (tienda,
- * tipo, centro, motivo, prioridad, líneas de materiales) mientras se está
- * consultando disponibilidad — para que el usuario no pueda seguir editando
- * y desincronizar lo que ve de lo que realmente se está consultando.
+ * tipo, centro, motivo, prioridad, líneas de materiales, botón Solicitar).
+ * Se usa mientras se consulta disponibilidad Y mientras hay una confirmación
+ * pendiente sin cancelar/enviar — para que no se pueda editar nada ni
+ * empezar una segunda consulta encima de la que está en curso.
  */
 function bloquearFormularioPrincipal(bloquear) {
   const cont = document.getElementById("traslados-contenido");
@@ -291,80 +341,99 @@ function centrosYAlmacenesParaConsulta(idCentroSeleccionado) {
   return { centros, almacenes: almacenesPermitidosParaCentros(centros) };
 }
 
-async function buscarDisponibilidad() {
-  mostrarErrorFormulario(null);
+function validarLineasComunes(requiereCodigo) {
+  if (requiereCodigo) {
+    const lineasValidas = lineas
+      .map(l => ({ codigo: (l.codigo || "").trim(), cantidad: (l.cantidad || "").toString().trim() }))
+      .filter(l => l.codigo);
+    if (lineasValidas.length === 0) return { error: "Ingresa al menos un código." };
+    const codigoInvalido = lineasValidas.find(l => !CODIGO_REGEX.test(l.codigo));
+    if (codigoInvalido) return { error: `El código "${codigoInvalido.codigo}" debe tener solo números, entre 3 y 10 dígitos.` };
+    const cantidadInvalida = lineasValidas.find(l => !CANTIDAD_REGEX.test(l.cantidad));
+    if (cantidadInvalida) return { error: `La cantidad del código ${cantidadInvalida.codigo} debe ser numérica, hasta 5 dígitos enteros y 3 decimales.` };
+    const codigosUnicos = new Set(lineasValidas.map(l => l.codigo));
+    if (codigosUnicos.size !== lineasValidas.length) return { error: "Hay códigos repetidos en la lista." };
+    return { ok: true, lineas: lineasValidas.map(l => ({ codigo: l.codigo, cantidad: Number(l.cantidad) })) };
+  }
 
+  const lineasValidas = lineas
+    .map(l => ({ descripcion: (l.descripcion || "").trim(), cantidad: (l.cantidad || "").toString().trim() }))
+    .filter(l => l.descripcion || l.cantidad);
+  if (lineasValidas.length === 0) return { error: "Ingresa al menos un material." };
+  const descripcionInvalida = lineasValidas.find(l => l.descripcion.length < DESCRIPCION_MIN || l.descripcion.length > DESCRIPCION_MAX);
+  if (descripcionInvalida) return { error: `Cada descripción debe tener entre ${DESCRIPCION_MIN} y ${DESCRIPCION_MAX} caracteres ("${descripcionInvalida.descripcion.slice(0, 30)}..." tiene ${descripcionInvalida.descripcion.length}).` };
+  const cantidadInvalida = lineasValidas.find(l => !CANTIDAD_REGEX.test(l.cantidad));
+  if (cantidadInvalida) return { error: `La cantidad de "${cantidadInvalida.descripcion.slice(0, 30)}..." debe ser numérica, hasta 5 dígitos enteros y 3 decimales.` };
+  return { ok: true, lineas: lineasValidas.map(l => ({ descripcion: l.descripcion, cantidad: Number(l.cantidad) })) };
+}
+
+function validarCabeceraComun() {
   const emisora = tiendaEmisoraActual();
-  if (!emisora) { mostrarErrorFormulario("Selecciona la tienda solicitante."); return; }
-
+  if (!emisora) return { error: "Selecciona la tienda solicitante." };
   const idCentroSel = document.getElementById("st-centro").value;
   const motivo = document.getElementById("st-motivo").value;
   const motivoOtro = document.getElementById("st-motivo-otro").value.trim();
   const prioridad = document.getElementById("st-prioridad").value;
+  if (motivo === "Otro" && !motivoOtro) return { error: "Especifica el motivo." };
+  return { ok: true, emisora, idCentroSel, motivo, motivoOtro, prioridad };
+}
 
-  if (motivo === "Otro" && !motivoOtro) {
-    mostrarErrorFormulario("Especifica el motivo.");
-    return;
-  }
+async function buscarDisponibilidad() {
+  mostrarErrorFormulario(null);
 
-  const lineasValidas = lineas
-    .map(l => ({ codigo: (l.codigo || "").trim(), cantidad: Number(l.cantidad) }))
-    .filter(l => l.codigo);
+  const cabecera = validarCabeceraComun();
+  if (cabecera.error) { mostrarErrorFormulario(cabecera.error); return; }
+  const { emisora, idCentroSel, motivo, motivoOtro, prioridad } = cabecera;
 
-  if (lineasValidas.length === 0) {
-    mostrarErrorFormulario("Ingresa al menos un código.");
-    return;
-  }
-  const conCantidadInvalida = lineasValidas.find(l => !(l.cantidad > 0));
-  if (conCantidadInvalida) {
-    mostrarErrorFormulario(`El código ${conCantidadInvalida.codigo} necesita una cantidad válida (mayor a 0).`);
-    return;
-  }
-  const codigosUnicos = new Set(lineasValidas.map(l => l.codigo));
-  if (codigosUnicos.size !== lineasValidas.length) {
-    mostrarErrorFormulario("Hay códigos repetidos en la lista.");
-    return;
-  }
+  const lineasChk = validarLineasComunes(true);
+  if (lineasChk.error) { mostrarErrorFormulario(lineasChk.error); return; }
+  const lineasValidas = lineasChk.lineas;
+  const codigosUnicos = lineasValidas.map(l => l.codigo);
 
   const btn = document.getElementById("st-buscar");
   bloquearFormularioPrincipal(true);
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Consultando...';
 
   try {
-    // Para "extra_sap" el stock a validar es el de la PROPIA tienda solicitante
-    // (la mercancía sale de ahí). Para "nota_traslado" es el del centro elegido
-    // (de donde se está pidiendo). Ver nota en el mensaje final de la respuesta
-    // por si esta interpretación necesita ajuste.
-    const idCentroConsulta = tipoActual === "extra_sap" ? emisora : idCentroSel;
-    const { centros, almacenes } = centrosYAlmacenesParaConsulta(idCentroConsulta);
-    const stockMap = await obtenerStockDesdeSupabase(centros, almacenes, { soloLibreUtilizacion: true });
+    // Siempre se consultan AMBOS centros: el de la tienda solicitante (la
+    // que emite, en los dos tipos de solicitud) y el centro elegido en el
+    // formulario (el "solicitado" en nota_traslado, o el "destino/receptor"
+    // en extra_sap) — así la persona que revisa ve disponibilidad de los dos
+    // lados sin tener que adivinar.
+    const { centros: centrosA, almacenes: almacenesA } = centrosYAlmacenesParaConsulta(emisora);
+    const { centros: centrosB, almacenes: almacenesB } = centrosYAlmacenesParaConsulta(idCentroSel);
+    const [stockSolicitante, stockSolicitado] = await Promise.all([
+      obtenerStockDesdeSupabase(centrosA, almacenesA, { soloLibreUtilizacion: true }),
+      obtenerStockDesdeSupabase(centrosB, almacenesB, { soloLibreUtilizacion: true })
+    ]);
 
     // en_notas_kacosa: solo tiene sentido cuando se está pidiendo A Kacosa
     let notasKacosaPorCodigo = {};
     if (tipoActual === "nota_traslado" && idCentroSel === "KACOSA") {
-      notasKacosaPorCodigo = await obtenerEnNotasKacosaHoy(emisora, [...codigosUnicos]);
+      notasKacosaPorCodigo = await obtenerEnNotasKacosaHoy(emisora, codigosUnicos);
     }
 
     const materiales = [];
     const codigosNoEncontrados = [];
     for (const l of lineasValidas) {
-      let info = stockMap[l.codigo];
-      if (!info) {
-        // No tiene stock en ese centro — se busca solo la descripción en UBICACIONES
-        // para confirmar que el código existe y mostrar algo legible.
+      const infoA = stockSolicitante[l.codigo];
+      const infoB = stockSolicitado[l.codigo];
+      let descripcion = (infoA && infoA.descripcion) || (infoB && infoB.descripcion) || "";
+      let unidad = (infoA && infoA.unidadBase) || (infoB && infoB.unidadBase) || "UN";
+
+      if (!infoA && !infoB) {
         const filas = await supabaseSelect("UBICACIONES", `material=eq.${encodeURIComponent(l.codigo)}&select=descripcion&limit=1`);
-        if (!filas || filas.length === 0) {
-          codigosNoEncontrados.push(l.codigo);
-          continue;
-        }
-        info = { descripcion: filas[0].descripcion || "", unidadBase: "UN", stockDisponible: 0 };
+        if (!filas || filas.length === 0) { codigosNoEncontrados.push(l.codigo); continue; }
+        descripcion = filas[0].descripcion || "";
       }
+
       materiales.push({
         codigo: l.codigo,
-        descripcion: info.descripcion || "",
-        unidad: info.unidadBase || "UN",
+        descripcion,
+        unidad,
         cantidad: l.cantidad,
-        stockDisponible: Math.round((info.stockDisponible || 0) * 100) / 100,
+        stockCentroSolicitante: Math.round(((infoA && infoA.stockDisponible) || 0) * 100) / 100,
+        stockCentroSolicitado: Math.round(((infoB && infoB.stockDisponible) || 0) * 100) / 100,
         enNotasKacosa: notasKacosaPorCodigo[l.codigo] || 0
       });
     }
@@ -388,8 +457,12 @@ async function buscarDisponibilidad() {
     console.error(err);
     mostrarErrorFormulario("Error al consultar: " + err.message);
   } finally {
-    bloquearFormularioPrincipal(false);
     btn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Solicitar';
+    // Si quedó una confirmación pendiente, el formulario se mantiene
+    // bloqueado hasta que se cancele o se envíe (ver pintarConfirmacion /
+    // enviarSolicitud). Si hubo error o no se llegó a confirmación, se
+    // desbloquea para que el usuario pueda corregir.
+    if (!confirmacion) bloquearFormularioPrincipal(false);
   }
 }
 
@@ -408,21 +481,37 @@ async function obtenerEnNotasKacosaHoy(tienda, codigos) {
   return mapa;
 }
 
+/** Etiquetas de las 2 columnas de disponible, según el tipo de solicitud. */
+function etiquetasDisponible() {
+  return tipoActual === "extra_sap"
+    ? { solicitante: "Disponible (centro emisor)", solicitado: "Disponible (centro receptor)" }
+    : { solicitante: "Disponible (tu tienda)", solicitado: "Disponible (centro solicitado)" };
+}
+
+/** ¿Contra cuál de las 2 columnas se valida "no pedir más de lo disponible"? */
+function fuenteDeValidacion() {
+  // nota_traslado: el material sale del centro SOLICITADO hacia la tienda.
+  // extra_sap: el material sale de la propia tienda (solicitante/emisor).
+  return tipoActual === "extra_sap" ? "stockCentroSolicitante" : "stockCentroSolicitado";
+}
+
 function pintarConfirmacion() {
   const wrap = document.getElementById("st-confirmacion-wrap");
   if (!wrap || !confirmacion) return;
+  const etiquetas = etiquetasDisponible();
 
   const filasHtml = confirmacion.materiales.map((m, idx) => `
     <tr data-idx="${idx}">
       <td>${m.codigo}</td>
       <td>${m.descripcion}</td>
       <td>${m.unidad}</td>
-      <td class="conf-disponible">${m.stockDisponible}</td>
+      <td>${m.stockCentroSolicitante}</td>
+      <td>${m.stockCentroSolicitado}</td>
       ${confirmacion.tipo_solicitud === "nota_traslado" && confirmacion.centro_solicitado === "KACOSA"
         ? `<td>${m.enNotasKacosa}</td>` : ""}
       <td>
-        <input type="number" min="0.01" step="0.01" class="input-modern conf-cantidad" style="width:90px" value="${m.cantidad}">
-        <div class="conf-cantidad-error" style="display:none; color:var(--rojo-alerta); font-size:11px; margin-top:3px">Supera lo disponible</div>
+        <input type="text" inputmode="decimal" class="input-modern conf-cantidad" style="width:90px" value="${m.cantidad}">
+        <div class="conf-cantidad-error" style="display:none; color:var(--rojo-alerta); font-size:11px; margin-top:3px">Cantidad inválida</div>
       </td>
       <td><button type="button" class="btn-sutil-peligro conf-quitar" title="Quitar de la solicitud"><i class="fa-solid fa-trash"></i></button></td>
     </tr>
@@ -438,7 +527,8 @@ function pintarConfirmacion() {
         <table>
           <thead>
             <tr>
-              <th>Código</th><th>Descripción</th><th>UMB</th><th>Disponible</th>
+              <th>Código</th><th>Descripción</th><th>UMB</th>
+              <th>${etiquetas.solicitante}</th><th>${etiquetas.solicitado}</th>
               ${muestraNotasKacosa ? "<th>En notas Kacosa</th>" : ""}
               <th>Cantidad a pedir</th><th></th>
             </tr>
@@ -447,7 +537,7 @@ function pintarConfirmacion() {
         </table>
       </div>
       <div id="st-confirmacion-error" style="color:var(--rojo-alerta); font-size:13px; margin-top:10px; display:none">
-        Hay líneas con cantidad mayor a lo disponible. Ajústalas o quítalas para poder enviar.
+        Hay líneas con una cantidad inválida o mayor a lo disponible. Ajústalas o quítalas para poder enviar.
       </div>
       <div class="btn-group" style="margin-top:16px">
         <button type="button" id="st-cancelar-confirmacion" class="btn-secundario">Cancelar</button>
@@ -459,7 +549,7 @@ function pintarConfirmacion() {
   wrap.querySelectorAll(".conf-cantidad").forEach(inp => {
     inp.addEventListener("input", (e) => {
       const idx = Number(e.target.closest("tr").dataset.idx);
-      confirmacion.materiales[idx].cantidad = Number(e.target.value);
+      confirmacion.materiales[idx].cantidad = e.target.value;
       validarConfirmacion();
     });
   });
@@ -467,7 +557,7 @@ function pintarConfirmacion() {
     btn.addEventListener("click", (e) => {
       const idx = Number(e.target.closest("tr").dataset.idx);
       confirmacion.materiales.splice(idx, 1);
-      if (confirmacion.materiales.length === 0) { confirmacion = null; wrap.innerHTML = ""; return; }
+      if (confirmacion.materiales.length === 0) { confirmacion = null; wrap.innerHTML = ""; bloquearFormularioPrincipal(false); return; }
       pintarConfirmacion();
     });
   });
@@ -475,33 +565,42 @@ function pintarConfirmacion() {
   document.getElementById("st-cancelar-confirmacion").addEventListener("click", () => {
     confirmacion = null;
     wrap.innerHTML = "";
+    bloquearFormularioPrincipal(false);
   });
-  document.getElementById("st-enviar").addEventListener("click", enviarSolicitud);
+  document.getElementById("st-enviar").addEventListener("click", () => enviarSolicitud(document.getElementById("st-enviar")));
 
   validarConfirmacion();
 }
 
 /**
- * Marca en rojo las líneas donde "Cantidad a pedir" > "Disponible" y
- * deshabilita "Enviar solicitud" mientras exista al menos una. Se llama al
- * pintar la tabla y cada vez que el usuario edita una cantidad.
+ * Marca en rojo las líneas con cantidad inválida (formato, o mayor a lo
+ * disponible en el centro de origen) y deshabilita "Enviar solicitud"
+ * mientras exista al menos una. Se llama al pintar la tabla y cada vez que
+ * el usuario edita una cantidad.
  */
 function validarConfirmacion() {
   const wrap = document.getElementById("st-confirmacion-wrap");
   const btnEnviar = document.getElementById("st-enviar");
   const avisoGeneral = document.getElementById("st-confirmacion-error");
   if (!wrap || !confirmacion) return;
+  const campoFuente = fuenteDeValidacion();
 
   let hayInvalidas = false;
   wrap.querySelectorAll("tr[data-idx]").forEach(fila => {
     const idx = Number(fila.dataset.idx);
     const m = confirmacion.materiales[idx];
-    const invalida = !(m.cantidad > 0) || m.cantidad > m.stockDisponible;
+    const cantidadStr = (m.cantidad || "").toString();
+    const formatoValido = CANTIDAD_REGEX.test(cantidadStr);
+    const cantidadNum = Number(cantidadStr);
+    const invalida = !formatoValido || cantidadNum > m[campoFuente];
     const inputCantidad = fila.querySelector(".conf-cantidad");
     const avisoFila = fila.querySelector(".conf-cantidad-error");
     fila.style.background = invalida ? "var(--rojo-claro)" : "";
     if (inputCantidad) inputCantidad.style.borderColor = invalida ? "var(--rojo-alerta)" : "";
-    if (avisoFila) avisoFila.style.display = invalida ? "block" : "none";
+    if (avisoFila) {
+      avisoFila.textContent = !formatoValido ? "Máx. 5 enteros y 3 decimales" : "Supera lo disponible";
+      avisoFila.style.display = invalida ? "block" : "none";
+    }
     if (invalida) hayInvalidas = true;
   });
 
@@ -509,11 +608,49 @@ function validarConfirmacion() {
   if (avisoGeneral) avisoGeneral.style.display = hayInvalidas ? "block" : "none";
 }
 
-async function enviarSolicitud() {
+/** Flujo "Sin código SAP": sin stock, confirmación simple, envío directo. */
+async function manejarSolicitudSinCodigo() {
+  mostrarErrorFormulario(null);
+
+  const cabecera = validarCabeceraComun();
+  if (cabecera.error) { mostrarErrorFormulario(cabecera.error); return; }
+  const { emisora, idCentroSel, motivo, motivoOtro, prioridad } = cabecera;
+
+  const lineasChk = validarLineasComunes(false);
+  if (lineasChk.error) { mostrarErrorFormulario(lineasChk.error); return; }
+
+  const materiales = lineasChk.lineas.map(l => ({
+    codigo: null,
+    descripcion: l.descripcion,
+    unidad: "N/A",
+    cantidad: l.cantidad,
+    sinCodigoSap: true
+  }));
+
+  const resumen = materiales.map(m => `• ${m.descripcion} (${m.cantidad})`).join("\n");
+  const ok = await confirmarAccion(
+    `Vas a enviar una solicitud SIN código SAP con ${materiales.length} material(es):\n\n${resumen}\n\nNo se valida contra el stock del sistema. ¿Confirmas el envío?`,
+    { titulo: "Confirmar solicitud" }
+  );
+  if (!ok) return;
+
+  confirmacion = {
+    tienda_solicitante: emisora,
+    tipo_solicitud: tipoActual,
+    centro_solicitado: tipoActual === "nota_traslado" ? idCentroSel : null,
+    centro_destino: tipoActual === "extra_sap" ? idCentroSel : null,
+    motivo, motivo_otro: motivo === "Otro" ? motivoOtro : null,
+    prioridad,
+    materiales
+  };
+  bloquearFormularioPrincipal(true);
+  await enviarSolicitud(document.getElementById("st-buscar"));
+}
+
+async function enviarSolicitud(btnEl) {
   if (!confirmacion) return;
-  const btn = document.getElementById("st-enviar");
   bloquearConfirmacion(true);
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando...';
+  if (btnEl) btnEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando...';
 
   try {
     const usuario = window.KACOSA.usuario;
@@ -535,10 +672,8 @@ async function enviarSolicitud() {
     const solicitud = insertado && insertado[0];
 
     // No se espera la respuesta del correo (Apps Script puede tardar varios
-    // segundos) — la solicitud ya quedó guardada, así que el aviso por correo
-    // se manda en segundo plano y no retrasa la confirmación al usuario.
-    // enviarAvisoCorreo ya tiene su propio try/catch, por eso es seguro no
-    // hacerle await aquí (no genera una promesa rechazada sin capturar).
+    // segundos) — la solicitud ya quedó guardada, el aviso se manda en
+    // segundo plano. enviarAvisoCorreo ya tiene su propio try/catch.
     enviarAvisoCorreo(solicitud);
 
     notificarExito(
@@ -551,14 +686,15 @@ async function enviarSolicitud() {
     confirmacion = null;
     lineas = [nuevaLinea()];
     vistaConstruida = false;
-    render();
+    render(); // reconstruye todo el formulario ya desbloqueado
   } catch (err) {
     console.error(err);
     notificarExito("No se pudo enviar la solicitud: " + err.message, {
       titulo: "Error", icono: '<i class="fa-solid fa-triangle-exclamation"></i>', segundos: 6
     });
     bloquearConfirmacion(false);
-    if (btn) btn.innerHTML = "Enviar solicitud";
+    bloquearFormularioPrincipal(false);
+    if (btnEl) btnEl.innerHTML = btnEl.id === "st-buscar" ? '<i class="fa-solid fa-magnifying-glass"></i> Solicitar' : "Enviar solicitud";
   }
 }
 
@@ -657,22 +793,22 @@ function msRestantesClave(s) {
   if (!s.clave_descarga || !s.clave_generada_en) return null;
   return new Date(s.clave_generada_en).getTime() + DURACION_CLAVE_MS - Date.now();
 }
-
 function formatearRestante(ms) {
   const seg = Math.max(0, Math.floor(ms / 1000));
   return Math.floor(seg / 60) + ":" + String(seg % 60).padStart(2, "0");
 }
-
-/** Texto + estado del código de descarga de una solicitud, para mostrar en los modales. */
 function estadoClaveTexto(s) {
   if (!s.clave_descarga) return null;
-  if (s.clave_usada) return { texto: "Ya fue utilizado", clase: "vencido" };
+  if (s.clave_usada) return { texto: "Ya fue utilizado", vencido: true };
   const restante = msRestantesClave(s);
-  if (restante === null) return { texto: "Vigente", clase: "" };
-  if (restante <= 0) return { texto: "Expiró (duraba 5 min)", clase: "vencido" };
-  return { texto: "Vence en " + formatearRestante(restante), clase: "" };
+  if (restante === null) return { texto: "Vigente", vencido: false };
+  if (restante <= 0) return { texto: "Expiró (duraba 5 min)", vencido: true };
+  return { texto: "Vence en " + formatearRestante(restante), vencido: false };
 }
 
+// El código va en una "ficha" de colores fijos (no depende de las variables
+// de tema claro/oscuro) para que siempre se pueda leer, sin importar el
+// tema activo — ver .codigo-chip en app.css.
 function htmlBloqueClave(s) {
   if (!s.clave_descarga || s.tipo_solicitud !== "extra_sap") return "";
   const estado = estadoClaveTexto(s);
@@ -680,9 +816,9 @@ function htmlBloqueClave(s) {
     <div class="card" style="margin-top:10px; background:var(--fondo)">
       <p style="font-size:12px; color:var(--texto-secundario); margin:0 0 6px 0">Código de descarga</p>
       <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
-        <span style="font-size:20px; font-weight:800; letter-spacing:3px; color:var(--azul-base)">${s.clave_descarga}</span>
+        <span class="codigo-chip">${s.clave_descarga}</span>
         <button type="button" class="btn-secundario btn-copiar-clave" data-copiar="${s.clave_descarga}" style="padding:6px 12px; font-size:12px"><i class="fa-solid fa-copy"></i> Copiar</button>
-        <span style="font-size:12px; color:${estado.clase === "vencido" ? "var(--rojo-alerta)" : "var(--texto-secundario)"}">${estado.texto}</span>
+        <span style="font-size:12px; color:${estado.vencido ? "var(--rojo-alerta)" : "var(--texto-secundario)"}">${estado.texto}</span>
       </div>
     </div>
   `;
@@ -700,12 +836,17 @@ function activarBotonesCopiar(contenedor) {
   });
 }
 
+function filaMaterialDetalle(m) {
+  if (m.sinCodigoSap || !m.codigo) {
+    return `<tr><td colspan="2"><em>Sin código SAP:</em> ${m.descripcion}</td><td>${m.cantidad}</td><td>${m.unidad || "N/A"}</td></tr>`;
+  }
+  return `<tr><td>${m.codigo}</td><td>${m.descripcion}</td><td>${m.cantidad}</td><td>${m.unidad}</td></tr>`;
+}
+
 function abrirModalDetalleSolicitud(s) {
   const modal = document.createElement("div");
   modal.style.cssText = "position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:60; display:flex; align-items:center; justify-content:center; padding:20px";
-  const filasMat = (s.materiales || []).map(m => `
-    <tr><td>${m.codigo}</td><td>${m.descripcion}</td><td>${m.cantidad}</td><td>${m.unidad}</td></tr>
-  `).join("");
+  const filasMat = (s.materiales || []).map(filaMaterialDetalle).join("");
   modal.innerHTML = `
     <div style="background:var(--blanco); border-radius:var(--radio); max-width:600px; width:100%; max-height:90vh; overflow-y:auto; padding:24px">
       <h3 style="margin:0; color:var(--texto-titulo)">Solicitud #${s.id}</h3>
@@ -773,12 +914,6 @@ function abrirModalDescarga(s) {
     btn.textContent = "Verificando...";
     try {
       const limiteVigencia = new Date(Date.now() - DURACION_CLAVE_MS).toISOString();
-      // Reclamo atómico: solo tiene éxito si clave_usada seguía en false, la
-      // clave coincide, la solicitud sigue aceptada Y no pasaron los 5
-      // minutos — PostgREST solo actualiza (y devuelve) la fila si el filtro
-      // completo hace match, así que dos intentos simultáneos con el mismo
-      // código nunca pueden "ganar" los dos, y nada se guarda ante un intento
-      // con código equivocado (el UPDATE simplemente no afecta ninguna fila).
       const actualizado = await supabaseUpdate(
         "solicitudes_traslado",
         `id=eq.${s.id}&clave_descarga=eq.${encodeURIComponent(codigo)}&clave_usada=eq.false&estado=eq.aceptada&clave_generada_en=gte.${limiteVigencia}`,
@@ -822,7 +957,7 @@ async function diagnosticarFalloClave(id, codigoIngresado) {
 }
 
 /* =========================================================
- *  AUTO-SINCRONIZACIÓN de "Mis solicitudes" (18-sep-2026)
+ *  AUTO-SINCRONIZACIÓN de "Mis solicitudes"
  *  Mismo patrón que resumen-directiva.js: mientras la vista está
  *  activa, se refresca sola cada INTERVALO_SYNC_MS para que el
  *  gerente vea el cambio de estado sin tener que recargar.
