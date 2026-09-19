@@ -172,20 +172,29 @@ function activarBotonesCopiar(contenedor) {
 function abrirModalSolicitud(s) {
   const puedeProcesarEsteTipo = tiposQuePuedeProcesar().includes(s.tipo_solicitud);
 
-  const filasMat = (s.materiales || []).map(m => `
+  const filasMat = (s.materiales || []).map(m => {
+    if (m.sinCodigoSap || !m.codigo) {
+      return `<tr><td colspan="2"><em>Sin código SAP:</em> ${m.descripcion}</td><td>${m.cantidad}</td><td>${m.unidad || "N/A"}</td><td>—</td><td>—</td>${s.tipo_solicitud === "nota_traslado" ? "<td>—</td>" : ""}</tr>`;
+    }
+    return `
     <tr>
       <td>${m.codigo}</td><td>${m.descripcion}</td><td>${m.cantidad}</td><td>${m.unidad}</td>
-      <td>${m.stockDisponible ?? "—"}</td>
+      <td>${m.stockCentroSolicitante ?? "—"}</td>
+      <td>${m.stockCentroSolicitado ?? "—"}</td>
       ${s.tipo_solicitud === "nota_traslado" ? `<td>${m.enNotasKacosa ?? 0}</td>` : ""}
     </tr>
-  `).join("");
+  `;
+  }).join("");
+
+  const etqSolicitante = s.tipo_solicitud === "extra_sap" ? "Disp. (emisor)" : "Disp. (tu tienda)";
+  const etqSolicitado = s.tipo_solicitud === "extra_sap" ? "Disp. (receptor)" : "Disp. (solicitado)";
 
   const estadoClave = estadoClaveTexto(s);
   const bloqueClave = s.clave_descarga ? `
     <div class="card" style="margin-top:10px; background:var(--fondo)">
       <p style="font-size:12px; color:var(--texto-secundario); margin:0 0 6px 0">Código de descarga generado</p>
       <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
-        <span style="font-size:20px; font-weight:800; letter-spacing:3px; color:var(--azul-base)">${s.clave_descarga}</span>
+        <span class="codigo-chip">${s.clave_descarga}</span>
         <button type="button" class="btn-secundario btn-copiar-clave" data-copiar="${s.clave_descarga}" style="padding:6px 12px; font-size:12px"><i class="fa-solid fa-copy"></i> Copiar</button>
         <span style="font-size:12px; color:${estadoClave.vencido ? "var(--rojo-alerta)" : "var(--texto-secundario)"}">${estadoClave.texto}</span>
       </div>
@@ -196,7 +205,7 @@ function abrirModalSolicitud(s) {
   const modal = document.createElement("div");
   modal.style.cssText = "position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:60; display:flex; align-items:center; justify-content:center; padding:20px";
   modal.innerHTML = `
-    <div style="background:var(--blanco); border-radius:var(--radio); max-width:640px; width:100%; max-height:90vh; overflow-y:auto; padding:24px">
+    <div style="background:var(--blanco); border-radius:var(--radio); max-width:680px; width:100%; max-height:90vh; overflow-y:auto; padding:24px">
       <h3 style="margin:0; color:var(--texto-titulo)">Solicitud #${s.id} · ${s.tipo_solicitud === "extra_sap" ? "Extra SAP" : "Nota de traslado"}</h3>
       <p class="vista-sub" style="margin-top:4px">
         <span class="estado-pill estado-${s.estado}">${etiquetaEstado(s.estado)}</span> · Prioridad ${s.prioridad}
@@ -213,7 +222,7 @@ function abrirModalSolicitud(s) {
       <div class="table-responsive" style="margin-top:10px">
         <table>
           <thead><tr>
-            <th>Código</th><th>Descripción</th><th>Cantidad</th><th>UMB</th><th>Disponible</th>
+            <th>Código</th><th>Descripción</th><th>Cantidad</th><th>UMB</th><th>${etqSolicitante}</th><th>${etqSolicitado}</th>
             ${s.tipo_solicitud === "nota_traslado" ? "<th>En notas Kacosa</th>" : ""}
           </tr></thead>
           <tbody>${filasMat}</tbody>
@@ -340,7 +349,7 @@ function mostrarCodigoGenerado(clave) {
       <i class="fa-solid fa-circle-check" style="font-size:32px; color:var(--verde-kpi)"></i>
       <h3 style="margin:10px 0 4px 0; color:var(--texto-titulo)">Solicitud aceptada</h3>
       <p class="vista-sub" style="margin-bottom:14px">Código de descarga (un solo uso, vence en 5 minutos):</p>
-      <div style="font-size:28px; font-weight:800; letter-spacing:5px; color:var(--azul-base); margin-bottom:14px">${clave}</div>
+      <div style="margin-bottom:14px"><span class="codigo-chip codigo-chip-grande">${clave}</span></div>
       <button type="button" class="btn-secundario btn-copiar-clave" data-copiar="${clave}" style="width:100%; margin-bottom:10px"><i class="fa-solid fa-copy"></i> Copiar código</button>
       <button type="button" id="nt-cerrar-codigo" class="btn-primario" style="width:100%">Listo</button>
     </div>
