@@ -4,9 +4,9 @@
 // solo uso (ver abrirModalDescarga en traslados.js) — este archivo no vuelve
 // a validar nada, confía en que quien lo llamó ya hizo el UPDATE atómico.
 //
-// Requiere jsPDF cargado como <script> global en app.html
-// (https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js) —
-// expone window.jspdf.jsPDF.
+// Requiere, cargados como <script> globales en app.html:
+// - jsPDF (https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js) → window.jspdf.jsPDF
+// - JsBarcode (https://cdnjs.cloudflare.com/ajax/libs/JsBarcode/3.11.5/JsBarcode.all.min.js) → window.JsBarcode
 import { supabaseSelect } from "./supabase-client.js?v=1";
 import { TIENDAS, nombrePorId } from "./tiendas.js?v=1";
 
@@ -42,6 +42,19 @@ function fechaEnLetras(fecha, ciudad) {
   return `${ciudad ? ciudad + ", " : ""}${d} de ${mes} del ${y}`;
 }
 
+/** PNG en base64 de un código de barras CODE128 para `texto`, o null si no se pudo generar (no bloquea el PDF). */
+function generarBarcodeDataUrl(texto) {
+  if (!texto || !window.JsBarcode) return null;
+  try {
+    const canvas = document.createElement("canvas");
+    window.JsBarcode(canvas, texto, { format: "CODE128", displayValue: false, margin: 0, height: 60 });
+    return canvas.toDataURL("image/png");
+  } catch (err) {
+    console.warn("No se pudo generar el código de barras:", err.message);
+    return null;
+  }
+}
+
 export async function descargarNotaDeTraslado(solicitud) {
   if (!window.jspdf || !window.jspdf.jsPDF) {
     throw new Error("No se pudo cargar el generador de PDF (jsPDF). Verifica tu conexión e inténtalo de nuevo.");
@@ -57,13 +70,19 @@ export async function descargarNotaDeTraslado(solicitud) {
   const margenIzq = 18, margenDer = 18, anchoUtil = 216 - margenIzq - margenDer; // letter = 216x279mm
   let y = 20;
 
-  // --- Encabezado: fecha (izq) y número de nota (der) ---
+  const barcodeNota = generarBarcodeDataUrl(solicitud.numero_nota);
+  const barcodeClave = generarBarcodeDataUrl(solicitud.clave_descarga);
+
+  // --- Encabezado: fecha (izq) y número de nota + su código de barras (der) ---
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
   doc.text(fechaEnLetras(new Date(), emisora.ciudad), margenIzq, y);
   doc.text(String(solicitud.numero_nota || ""), 216 - margenDer, y, { align: "right" });
+  if (barcodeNota) {
+    doc.addImage(barcodeNota, "PNG", 216 - margenDer - 45, y + 3, 45, 10);
+  }
 
-  y += 14;
+  y += barcodeNota ? 26 : 14;
   doc.setFontSize(15);
   doc.setFont("helvetica", "bold");
   doc.text("Nota de Traslado", 108, y, { align: "center" });
@@ -102,13 +121,13 @@ export async function descargarNotaDeTraslado(solicitud) {
     const lineasDesc = doc.splitTextToSize(String(m.descripcion || ""), anchoDesc);
     const alturaFila = Math.max(lineasDesc.length, 1) * 4.6;
 
-    if (y + alturaFila > 250) { // deja espacio para pie de página
+    if (y + alturaFila > 245) { // deja espacio para pie de página
       doc.addPage();
       y = 20;
       encabezadoTabla();
     }
 
-    doc.text(String(m.codigo || ""), colX.codigo, y);
+    doc.text(String(m.codigo || (m.sinCodigoSap ? "S/C" : "")), colX.codigo, y);
     doc.text(lineasDesc, colX.desc, y);
     doc.text(String(m.unidad || ""), colX.umb, y);
     doc.text(String(m.cantidad ?? ""), colX.cant, y);
@@ -116,7 +135,7 @@ export async function descargarNotaDeTraslado(solicitud) {
   });
 
   // --- Firmas (al final del documento, después de la tabla) ---
-  if (y > 150) { doc.addPage(); y = 20; }
+  if (y > 130) { doc.addPage(); y = 20; }
   y += 14;
   const firmas = ["Gerente emisor", "Personal de seguridad de tienda emisora", "Chófer", "Gerente receptor"];
   const anchoFirma = anchoUtil / 2 - 6;
@@ -131,17 +150,18 @@ export async function descargarNotaDeTraslado(solicitud) {
     doc.text(etiqueta, x, yy + 19);
   });
 
-  // --- Sello de la tienda (abajo-izquierda) y código de seguridad
-  // (abajo-derecha, 18-sep-2026): el código queda impreso en el documento ya
-  // canjeado (no sirve para volver a descargarlo, eso ya se invalidó al
-  // usarse) — su función aquí es servir de sello de autenticidad: cualquiera
-  // que reciba el papel puede confirmar en el sistema (solicitud/código) que
+  // --- Sello de la tienda (abajo-izquierda) y código de seguridad + su
+  // código de barras (abajo-derecha, 18/19-sep-2026): el código queda
+  // impreso en el documento ya canjeado (no sirve para volver a descargarlo,
+  // eso ya se invalidó al usarse) — su función aquí es servir de sello de
+  // autenticidad: cualquiera que reciba el papel puede escanearlo o
+  // verificarlo en el sistema (solicitud/código) para confirmar que
   // corresponde a esta nota específica, y una fotocopia no puede hacerse
   // pasar por otra nota distinta.
   y += 58;
-  if (y > 235) { doc.addPage(); y = 30; }
+  if (y > 210) { doc.addPage(); y = 30; }
 
-  const selloAncho = 55, selloAlto = 26;
+  const selloAncho = 70, selloAlto = 35;
   doc.setLineWidth(0.3);
   doc.rect(margenIzq, y, selloAncho, selloAlto);
   doc.setFontSize(8.5);
@@ -159,6 +179,9 @@ export async function descargarNotaDeTraslado(solicitud) {
   doc.setTextColor(130);
   doc.text("Verificar en el sistema — N° de nota " + (solicitud.numero_nota || ""), 216 - margenDer, y + 22, { align: "right" });
   doc.setTextColor(0);
+  if (barcodeClave) {
+    doc.addImage(barcodeClave, "PNG", 216 - margenDer - 45, y + 25, 45, 12);
+  }
 
   // --- Pie de página con número de página en todas las hojas ---
   const totalPaginas = doc.getNumberOfPages();
