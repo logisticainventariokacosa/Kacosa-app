@@ -116,7 +116,7 @@ export async function descargarNotaDeTraslado(solicitud) {
   });
 
   // --- Firmas (al final del documento, después de la tabla) ---
-  if (y > 225) { doc.addPage(); y = 20; }
+  if (y > 150) { doc.addPage(); y = 20; }
   y += 14;
   const firmas = ["Gerente emisor", "Personal de seguridad de tienda emisora", "Chófer", "Gerente receptor"];
   const anchoFirma = anchoUtil / 2 - 6;
@@ -130,6 +130,35 @@ export async function descargarNotaDeTraslado(solicitud) {
     doc.setFontSize(9);
     doc.text(etiqueta, x, yy + 19);
   });
+
+  // --- Sello de la tienda (abajo-izquierda) y código de seguridad
+  // (abajo-derecha, 18-sep-2026): el código queda impreso en el documento ya
+  // canjeado (no sirve para volver a descargarlo, eso ya se invalidó al
+  // usarse) — su función aquí es servir de sello de autenticidad: cualquiera
+  // que reciba el papel puede confirmar en el sistema (solicitud/código) que
+  // corresponde a esta nota específica, y una fotocopia no puede hacerse
+  // pasar por otra nota distinta.
+  y += 58;
+  if (y > 235) { doc.addPage(); y = 30; }
+
+  const selloAncho = 55, selloAlto = 26;
+  doc.setLineWidth(0.3);
+  doc.rect(margenIzq, y, selloAncho, selloAlto);
+  doc.setFontSize(8.5);
+  doc.setTextColor(120);
+  doc.text("Sello de la tienda", margenIzq + selloAncho / 2, y + selloAlto + 6, { align: "center" });
+
+  doc.setTextColor(0);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("Código de seguridad del documento:", 216 - margenDer, y + 8, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(13);
+  doc.text(String(solicitud.clave_descarga || ""), 216 - margenDer, y + 16, { align: "right" });
+  doc.setFontSize(7.5);
+  doc.setTextColor(130);
+  doc.text("Verificar en el sistema — N° de nota " + (solicitud.numero_nota || ""), 216 - margenDer, y + 22, { align: "right" });
+  doc.setTextColor(0);
 
   // --- Pie de página con número de página en todas las hojas ---
   const totalPaginas = doc.getNumberOfPages();
