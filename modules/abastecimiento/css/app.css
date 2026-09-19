@@ -2057,3 +2057,23 @@ tbody tr.fila-excluida:hover {
 .estado-rechazada { background: var(--rojo-claro); color: var(--rojo-alerta); }
 
 .st-linea .input-modern { margin-bottom: 0; }
+
+/* Código de descarga (19-sep-2026): colores fijos, independientes del tema
+   claro/oscuro activo — el texto se veía invisible en modo oscuro porque
+   usaba var(--azul-base), pensado para texto sobre fondo claro. */
+.codigo-chip {
+  display: inline-block;
+  padding: 8px 18px;
+  background: #0F1A2E;
+  color: #F5D49A;
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: 4px;
+  border-radius: 8px;
+  font-family: 'Space Grotesk', monospace;
+}
+.codigo-chip-grande {
+  font-size: 30px;
+  letter-spacing: 6px;
+  padding: 12px 22px;
+}
