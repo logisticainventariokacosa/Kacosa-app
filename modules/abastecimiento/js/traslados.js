@@ -153,7 +153,7 @@ function render() {
 
       <div style="margin-top:20px">
         <label class="form-label">Materiales <span class="required">*</span></label>
-        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px">
+        <div id="st-modo-material-wrap" style="display:${tipoActual === "extra_sap" ? "flex" : "none"}; gap:10px; flex-wrap:wrap; margin-bottom:10px">
           <button type="button" class="btn-tipo-solicitud ${modoMaterial === "con_codigo" ? "activo" : ""}" data-modo="con_codigo">Con código SAP</button>
           <button type="button" class="btn-tipo-solicitud ${modoMaterial === "sin_codigo" ? "activo" : ""}" data-modo="sin_codigo">Sin código SAP</button>
         </div>
@@ -195,6 +195,22 @@ function render() {
       document.getElementById("st-label-centro").innerHTML =
         `${tipoActual === "extra_sap" ? "Centro de destino" : "Centro del que se solicita"} <span class="required">*</span>`;
       actualizarCentroDestino();
+
+      // El toggle "Con/Sin código SAP" solo tiene sentido para Extra SAP —
+      // en Nota de traslado siempre se pide con código SAP.
+      const wrapModo = document.getElementById("st-modo-material-wrap");
+      if (tipoActual === "extra_sap") {
+        wrapModo.style.display = "flex";
+      } else {
+        wrapModo.style.display = "none";
+        if (modoMaterial !== "con_codigo") {
+          modoMaterial = "con_codigo";
+          lineas = [nuevaLinea()];
+          cont.querySelectorAll(".btn-tipo-solicitud[data-modo]").forEach(b => b.classList.toggle("activo", b.dataset.modo === "con_codigo"));
+          document.getElementById("st-agregar-linea").innerHTML = '<i class="fa-solid fa-plus"></i> Agregar código';
+          pintarLineas();
+        }
+      }
     });
   });
 
