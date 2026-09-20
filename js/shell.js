@@ -5,7 +5,7 @@ import {
   sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { iniciarCampanitaNotificaciones, detenerCampanitaNotificaciones } from "./notificaciones-bell.js?v=1";
+import { iniciarCampanitaNotificaciones, detenerCampanitaNotificaciones } from "./notificaciones-bell.js?v=2";
 
 /* =====================================================================
    ÁRBOL DE MÓDULOS TIPO SAP
