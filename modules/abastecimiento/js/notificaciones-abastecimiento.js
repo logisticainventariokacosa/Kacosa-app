@@ -224,13 +224,14 @@ function abrirModalSolicitud(s) {
         <span class="estado-pill estado-${s.estado}">${etiquetaEstado(s.estado)}</span> · Prioridad ${s.prioridad}
       </p>
       <p style="font-size:13px; margin-top:10px; line-height:1.7">
-        <strong>Solicitado por:</strong> ${s.usuario_nombre} (${nombrePorId(s.tienda_solicitante)})<br>
+        <strong>Solicitado por:</strong> ${s.usuario_nombre} (${s.usuario_email || ""}) — ${nombrePorId(s.tienda_solicitante)}<br>
         <strong>Centro:</strong> ${nombrePorId(s.centro_solicitado || s.centro_destino || "")}<br>
         <strong>Motivo:</strong> ${s.motivo}${s.motivo_otro ? " — " + s.motivo_otro : ""}
       </p>
       ${s.numero_nota ? `<p style="font-size:13px"><strong>N° de nota:</strong> ${s.numero_nota}</p>` : ""}
       ${s.estado === "rechazada" && s.motivo_rechazo ? `<p style="font-size:13px; color:var(--rojo-alerta)"><strong>Motivo de rechazo:</strong> ${s.motivo_rechazo}</p>` : ""}
       ${s.motivo_edicion ? `<p style="font-size:13px; color:var(--ambar-oscuro)"><strong>Motivo de la edición de cantidades:</strong> ${s.motivo_edicion}</p>` : ""}
+      ${s.procesado_por_nombre ? `<p style="font-size:13px; color:var(--texto-secundario)"><strong>Procesado por:</strong> ${s.procesado_por_nombre} (${s.procesado_por_email || ""})</p>` : ""}
       ${bloqueClave}
 
       ${codigosDisponibles.length > 0 ? `
@@ -636,7 +637,9 @@ async function enviarAvisoResultado(solicitud, resultado) {
       numeroNota: solicitud.numero_nota || null,
       claveDescarga: solicitud.clave_descarga || null,
       motivoRechazo: solicitud.motivo_rechazo || null,
-      motivoEdicion: solicitud.motivo_edicion || null
+      motivoEdicion: solicitud.motivo_edicion || null,
+      procesadoPorNombre: solicitud.procesado_por_nombre || null,
+      procesadoPorEmail: solicitud.procesado_por_email || null
     });
     if (!resp || !resp.ok) {
       console.warn("No se pudo notificar al gerente por correo:", resp && resp.error);
