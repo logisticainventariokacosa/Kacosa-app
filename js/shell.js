@@ -122,24 +122,14 @@ const MODULES = [
         label: "Solicitud de Traslado",
         icon: "fa-dolly",
         src: "modules/abastecimiento/app.html#vista=vista-traslados",
-        // TEMPORAL (17-sep-2026): oculto para todos excepto admin mientras se
-        // prueba (construirSidebar() más abajo siempre deja pasar a "admin",
-        // sin importar esta lista). Cuando esté listo para producción, poner
-        // aquí ["gerente"] (o ROLES_ABASTECIMIENTO si aplica a más roles) — y
-        // revisar también ROLES_ACCESO_SOLICITUD_TRASLADO en
-        // modules/abastecimiento/js/auth.js, que hace la misma comprobación
-        // dentro del módulo embebido.
-        roles: []
+        roles: ["gerente"]
       },
       {
         id: "notificaciones-abastecimiento",
         label: "Notificaciones",
         icon: "fa-bell",
         src: "modules/abastecimiento/app.html#vista=vista-notificaciones",
-        // TEMPORAL (17-sep-2026): mismo caso que arriba. Producción: agregar
-        // ["abastecimiento","directiva","coordinador"] aquí y en
-        // ROLES_ACCESO_NOTIFICACIONES (auth.js).
-        roles: []
+        roles: ["abastecimiento", "directiva", "coordinador"]
       }
     ]
   },
