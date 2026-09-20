@@ -2077,3 +2077,66 @@ tbody tr.fila-excluida:hover {
   letter-spacing: 6px;
   padding: 12px 22px;
 }
+
+/* Chips de tienda en Consultas (19-sep-2026, antes checkboxes clásicos) */
+.chip-tienda {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 14px;
+  border: 1.5px solid var(--borde);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--texto-secundario);
+  background: var(--blanco);
+  transition: var(--transicion);
+  user-select: none;
+}
+.chip-tienda input[type="checkbox"] {
+  position: absolute;
+  width: 1px; height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.chip-tienda:hover { border-color: var(--azul-base); }
+.chip-tienda:has(input:checked) {
+  background: var(--azul-base);
+  border-color: var(--azul-base);
+  color: #fff;
+}
+
+/* --- Modo oscuro: paginación y chips de tienda (19-sep-2026) ---
+   .btn-pagina y el <select> de filas-por-página se pintan con estilo en
+   línea en tabla-utils.js (background:var(--blanco), border:var(--borde)),
+   pensado para tema claro; en modo oscuro casi no se distinguían del fondo.
+   Se sobreescribe aquí con !important porque el estilo en línea tiene más
+   especificidad que una clase normal. Afecta TODAS las tablas paginadas de
+   la app (usan el mismo componente compartido tabla-utils.js). */
+html.kacosa-dark .btn-pagina {
+  background: var(--azul-claro) !important;
+  border-color: var(--azul-medio) !important;
+  color: #fff !important;
+}
+html.kacosa-dark .btn-pagina:hover:not([disabled]) {
+  background: var(--ambar) !important;
+  color: var(--azul-base) !important;
+}
+html.kacosa-dark .btn-pagina[disabled] {
+  color: rgba(255,255,255,0.5) !important;
+}
+html.kacosa-dark #filas-por-pagina {
+  background: var(--azul-claro) !important;
+  border-color: var(--azul-medio) !important;
+  color: #fff !important;
+}
+html.kacosa-dark .chip-tienda {
+  background: var(--azul-claro);
+  border-color: var(--azul-medio);
+  color: #fff;
+}
+html.kacosa-dark .chip-tienda:has(input:checked) {
+  background: var(--ambar);
+  border-color: var(--ambar);
+  color: var(--azul-base);
+}
