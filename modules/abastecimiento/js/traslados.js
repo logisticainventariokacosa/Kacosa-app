@@ -93,6 +93,13 @@ function render() {
     return;
   }
   vistaConstruida = true;
+  // El HTML de #traslados-contenido se va a reconstruir por completo (pasa
+  // tras el primer render Y otra vez después de cada envío exitoso), lo que
+  // destruye el <div id="st-tabla-mis-solicitudes"> anterior. Si no se
+  // limpia esta referencia, cargarMisSolicitudes() sigue actualizando la
+  // tabla VIEJA (ya fuera del DOM) en vez de la nueva — por eso "Mis
+  // solicitudes" no se refrescaba al volver a la vista tras enviar.
+  tablaMisSolicitudes = null;
 
   const disponibles = tiendasDisponiblesParaSolicitar();
   const necesitaSelectorTienda = disponibles.length > 1;
