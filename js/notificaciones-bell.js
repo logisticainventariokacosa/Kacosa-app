@@ -24,7 +24,7 @@ const ROLES_PROCESA_EXTRA_SAP = ["directiva", "coordinador", "admin"];
 
 const SUPABASE_URL = "https://nlrgneggfqhmwszzbydb.supabase.co";
 const PUBLISHABLE_KEY = "sb_publishable_3w3-FLBmhA3NPqwXVdm3AQ_OxTGvPix";
-const INTERVALO_MS = 60000; // 1 minuto
+const INTERVALO_MS = 5000; // 5s (19-sep-2026, antes 1 min) — igual que notificaciones-abastecimiento.js, para que el contador no se quede atrás
 
 let intervaloId = null;
 let dropdownAbierto = false;
