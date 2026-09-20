@@ -172,20 +172,32 @@ function activarBotonesCopiar(contenedor) {
 
 function abrirModalSolicitud(s) {
   const puedeProcesarEsteTipo = tiposQuePuedeProcesar().includes(s.tipo_solicitud);
+  // Solo Abastecimiento, revisando una Nota de traslado ya aceptada (para
+  // marcarla procesada), puede editar las cantidades línea por línea — ver
+  // marcarProcesada() para el pedido de motivo cuando algo cambió.
+  const modoEdicion = puedeProcesarEsteTipo && s.estado === "aceptada" && s.tipo_solicitud === "nota_traslado";
 
-  const filasMat = (s.materiales || []).map(m => {
+  const filasMat = (s.materiales || []).map((m, idx) => {
     if (m.sinCodigoSap || !m.codigo) {
-      return `<tr><td colspan="2"><em>Sin código SAP:</em> ${m.descripcion}</td><td>${m.cantidad}</td><td>${m.unidad || "N/A"}</td><td>—</td><td>—</td>${s.tipo_solicitud === "nota_traslado" ? "<td>—</td>" : ""}</tr>`;
+      const celdaCantidad = modoEdicion
+        ? `<input type="text" inputmode="decimal" class="input-modern nt-cant-edit" data-idx="${idx}" data-original="${m.cantidad}" value="${m.cantidad}" style="width:80px">`
+        : m.cantidad;
+      return `<tr><td colspan="2"><em>Sin código SAP:</em> ${m.descripcion}</td><td>${celdaCantidad}</td><td>${m.unidad || "N/A"}</td><td>—</td><td>—</td>${s.tipo_solicitud === "nota_traslado" ? "<td>—</td>" : ""}</tr>`;
     }
+    const celdaCantidad = modoEdicion
+      ? `<input type="text" inputmode="decimal" class="input-modern nt-cant-edit" data-idx="${idx}" data-original="${m.cantidad}" value="${m.cantidad}" style="width:80px">`
+      : m.cantidad;
     return `
     <tr>
-      <td>${m.codigo}</td><td>${m.descripcion}</td><td>${m.cantidad}</td><td>${m.unidad}</td>
+      <td>${m.codigo}</td><td>${m.descripcion}</td><td>${celdaCantidad}</td><td>${m.unidad}</td>
       <td>${m.stockCentroSolicitante ?? "—"}</td>
       <td>${m.stockCentroSolicitado ?? "—"}</td>
       ${s.tipo_solicitud === "nota_traslado" ? `<td>${m.enNotasKacosa ?? 0}</td>` : ""}
     </tr>
   `;
   }).join("");
+
+  const codigosDisponibles = (s.materiales || []).filter(m => m.codigo).map(m => m.codigo);
 
   const etqSolicitante = s.tipo_solicitud === "extra_sap" ? "Disp. (emisor)" : "Disp. (tu tienda)";
   const etqSolicitado = s.tipo_solicitud === "extra_sap" ? "Disp. (receptor)" : "Disp. (solicitado)";
@@ -218,7 +230,12 @@ function abrirModalSolicitud(s) {
       </p>
       ${s.numero_nota ? `<p style="font-size:13px"><strong>N° de nota:</strong> ${s.numero_nota}</p>` : ""}
       ${s.estado === "rechazada" && s.motivo_rechazo ? `<p style="font-size:13px; color:var(--rojo-alerta)"><strong>Motivo de rechazo:</strong> ${s.motivo_rechazo}</p>` : ""}
+      ${s.motivo_edicion ? `<p style="font-size:13px; color:var(--ambar-oscuro)"><strong>Motivo de la edición de cantidades:</strong> ${s.motivo_edicion}</p>` : ""}
       ${bloqueClave}
+
+      ${codigosDisponibles.length > 0 ? `
+        <button type="button" class="btn-secundario btn-copiar-clave" data-copiar="${codigosDisponibles.join('\n')}" style="margin-top:10px; font-size:12px; padding:6px 12px"><i class="fa-solid fa-copy"></i> Copiar todos los códigos</button>
+      ` : ""}
 
       <div class="table-responsive" style="margin-top:10px">
         <table>
@@ -229,6 +246,7 @@ function abrirModalSolicitud(s) {
           <tbody>${filasMat}</tbody>
         </table>
       </div>
+      ${modoEdicion ? `<p style="font-size:11.5px; color:var(--texto-claro); margin-top:6px">Puedes ajustar cantidades (incluso a 0) si el stock cambió. Se te pedirá un motivo antes de guardar.</p>` : ""}
 
       <div id="nt-modal-error" style="color:var(--rojo-alerta); font-size:13px; margin-top:12px; display:none"></div>
       <div id="nt-modal-acciones" style="margin-top:18px"></div>
@@ -270,13 +288,15 @@ function abrirModalSolicitud(s) {
       btnRechazar.disabled = true;
       rechazarSolicitud(s, modal, () => { btnAceptar.disabled = false; btnRechazar.disabled = false; });
     });
-  } else if (s.estado === "aceptada" && s.tipo_solicitud === "nota_traslado") {
+  } else if (modoEdicion) {
     accionesEl.innerHTML = `
       <label class="form-label">N° de nota (para marcar como procesada)</label>
       <input type="text" id="nt-numero-nota" class="input-modern" placeholder="Número de nota" style="margin-bottom:10px">
       <button type="button" id="nt-btn-procesar" class="btn-primario" style="width:100%">Marcar como procesada</button>
+      <button type="button" id="nt-btn-cancelar-solicitud" class="btn-sutil-peligro" style="width:100%; margin-top:10px">Cancelar solicitud</button>
     `;
     document.getElementById("nt-btn-procesar").addEventListener("click", () => marcarProcesada(s, modal));
+    document.getElementById("nt-btn-cancelar-solicitud").addEventListener("click", () => cancelarSolicitudAceptada(s, modal));
   }
 }
 
@@ -287,10 +307,50 @@ function mostrarErrorModal(msg) {
   el.style.display = "block";
 }
 
+/**
+ * Modal de texto con el estilo de la página, para reemplazar prompt()
+ * (19-sep-2026 — el diálogo nativo del navegador no tenía nada que ver con
+ * el resto de la app). Devuelve el texto ingresado, o null si se canceló o
+ * se dejó vacío.
+ */
+function pedirTexto({ titulo, mensaje, placeholder = "", obligatorio = true }) {
+  return new Promise((resolve) => {
+    const modal = document.createElement("div");
+    modal.style.cssText = "position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:80; display:flex; align-items:center; justify-content:center; padding:20px";
+    modal.innerHTML = `
+      <div style="background:var(--blanco); border-radius:var(--radio); max-width:420px; width:100%; padding:24px">
+        <h3 style="margin:0; color:var(--texto-titulo)">${titulo}</h3>
+        ${mensaje ? `<p class="vista-sub" style="margin-top:6px">${mensaje}</p>` : ""}
+        <textarea id="pt-input" class="input-modern" rows="3" style="margin-top:10px; resize:vertical" placeholder="${placeholder}"></textarea>
+        <div id="pt-error" style="color:var(--rojo-alerta); font-size:12px; margin-top:6px; display:none">Este campo es obligatorio.</div>
+        <div class="btn-group" style="margin-top:16px">
+          <button type="button" id="pt-cancelar" class="btn-secundario">Cancelar</button>
+          <button type="button" id="pt-aceptar" class="btn-primario">Aceptar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    const input = document.getElementById("pt-input");
+    input.focus();
+
+    const cerrar = (valor) => { modal.remove(); resolve(valor); };
+    document.getElementById("pt-cancelar").addEventListener("click", () => cerrar(null));
+    modal.addEventListener("click", (e) => { if (e.target === modal) cerrar(null); });
+    document.getElementById("pt-aceptar").addEventListener("click", () => {
+      const texto = input.value.trim();
+      if (obligatorio && !texto) {
+        document.getElementById("pt-error").style.display = "block";
+        return;
+      }
+      cerrar(texto);
+    });
+  });
+}
+
 async function aceptarSolicitud(s, modal, reactivarBotones) {
   const ok = await confirmarAccion(
     s.tipo_solicitud === "extra_sap"
-      ? "Al aceptar se generará una clave de un solo uso (vence en 5 minutos) para que el gerente descargue la Nota de Traslado. ¿Continuar?"
+      ? "Al aceptar se generará una clave de un solo uso (vence en 5 minutos) para que el gerente descargue la Nota de Traslado, y la solicitud pasará directo a \"Procesada\". ¿Continuar?"
       : "¿Aceptar esta solicitud? El gerente verá que está en proceso.",
     { titulo: "Confirmar aceptación" }
   );
@@ -304,6 +364,12 @@ async function aceptarSolicitud(s, modal, reactivarBotones) {
       procesado_en: new Date().toISOString()
     };
     if (s.tipo_solicitud === "extra_sap") {
+      // Extra SAP no tiene un paso manual de "marcar procesada" aparte (eso
+      // es solo para nota_traslado, donde Abastecimiento anota el número de
+      // nota después) — aceptar y generar el código YA es el paso final,
+      // así que pasa directo a "procesada" (19-sep-2026, antes se quedaba
+      // en "aceptada" esperando algo que nunca llegaba).
+      cambios.estado = "procesada";
       cambios.clave_descarga = await generarClaveUnica();
       cambios.clave_generada_en = new Date().toISOString();
       cambios.numero_nota = await generarNumeroNota();
@@ -325,7 +391,7 @@ async function aceptarSolicitud(s, modal, reactivarBotones) {
     // No se espera la respuesta del correo (puede tardar varios segundos en
     // Apps Script) — el cambio de estado ya quedó guardado, así que se avisa
     // en segundo plano. enviarAvisoResultado ya tiene su propio try/catch.
-    enviarAvisoResultado(fila, "aceptada");
+    enviarAvisoResultado(fila, fila.estado);
 
     if (s.tipo_solicitud === "extra_sap") {
       mostrarCodigoGenerado(fila.clave_descarga);
@@ -368,14 +434,14 @@ async function regenerarClave(s, modal) {
     const nuevaClave = await generarClaveUnica();
     const actualizado = await supabaseUpdate(
       "solicitudes_traslado",
-      `id=eq.${s.id}&estado=eq.aceptada&clave_usada=eq.false`,
+      `id=eq.${s.id}&estado=eq.procesada&clave_usada=eq.false`,
       { clave_descarga: nuevaClave, clave_generada_en: new Date().toISOString() }
     );
     if (!actualizado || actualizado.length === 0) {
       mostrarErrorModal("No se pudo regenerar (puede que el código ya se haya usado).");
       return;
     }
-    enviarAvisoResultado(actualizado[0], "aceptada");
+    enviarAvisoResultado(actualizado[0], "procesada");
     modal.remove();
     mostrarCodigoGenerado(nuevaClave);
     cargarSolicitudes();
@@ -386,13 +452,13 @@ async function regenerarClave(s, modal) {
 }
 
 async function rechazarSolicitud(s, modal, reactivarBotones) {
-  const motivo = prompt("Motivo del rechazo:");
-  if (!motivo || !motivo.trim()) { reactivarBotones(); return; }
+  const motivo = await pedirTexto({ titulo: "Motivo del rechazo", placeholder: "Explica por qué se rechaza..." });
+  if (!motivo) { reactivarBotones(); return; }
 
   try {
     const actualizado = await supabaseUpdate("solicitudes_traslado", `id=eq.${s.id}&estado=eq.pendiente`, {
       estado: "rechazada",
-      motivo_rechazo: motivo.trim(),
+      motivo_rechazo: motivo,
       procesado_por_email: window.KACOSA.usuario.email,
       procesado_por_nombre: window.KACOSA.usuario.nombre || window.KACOSA.usuario.email,
       procesado_en: new Date().toISOString()
@@ -413,23 +479,94 @@ async function rechazarSolicitud(s, modal, reactivarBotones) {
   }
 }
 
+/**
+ * Cancela una solicitud de Nota de traslado que YA se había aceptado (por
+ * ejemplo, si al ir a procesarla resulta que ya no se puede ceder nada de lo
+ * pedido). Funciona igual que un rechazo, pero partiendo de "aceptada" en
+ * vez de "pendiente" (19-sep-2026).
+ */
+async function cancelarSolicitudAceptada(s, modal) {
+  const motivo = await pedirTexto({
+    titulo: "Cancelar solicitud",
+    mensaje: "Esto la deja como rechazada — úsalo si ya no se puede procesar nada de lo pedido.",
+    placeholder: "Motivo de la cancelación..."
+  });
+  if (!motivo) return;
+
+  try {
+    const actualizado = await supabaseUpdate("solicitudes_traslado", `id=eq.${s.id}&estado=eq.aceptada`, {
+      estado: "rechazada",
+      motivo_rechazo: motivo,
+      procesado_por_email: window.KACOSA.usuario.email,
+      procesado_por_nombre: window.KACOSA.usuario.nombre || window.KACOSA.usuario.email,
+      procesado_en: new Date().toISOString()
+    });
+    if (!actualizado || actualizado.length === 0) {
+      mostrarErrorModal("Esta solicitud ya fue actualizada por otra persona — se refrescó la lista.");
+      cargarSolicitudes();
+      return;
+    }
+    enviarAvisoResultado(actualizado[0], "rechazada");
+    notificarExito("Solicitud cancelada.", { titulo: "Cancelada" });
+    modal.remove();
+    cargarSolicitudes();
+  } catch (err) {
+    console.error(err);
+    mostrarErrorModal("No se pudo cancelar: " + err.message);
+  }
+}
+
+const CANTIDAD_REGEX_NT = /^\d{1,5}(\.\d{1,3})?$/; // hasta 5 enteros, 3 decimales — igual que en traslados.js, incluye el 0
+
 async function marcarProcesada(s, modal) {
   const input = document.getElementById("nt-numero-nota");
   const btn = document.getElementById("nt-btn-procesar");
   const numero = input.value.trim();
   if (!numero) { mostrarErrorModal("Ingresa el número de nota."); return; }
 
+  // Cantidades editadas (si el usuario las tocó) — se valida formato y se
+  // detecta si algo realmente cambió respecto al valor original.
+  const materialesActualizados = (s.materiales || []).map(m => ({ ...m }));
+  let huboCambios = false;
+  const inputsCantidad = modal.querySelectorAll(".nt-cant-edit");
+  for (const inp of inputsCantidad) {
+    const idx = Number(inp.dataset.idx);
+    const valor = inp.value.trim();
+    if (!CANTIDAD_REGEX_NT.test(valor)) {
+      mostrarErrorModal(`La cantidad de "${materialesActualizados[idx]?.codigo || materialesActualizados[idx]?.descripcion}" no es válida (hasta 5 enteros y 3 decimales, puede ser 0).`);
+      return;
+    }
+    const nuevoValor = Number(valor);
+    if (nuevoValor !== Number(inp.dataset.original)) huboCambios = true;
+    materialesActualizados[idx].cantidad = nuevoValor;
+  }
+
+  let motivoEdicion = null;
+  if (huboCambios) {
+    motivoEdicion = await pedirTexto({
+      titulo: "Motivo de la modificación",
+      mensaje: "Cambiaste una o más cantidades respecto a lo solicitado. Explica por qué (ej. cambio de stock disponible).",
+      placeholder: "Motivo..."
+    });
+    if (!motivoEdicion) return; // canceló — no se guarda nada
+  }
+
   input.disabled = true;
   btn.disabled = true;
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
   try {
-    const actualizado = await supabaseUpdate("solicitudes_traslado", `id=eq.${s.id}&estado=eq.aceptada`, {
+    const cambios = {
       estado: "procesada",
       numero_nota: numero,
       procesado_por_email: window.KACOSA.usuario.email,
       procesado_por_nombre: window.KACOSA.usuario.nombre || window.KACOSA.usuario.email,
       procesado_en: new Date().toISOString()
-    });
+    };
+    if (huboCambios) {
+      cambios.materiales = materialesActualizados;
+      cambios.motivo_edicion = motivoEdicion;
+    }
+    const actualizado = await supabaseUpdate("solicitudes_traslado", `id=eq.${s.id}&estado=eq.aceptada`, cambios);
     if (!actualizado || actualizado.length === 0) {
       mostrarErrorModal("Esta solicitud ya fue actualizada por otra persona — se refrescó la lista.");
       cargarSolicitudes();
@@ -498,7 +635,8 @@ async function enviarAvisoResultado(solicitud, resultado) {
       tipoSolicitud: solicitud.tipo_solicitud,
       numeroNota: solicitud.numero_nota || null,
       claveDescarga: solicitud.clave_descarga || null,
-      motivoRechazo: solicitud.motivo_rechazo || null
+      motivoRechazo: solicitud.motivo_rechazo || null,
+      motivoEdicion: solicitud.motivo_edicion || null
     });
     if (!resp || !resp.ok) {
       console.warn("No se pudo notificar al gerente por correo:", resp && resp.error);
