@@ -805,7 +805,7 @@ function etiquetaEstado(estado) {
 
 function htmlAccionesFila(r) {
   let html = `<button type="button" class="btn-secundario" style="padding:6px 10px; font-size:12px" data-fila-accion="ver">Ver</button>`;
-  if (r.tipo_solicitud === "extra_sap" && r.estado === "aceptada" && !r.clave_usada) {
+  if (r.tipo_solicitud === "extra_sap" && r.estado === "procesada" && !r.clave_usada) {
     html += ` <button type="button" class="btn-primario" style="padding:6px 10px; font-size:12px" data-fila-accion="descargar"><i class="fa-solid fa-file-pdf"></i> Descargar Nota</button>`;
   }
   return html;
@@ -939,7 +939,7 @@ function abrirModalDescarga(s) {
       const limiteVigencia = new Date(Date.now() - DURACION_CLAVE_MS).toISOString();
       const actualizado = await supabaseUpdate(
         "solicitudes_traslado",
-        `id=eq.${s.id}&clave_descarga=eq.${encodeURIComponent(codigo)}&clave_usada=eq.false&estado=eq.aceptada&clave_generada_en=gte.${limiteVigencia}`,
+        `id=eq.${s.id}&clave_descarga=eq.${encodeURIComponent(codigo)}&clave_usada=eq.false&estado=eq.procesada&clave_generada_en=gte.${limiteVigencia}`,
         { clave_usada: true, clave_usada_en: new Date().toISOString() }
       );
       if (!actualizado || actualizado.length === 0) {
@@ -967,7 +967,7 @@ async function diagnosticarFalloClave(id, codigoIngresado) {
     const filas = await supabaseSelect("solicitudes_traslado", `id=eq.${id}&select=clave_descarga,clave_usada,clave_generada_en,estado`);
     const actual = filas && filas[0];
     if (!actual) return "No se encontró la solicitud.";
-    if (actual.estado !== "aceptada") return "Esta solicitud ya no está disponible para descarga.";
+    if (actual.estado !== "procesada") return "Esta solicitud ya no está disponible para descarga.";
     if (actual.clave_usada) return "Este código ya fue utilizado.";
     if (actual.clave_generada_en && (Date.now() - new Date(actual.clave_generada_en).getTime()) > DURACION_CLAVE_MS) {
       return "El código expiró (duran 5 minutos). Pide que te generen uno nuevo.";
