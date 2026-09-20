@@ -896,7 +896,7 @@ function abrirModalDetalleSolicitud(s) {
       </p>
       ${s.estado === "rechazada" && s.motivo_rechazo ? `<p style="font-size:13px; color:var(--rojo-alerta)"><strong>Motivo de rechazo:</strong> ${s.motivo_rechazo}</p>` : ""}
       ${s.motivo_edicion ? `<p style="font-size:13px; color:var(--ambar-oscuro)"><strong>Motivo de la edición de cantidades:</strong> ${s.motivo_edicion}</p>` : ""}
-      ${s.numero_nota ? `<p style="font-size:13px"><strong>N° de nota:</strong> ${s.numero_nota}</p>` : ""}
+      ${s.numero_nota ? `<p style="font-size:13px"><strong>N° de nota:</strong> ${s.numero_nota} <button type="button" class="btn-secundario btn-copiar-clave" data-copiar="${s.numero_nota}" style="padding:2px 8px; font-size:11px; margin-left:6px; vertical-align:middle"><i class="fa-solid fa-copy"></i></button></p>` : ""}
       ${s.procesado_por_nombre ? `<p style="font-size:13px; color:var(--texto-secundario)"><strong>Procesado por:</strong> ${s.procesado_por_nombre} (${s.procesado_por_email || ""})</p>` : ""}
       ${htmlBloqueClave(s)}
       <div class="table-responsive" style="margin-top:10px">
