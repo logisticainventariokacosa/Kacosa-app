@@ -70,10 +70,16 @@ function render() {
   const cont = document.getElementById("consultas-contenido");
   if (!cont) return;
 
+  // Chips seleccionables (19-sep-2026, antes checkboxes clásicos) — el
+  // <input type="checkbox"> sigue ahí y sigue siendo lo que lee el resto de
+  // este archivo (chk-tienda-consulta, btn-toggle-todas-tiendas, etc.), solo
+  // se oculta visualmente y el <label> que lo envuelve se pinta como
+  // "chip" seleccionado vía CSS (.chip-tienda, ver app.css) — cero cambios
+  // de lógica.
   const checkboxesTiendas = TIENDAS.map(t => `
-    <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; padding:4px 0; cursor:pointer">
+    <label class="chip-tienda">
       <input type="checkbox" class="chk-tienda-consulta" value="${t.id}">
-      ${t.nombre}
+      <span>${t.nombre}</span>
     </label>
   `).join("");
 
@@ -88,7 +94,7 @@ function render() {
             <label class="form-label" style="margin-bottom:0">Tienda(s) / Centro(s)</label>
             <button type="button" id="btn-toggle-todas-tiendas" style="background:none; border:none; color:var(--texto-titulo); font-size:12px; font-weight:600; cursor:pointer; text-decoration:underline">Marcar/desmarcar todas</button>
           </div>
-          <div id="lista-tiendas-consulta" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(160px,1fr)); gap:2px; max-height:180px; overflow-y:auto; border:1.5px solid var(--borde); border-radius:var(--radio-peq); padding:10px; margin-top:6px">
+          <div id="lista-tiendas-consulta" style="display:flex; flex-wrap:wrap; gap:8px; max-height:180px; overflow-y:auto; border:1.5px solid var(--borde); border-radius:var(--radio-peq); padding:10px; margin-top:6px">
             ${checkboxesTiendas}
           </div>
         </div>
