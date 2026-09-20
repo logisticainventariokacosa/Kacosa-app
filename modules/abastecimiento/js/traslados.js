@@ -733,11 +733,13 @@ async function enviarAvisoCorreo(solicitud) {
     const destinatarios = await obtenerCorreosEquipo(
       solicitud.tipo_solicitud === "extra_sap" ? ["directiva", "coordinador"] : ["abastecimiento"]
     );
+    console.log("[Abastecimiento] Aviso de nueva solicitud #" + solicitud.id + " — destinatarios resueltos:", destinatarios);
     const resp = await callBridge("notificarSolicitudTraslado", {
       solicitudId: solicitud.id,
       tipoSolicitud: solicitud.tipo_solicitud,
       tiendaSolicitante: nombrePorId(solicitud.tienda_solicitante),
       usuarioNombre: solicitud.usuario_nombre,
+      usuarioEmail: solicitud.usuario_email,
       prioridad: solicitud.prioridad,
       materiales: solicitud.materiales,
       destinatarios
@@ -750,11 +752,22 @@ async function enviarAvisoCorreo(solicitud) {
   }
 }
 
+/**
+ * Lee los correos activos de equipo_notificaciones para los roles pedidos.
+ * 19-sep-2026: el filtro de rol se hace en JS (no en la consulta) y sin
+ * importar mayúsculas/minúsculas — si nunca llegaban los avisos de nuevas
+ * solicitudes, lo más probable es que la tabla esté vacía o que el texto del
+ * rol no calzara exacto (ej. "Abastecimiento" vs "abastecimiento"); esto
+ * elimina esa segunda causa. Revisa la consola del navegador: si el arreglo
+ * de destinatarios sale vacío, hay que revisar/llenar esa tabla en Supabase.
+ */
 async function obtenerCorreosEquipo(roles) {
   try {
-    const listaRoles = roles.map(r => `"${r}"`).join(",");
-    const filas = await supabaseSelect("equipo_notificaciones", `select=email&activo=eq.true&rol=in.(${listaRoles})`);
-    return (filas || []).map(f => f.email);
+    const filas = await supabaseSelect("equipo_notificaciones", `select=email,rol&activo=eq.true`);
+    const rolesBuscados = roles.map(r => r.toLowerCase());
+    return (filas || [])
+      .filter(f => rolesBuscados.includes((f.rol || "").toLowerCase().trim()))
+      .map(f => f.email);
   } catch (err) {
     console.warn("No se pudieron leer los correos del equipo:", err.message);
     return [];
@@ -882,7 +895,9 @@ function abrirModalDetalleSolicitud(s) {
         <strong>Motivo:</strong> ${s.motivo}${s.motivo_otro ? " — " + s.motivo_otro : ""}
       </p>
       ${s.estado === "rechazada" && s.motivo_rechazo ? `<p style="font-size:13px; color:var(--rojo-alerta)"><strong>Motivo de rechazo:</strong> ${s.motivo_rechazo}</p>` : ""}
+      ${s.motivo_edicion ? `<p style="font-size:13px; color:var(--ambar-oscuro)"><strong>Motivo de la edición de cantidades:</strong> ${s.motivo_edicion}</p>` : ""}
       ${s.numero_nota ? `<p style="font-size:13px"><strong>N° de nota:</strong> ${s.numero_nota}</p>` : ""}
+      ${s.procesado_por_nombre ? `<p style="font-size:13px; color:var(--texto-secundario)"><strong>Procesado por:</strong> ${s.procesado_por_nombre} (${s.procesado_por_email || ""})</p>` : ""}
       ${htmlBloqueClave(s)}
       <div class="table-responsive" style="margin-top:10px">
         <table><thead><tr><th>Código</th><th>Descripción</th><th>Cantidad</th><th>UMB</th></tr></thead>
