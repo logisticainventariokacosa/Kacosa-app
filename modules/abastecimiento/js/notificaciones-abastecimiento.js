@@ -18,7 +18,7 @@ import {
 } from "./auth.js";
 
 const DURACION_CLAVE_MS = 5 * 60 * 1000; // 5 minutos
-const INTERVALO_SYNC_MS = 15000; // 15s — la bandeja se refresca sola mientras está activa
+const INTERVALO_SYNC_MS = 5000; // 5s (19-sep-2026, antes 15s) — la bandeja se refresca sola mientras está activa
 
 let tablaNotificaciones = null;
 let filtroEstado = "pendiente"; // 'pendiente' | 'aceptada' | 'historial' (rechazada+procesada)
