@@ -70,6 +70,7 @@ function render() {
 
   if (!vistaConstruida) {
     vistaConstruida = true;
+    tablaNotificaciones = null; // ver el mismo comentario en traslados.js: evita apuntar a un nodo ya destruido
     cont.innerHTML = `
       <div class="tienda-selector">
         <span class="label"><i class="fa-solid fa-filter"></i> Mostrar</span>
