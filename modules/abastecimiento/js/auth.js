@@ -37,28 +37,15 @@ export const ROLES_CON_ACCESO_A_ALERTAS_DE_OTROS = ["admin", "coordinador", "dir
 export const ROLES_ACCESO_RESUMEN_DIRECTIVA = ["directiva", "coordinador", "admin"];
 
 // ---------------------------------------------------------------------
-// Solicitud de Traslado / Notificaciones (17-sep-2026)
+// Solicitud de Traslado / Notificaciones (17-sep-2026, abierto a
+// producción el 19-sep-2026)
 // ---------------------------------------------------------------------
-// Roles que en PRODUCCIÓN podrán crear una Solicitud de Traslado (el
-// "gerente" que pide materiales). TEMPORALMENTE, mientras se prueba, el
-// menú y esta comprobación solo dejan pasar a "admin" (ver el filtro real
-// más abajo, ROLES_ACCESO_SOLICITUD_TRASLADO). Cuando esté listo para
-// salir a producción, agrega aquí "gerente".
 export const ROLES_DESTINO_SOLICITUD_TRASLADO = ["gerente", "admin"];
-
-// Roles que en PRODUCCIÓN podrán entrar al submódulo "Notificaciones" a
-// procesar solicitudes (aceptar/rechazar). Igual que arriba: agrega
-// "abastecimiento", "directiva", "coordinador" cuando salga de pruebas.
 export const ROLES_DESTINO_NOTIFICACIONES = ["abastecimiento", "directiva", "coordinador", "admin"];
 
-// --- Filtros REALES usados ahora mismo por nav.js/traslados.js/notificaciones-abastecimiento.js ---
-// Mientras el submódulo esté en pruebas, solo "admin" tiene acceso, sin
-// importar lo que digan las listas de arriba. Cuando Derwin confirme que
-// ya se puede abrir a los roles reales, cambia estas dos constantes para
-// que apunten a ROLES_DESTINO_SOLICITUD_TRASLADO / ROLES_DESTINO_NOTIFICACIONES
-// (o simplemente bórralas y usa esas dos directo).
-export const ROLES_ACCESO_SOLICITUD_TRASLADO = ["admin"];
-export const ROLES_ACCESO_NOTIFICACIONES = ["admin"];
+// --- Filtros REALES usados por nav.js/traslados.js/notificaciones-abastecimiento.js ---
+export const ROLES_ACCESO_SOLICITUD_TRASLADO = ROLES_DESTINO_SOLICITUD_TRASLADO;
+export const ROLES_ACCESO_NOTIFICACIONES = ROLES_DESTINO_NOTIFICACIONES;
 
 // Dentro de Notificaciones, quién puede procesar cada TIPO de solicitud
 // (esto sí es lógica de negocio real, no cambia con lo anterior).
