@@ -14,11 +14,9 @@
 // named '[DEFAULT]' already exists". Por eso este archivo solo importa `auth`
 // (ya inicializado) y duplica el mínimo de lógica REST necesaria.
 //
-// TEMPORAL (17-sep-2026): igual que en modules/abastecimiento/js/auth.js
-// (ROLES_ACCESO_NOTIFICACIONES), la campanita solo se muestra a "admin"
-// mientras se prueba el flujo. Cuando se abra a producción, actualiza ESTA
-// lista Y esa, deben quedar iguales.
-const ROLES_CON_CAMPANITA = ["admin"];
+// Abierto a producción el 19-sep-2026 — debe quedar igual a
+// ROLES_ACCESO_NOTIFICACIONES en modules/abastecimiento/js/auth.js.
+const ROLES_CON_CAMPANITA = ["abastecimiento", "directiva", "coordinador", "admin"];
 const ROLES_PROCESA_NOTA_TRASLADO = ["abastecimiento", "admin"];
 const ROLES_PROCESA_EXTRA_SAP = ["directiva", "coordinador", "admin"];
 
