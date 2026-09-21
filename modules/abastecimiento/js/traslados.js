@@ -517,10 +517,18 @@ async function obtenerEnNotasKacosaHoy(tienda, codigos) {
 }
 
 /** Etiquetas de las 2 columnas de disponible, según el tipo de solicitud. */
-function etiquetasDisponible() {
-  return tipoActual === "extra_sap"
-    ? { solicitante: "Disponible (centro emisor)", solicitado: "Disponible (centro receptor)" }
-    : { solicitante: "Disponible (tu tienda)", solicitado: "Disponible (centro solicitado)" };
+/** Código(s) SAP de un centro/tienda, para mostrar en los encabezados de disponibilidad. Kacosa son 2 centros (1000/3000) a la vez. */
+function codigoCentroTexto(idCentro) {
+  if (idCentro === "KACOSA") return CENTROS_KACOSA.join("/");
+  const t = TIENDAS.find(x => x.id === idCentro);
+  return (t && t.centro) || idCentro || "";
+}
+
+/** Etiquetas de las 2 columnas de disponible, mostrando el código SAP real de cada centro. */
+function etiquetasDisponible(idSolicitante, idSolicitado) {
+  const codSolicitante = codigoCentroTexto(idSolicitante);
+  const codSolicitado = codigoCentroTexto(idSolicitado);
+  return { solicitante: `Disponible (${codSolicitante})`, solicitado: `Disponible (${codSolicitado})` };
 }
 
 /** ¿Contra cuál de las 2 columnas se valida "no pedir más de lo disponible"? */
@@ -533,7 +541,7 @@ function fuenteDeValidacion() {
 function pintarConfirmacion() {
   const wrap = document.getElementById("st-confirmacion-wrap");
   if (!wrap || !confirmacion) return;
-  const etiquetas = etiquetasDisponible();
+  const etiquetas = etiquetasDisponible(confirmacion.tienda_solicitante, confirmacion.centro_solicitado || confirmacion.centro_destino);
 
   const filasHtml = confirmacion.materiales.map((m, idx) => `
     <tr data-idx="${idx}">
@@ -921,7 +929,7 @@ function abrirModalDetalleSolicitud(s) {
         ${etiquetaEstado(s.estado)} · Prioridad ${s.prioridad}
       </p>
       <p style="font-size:13px; margin-top:10px">
-        <strong>Centro:</strong> ${nombrePorId(s.centro_solicitado || s.centro_destino || "")}<br>
+        <strong>${s.tipo_solicitud === "extra_sap" ? "Centro solicitante" : "Centro solicitado"}:</strong> ${nombrePorId(s.centro_solicitado || s.centro_destino || "")}<br>
         <strong>Motivo:</strong> ${s.motivo}${s.motivo_otro ? " — " + s.motivo_otro : ""}
       </p>
       ${s.estado === "rechazada" && s.motivo_rechazo ? `<p style="font-size:13px; color:var(--rojo-alerta)"><strong>Motivo de rechazo:</strong> ${s.motivo_rechazo}</p>` : ""}
