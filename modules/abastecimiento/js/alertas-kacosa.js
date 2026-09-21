@@ -2,7 +2,7 @@
 import { callBridge } from "./bridge.js";
 import { supabaseSelect, supabaseSelectTodo, supabaseInsert, supabaseDelete } from "./supabase-client.js?v=1";
 import { cargarAltaRotacion } from "./alta-rotacion.js?v=3";
-import { obtenerStockDesdeSupabase } from "./stock-parser.js?v=1";
+import { obtenerStockDesdeSupabase } from "./stock-parser.js?v=2";
 import { crearTablaPaginada } from "./tabla-utils.js";
 import { nombrePorId, TIENDAS, almacenesPermitidosParaCentros } from "./tiendas.js?v=1";
 import { obtenerInfoPaquete, cargarPaquetes } from "./paquetes.js?v=1";
@@ -451,7 +451,12 @@ async function calcularAlertasKacosa(stockKacosa, periodoMeses, categoriaTienda,
     if (!ultimo || ultimo.length === 0) continue;
     const runId = ultimo[0].run_id;
 
-    const filas = await supabaseSelectTodo("analisis", `run_id=eq.${encodeURIComponent(runId)}&select=codigo,pendiente`);
+    // (21-sep-2026) order=codigo agregado: sin un orden explícito, la
+    // paginación por Range de supabaseSelectTodo no es estable en Postgres —
+    // en un run_id con muchos materiales (más de 1000, pasa de largo en
+    // análisis grandes) podían quedar filas fuera de todas las páginas. Ver
+    // el mismo fix en obtenerStockDesdeSupabase (stock-parser.js).
+    const filas = await supabaseSelectTodo("analisis", `run_id=eq.${encodeURIComponent(runId)}&select=codigo,pendiente&order=codigo`);
     filas.forEach(f => {
       const codigo = f.codigo;
       const pendiente = Number(f.pendiente) || 0;
