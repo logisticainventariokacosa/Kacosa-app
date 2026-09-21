@@ -7,7 +7,7 @@
 // cada quien es lógica de negocio real (ROLES_PROCESA_NOTA_TRASLADO /
 // ROLES_PROCESA_EXTRA_SAP), no cambia con lo anterior.
 import { supabaseSelectTodo, supabaseUpdate, supabaseSelect } from "./supabase-client.js?v=1";
-import { nombrePorId } from "./tiendas.js?v=1";
+import { nombrePorId, TIENDAS, CENTROS_KACOSA } from "./tiendas.js?v=1";
 import { crearTablaPaginada } from "./tabla-utils.js";
 import { notificarExito, confirmarAccion } from "./notificaciones.js";
 import { callBridge } from "./bridge.js";
@@ -170,6 +170,13 @@ function activarBotonesCopiar(contenedor) {
   });
 }
 
+/** Código(s) SAP de un centro/tienda — Kacosa son 2 centros (1000/3000) a la vez. Mismo helper que en traslados.js. */
+function codigoCentroTexto(idCentro) {
+  if (idCentro === "KACOSA") return CENTROS_KACOSA.join("/");
+  const t = TIENDAS.find(x => x.id === idCentro);
+  return (t && t.centro) || idCentro || "";
+}
+
 function abrirModalSolicitud(s) {
   const puedeProcesarEsteTipo = tiposQuePuedeProcesar().includes(s.tipo_solicitud);
   // Solo Abastecimiento, revisando una Nota de traslado ya aceptada (para
@@ -199,8 +206,8 @@ function abrirModalSolicitud(s) {
 
   const codigosDisponibles = (s.materiales || []).filter(m => m.codigo).map(m => m.codigo);
 
-  const etqSolicitante = s.tipo_solicitud === "extra_sap" ? "Disp. (emisor)" : "Disp. (tu tienda)";
-  const etqSolicitado = s.tipo_solicitud === "extra_sap" ? "Disp. (receptor)" : "Disp. (solicitado)";
+  const etqSolicitante = `Disp. (${codigoCentroTexto(s.tienda_solicitante)})`;
+  const etqSolicitado = `Disp. (${codigoCentroTexto(s.centro_solicitado || s.centro_destino)})`;
 
   const estadoClave = estadoClaveTexto(s);
   const bloqueClave = s.clave_descarga ? `
@@ -225,7 +232,7 @@ function abrirModalSolicitud(s) {
       </p>
       <p style="font-size:13px; margin-top:10px; line-height:1.7">
         <strong>Solicitado por:</strong> ${s.usuario_nombre} (${s.usuario_email || ""}) — ${nombrePorId(s.tienda_solicitante)}<br>
-        <strong>Centro:</strong> ${nombrePorId(s.centro_solicitado || s.centro_destino || "")}<br>
+        <strong>${s.tipo_solicitud === "extra_sap" ? "Centro solicitante" : "Centro solicitado"}:</strong> ${nombrePorId(s.centro_solicitado || s.centro_destino || "")}<br>
         <strong>Motivo:</strong> ${s.motivo}${s.motivo_otro ? " — " + s.motivo_otro : ""}
       </p>
       ${s.numero_nota ? `<p style="font-size:13px"><strong>N° de nota:</strong> ${s.numero_nota} <button type="button" class="btn-secundario btn-copiar-clave" data-copiar="${s.numero_nota}" style="padding:2px 8px; font-size:11px; margin-left:6px; vertical-align:middle"><i class="fa-solid fa-copy"></i></button></p>` : ""}
