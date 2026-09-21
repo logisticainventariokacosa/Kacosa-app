@@ -823,6 +823,7 @@ async function cargarMisSolicitudes() {
     const columnas = [
       { key: "id", label: "#" },
       { key: "creado_en", label: "Fecha", render: r => new Date(r.creado_en).toLocaleString("es-VE") },
+      { key: "fecha_procesado", label: "Fecha de procesado", render: r => r.fecha_procesado ? new Date(r.fecha_procesado).toLocaleString("es-VE") : "—" },
       { key: "tipo_solicitud", label: "Tipo", render: r => r.tipo_solicitud === "extra_sap" ? "Extra SAP" : "Nota de traslado" },
       { key: "centro", label: "Centro", render: r => nombrePorId(r.centro_solicitado || r.centro_destino || "") },
       { key: "prioridad", label: "Prioridad" },
@@ -941,7 +942,7 @@ function abrirModalDetalleSolicitud(s) {
         ${etiquetaEstado(s.estado)} · Prioridad ${s.prioridad}
       </p>
       <p style="font-size:13px; margin-top:10px">
-        <strong>${s.tipo_solicitud === "extra_sap" ? "Centro solicitante" : "Centro solicitado"}:</strong> ${nombrePorId(s.centro_solicitado || s.centro_destino || "")}<br>
+        <strong>${s.tipo_solicitud === "extra_sap" ? "Centro destino" : "Centro solicitado"}:</strong> ${nombrePorId(s.centro_solicitado || s.centro_destino || "")}<br>
         <strong>Motivo:</strong> ${s.motivo}${s.motivo_otro ? " — " + s.motivo_otro : ""}
       </p>
       ${s.estado === "rechazada" && s.motivo_rechazo ? `<p style="font-size:13px; color:var(--rojo-alerta)"><strong>Motivo de rechazo:</strong> ${s.motivo_rechazo}</p>` : ""}
