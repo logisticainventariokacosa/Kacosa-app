@@ -16,7 +16,7 @@
 // Mientras hay una consulta o una confirmación pendiente, el botón
 // "Solicitar" queda bloqueado hasta que se cancele o se envíe esa solicitud.
 import { supabaseSelect, supabaseSelectTodo, supabaseInsert, supabaseUpdate } from "./supabase-client.js?v=1";
-import { obtenerStockDesdeSupabase } from "./stock-parser.js?v=1";
+import { obtenerStockDesdeSupabase } from "./stock-parser.js?v=2";
 import { TIENDAS, nombrePorId, almacenesPermitidosParaCentros, CENTROS_KACOSA } from "./tiendas.js?v=1";
 import { crearTablaPaginada } from "./tabla-utils.js";
 import { notificarExito, confirmarAccion } from "./notificaciones.js";
