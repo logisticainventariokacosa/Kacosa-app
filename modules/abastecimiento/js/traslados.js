@@ -438,6 +438,13 @@ async function buscarDisponibilidad() {
     const { centros: centrosA, almacenes: almacenesA } = centrosYAlmacenesParaConsulta(emisora);
     const { centros: centrosB, almacenes: almacenesB } = centrosYAlmacenesParaConsulta(idCentroSel);
     const [stockSolicitante, stockSolicitado] = await Promise.all([
+      // Solo columna libre_utilización, sumada por cada almacén permitido
+      // del centro (general + exhibición — ver ALMACENES_POR_CENTRO en
+      // tiendas.js), SIN sumar trans_trasl/devoluciones — para "cuánto hay
+      // realmente disponible para ceder ahora mismo" esas dos columnas no
+      // cuentan (pueden traer valores que compensan/reducen el número real,
+      // como confirmó Derwin el 20-sep-2026 con un caso donde sumarlas
+      // convertía un disponible real de 330 en solo 1).
       obtenerStockDesdeSupabase(centrosA, almacenesA, { soloLibreUtilizacion: true }),
       obtenerStockDesdeSupabase(centrosB, almacenesB, { soloLibreUtilizacion: true })
     ]);
@@ -488,6 +495,11 @@ async function buscarDisponibilidad() {
       materiales
     };
     pintarConfirmacion();
+    // Lleva la vista al resultado — en móvil, el formulario suele ocupar
+    // toda la pantalla y el usuario no ve que ya apareció la tabla si no
+    // hace scroll manual (20-sep-2026).
+    const wrapConfirmacion = document.getElementById("st-confirmacion-wrap");
+    if (wrapConfirmacion) wrapConfirmacion.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (err) {
     console.error(err);
     mostrarErrorFormulario("Error al consultar: " + err.message);
