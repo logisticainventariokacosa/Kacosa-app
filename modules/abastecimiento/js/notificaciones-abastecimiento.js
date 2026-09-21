@@ -360,6 +360,7 @@ async function aceptarSolicitud(s, modal, reactivarBotones) {
   try {
     let cambios = {
       estado: "aceptada",
+      resultado_visto: false,
       procesado_por_email: window.KACOSA.usuario.email,
       procesado_por_nombre: window.KACOSA.usuario.nombre || window.KACOSA.usuario.email,
       procesado_en: new Date().toISOString()
@@ -459,6 +460,7 @@ async function rechazarSolicitud(s, modal, reactivarBotones) {
   try {
     const actualizado = await supabaseUpdate("solicitudes_traslado", `id=eq.${s.id}&estado=eq.pendiente`, {
       estado: "rechazada",
+      resultado_visto: false,
       motivo_rechazo: motivo,
       procesado_por_email: window.KACOSA.usuario.email,
       procesado_por_nombre: window.KACOSA.usuario.nombre || window.KACOSA.usuario.email,
@@ -497,6 +499,7 @@ async function cancelarSolicitudAceptada(s, modal) {
   try {
     const actualizado = await supabaseUpdate("solicitudes_traslado", `id=eq.${s.id}&estado=eq.aceptada`, {
       estado: "rechazada",
+      resultado_visto: false,
       motivo_rechazo: motivo,
       procesado_por_email: window.KACOSA.usuario.email,
       procesado_por_nombre: window.KACOSA.usuario.nombre || window.KACOSA.usuario.email,
@@ -558,6 +561,7 @@ async function marcarProcesada(s, modal) {
   try {
     const cambios = {
       estado: "procesada",
+      resultado_visto: false,
       numero_nota: numero,
       procesado_por_email: window.KACOSA.usuario.email,
       procesado_por_nombre: window.KACOSA.usuario.nombre || window.KACOSA.usuario.email,
