@@ -316,6 +316,20 @@ function mostrarErrorModal(msg) {
 }
 
 /**
+ * Traduce errores técnicos de Supabase a algo que tenga sentido leer. Por
+ * ahora solo cubre el caso del número de nota repetido (20-sep-2026);
+ * devuelve null si no reconoce el error, para que cada quien use su propio
+ * mensaje genérico de respaldo.
+ */
+function mensajeErrorAmigable(err) {
+  const texto = (err && err.message) || String(err);
+  if (texto.includes("23505") && texto.includes("uq_solicitudes_traslado_numero_nota")) {
+    return "El número de nota que intentas registrar ya existe en la base de datos. Por favor revisa y verifica que sea el número de nota correcto.";
+  }
+  return null;
+}
+
+/**
  * Modal de texto con el estilo de la página, para reemplazar prompt()
  * (19-sep-2026 — el diálogo nativo del navegador no tenía nada que ver con
  * el resto de la app). Devuelve el texto ingresado, o null si se canceló o
@@ -411,7 +425,7 @@ async function aceptarSolicitud(s, modal, reactivarBotones) {
     cargarSolicitudes();
   } catch (err) {
     console.error(err);
-    mostrarErrorModal("No se pudo aceptar: " + err.message);
+    mostrarErrorModal(mensajeErrorAmigable(err) || "No se pudo aceptar: " + err.message);
     reactivarBotones();
   }
 }
@@ -590,7 +604,7 @@ async function marcarProcesada(s, modal) {
     cargarSolicitudes();
   } catch (err) {
     console.error(err);
-    mostrarErrorModal("No se pudo guardar: " + err.message);
+    mostrarErrorModal(mensajeErrorAmigable(err) || "No se pudo guardar: " + err.message);
     input.disabled = false;
     btn.disabled = false;
     btn.textContent = "Marcar como procesada";
