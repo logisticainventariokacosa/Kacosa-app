@@ -70,6 +70,11 @@ function tiendaEmisoraActual() {
   return tiendaEmisoraSeleccionada || disponibles[0] || null;
 }
 
+/** "Tienda de procedencia" en Extra SAP (es quien envía), "Tienda solicitante" en Nota de traslado (es quien pide). */
+function etiquetaTiendaEmisora() {
+  return tipoActual === "extra_sap" ? "Tienda de procedencia" : "Tienda solicitante";
+}
+
 function render() {
   const cont = document.getElementById("traslados-contenido");
   if (!cont) return;
@@ -113,13 +118,13 @@ function render() {
 
       ${necesitaSelectorTienda ? `
         <div style="margin-top:14px">
-          <label class="form-label">Tienda solicitante <span class="required">*</span></label>
+          <label class="form-label" id="st-label-tienda-emisora">${etiquetaTiendaEmisora()} <span class="required">*</span></label>
           <select id="st-tienda-emisora" class="input-modern select-modern">
             ${disponibles.map(id => `<option value="${id}">${nombrePorId(id)}</option>`).join("")}
           </select>
         </div>
       ` : `
-        <p class="vista-sub" style="margin-top:6px">Tienda solicitante: <strong>${nombrePorId(disponibles[0] || "")}</strong></p>
+        <p class="vista-sub" style="margin-top:6px" id="st-label-tienda-emisora">${etiquetaTiendaEmisora()}: <strong>${nombrePorId(disponibles[0] || "")}</strong></p>
       `}
 
       <div style="margin-top:16px">
@@ -202,6 +207,13 @@ function render() {
       document.getElementById("st-label-centro").innerHTML =
         `${tipoActual === "extra_sap" ? "Centro de destino" : "Centro del que se solicita"} <span class="required">*</span>`;
       actualizarCentroDestino();
+
+      const labelTienda = document.getElementById("st-label-tienda-emisora");
+      if (labelTienda) {
+        labelTienda.innerHTML = necesitaSelectorTienda
+          ? `${etiquetaTiendaEmisora()} <span class="required">*</span>`
+          : `${etiquetaTiendaEmisora()}: <strong>${nombrePorId(disponibles[0] || "")}</strong>`;
+      }
 
       // El toggle "Con/Sin código SAP" solo tiene sentido para Extra SAP —
       // en Nota de traslado siempre se pide con código SAP.
@@ -786,6 +798,8 @@ async function cargarMisSolicitudes() {
       `select=*&usuario_email=eq.${encodeURIComponent(usuario.email)}&order=creado_en.desc&limit=500`
     );
 
+    marcarResultadosComoVistos(filas); // sin await: no debe demorar el pintado de la tabla
+
     const columnas = [
       { key: "id", label: "#" },
       { key: "creado_en", label: "Fecha", render: r => new Date(r.creado_en).toLocaleString("es-VE") },
@@ -814,6 +828,22 @@ async function cargarMisSolicitudes() {
 
 function etiquetaEstado(estado) {
   return { pendiente: "Pendiente", aceptada: "Aceptada", rechazada: "Rechazada", procesada: "Procesada" }[estado] || estado;
+}
+
+/**
+ * Al gerente le llega la campanita cuando alguna de sus solicitudes cambia
+ * de estado (ver notificaciones-bell.js). En cuanto entra aquí y las ve en
+ * la tabla, se marcan como vistas para que la campanita deje de contarlas —
+ * sin await a propósito, no debe demorar el pintado de "Mis solicitudes".
+ */
+async function marcarResultadosComoVistos(filas) {
+  const idsSinVer = (filas || []).filter(f => f.resultado_visto === false).map(f => f.id);
+  if (idsSinVer.length === 0) return;
+  try {
+    await supabaseUpdate("solicitudes_traslado", `id=in.(${idsSinVer.join(",")})`, { resultado_visto: true });
+  } catch (err) {
+    console.warn("No se pudo marcar como vistos los resultados:", err.message);
+  }
 }
 
 function htmlAccionesFila(r) {
