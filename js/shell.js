@@ -5,7 +5,7 @@ import {
   sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { iniciarCampanitaNotificaciones, detenerCampanitaNotificaciones } from "./notificaciones-bell.js?v=2";
+import { iniciarCampanitaNotificaciones, detenerCampanitaNotificaciones } from "./notificaciones-bell.js?v=3";
 
 /* =====================================================================
    ÁRBOL DE MÓDULOS TIPO SAP
@@ -567,6 +567,10 @@ function buscarSubmodulo(id) {
 // abrirSubmodulo) pueda llevar al usuario directo al submódulo Notificaciones
 // al hacer clic en la campanita, sin duplicar aquí la lógica del sidebar.
 window.KACOSA_abrirNotificaciones = () => abrirSubmodulo("notificaciones-abastecimiento", { actualizarUrl: true });
+// Igual que la anterior pero para el gerente: lo lleva a "Solicitud de
+// Traslado > Mis solicitudes" cuando le hace clic a la campanita con el
+// resultado de una de sus propias solicitudes.
+window.KACOSA_abrirSolicitudTraslado = () => abrirSubmodulo("solicitud-traslado", { actualizarUrl: true });
 
 function abrirSubmodulo(id, { actualizarUrl = false } = {}) {
   const encontrado = buscarSubmodulo(id);
