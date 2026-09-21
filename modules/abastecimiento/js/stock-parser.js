@@ -87,6 +87,15 @@ export async function obtenerStockDesdeSupabase(centros, almacenesPermitidos, op
   const columnas = "material,centro,libre_utilizacion,trans_trasl,devoluciones,texto_breve,unidad_medida_base";
   let query = `select=${columnas}&centro=in.(${listaCentros})`;
   if (listaAlmacenes) query += `&almacen=in.(${listaAlmacenes})`;
+  // (21-sep-2026) SIN esto, la paginación por Range de supabaseSelectTodo no
+  // es estable: Postgres no garantiza el mismo orden de filas entre una
+  // página y la siguiente si no hay un ORDER BY explícito, así que en
+  // consultas grandes (más de 1000 filas, como Kacosa o centros con varios
+  // almacenes) algunas filas podían quedar fuera de TODAS las páginas —
+  // intermitente, más notorio mientras más rápido respondiera Supabase.
+  // Con el orden fijo, cada página siempre trae exactamente las filas que le
+  // tocan, sin huecos ni duplicados.
+  query += `&order=material,centro,almacen`;
 
   const filas = await supabaseSelectTodo("stock", query);
 
