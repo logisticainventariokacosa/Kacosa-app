@@ -3,7 +3,7 @@ import { parsearMHT, aNumero } from "./mht-parser.js";
 import { procesarVentas, calcularRangoFechasVentas } from "./ventas-parser.js?v=2";
 import { cargarFactoresConversion } from "./factores-conversion.js?v=2";
 import { cargarCodigosExcluidos, esCodigoExcluido } from "./exclusiones.js?v=1";
-import { procesarNotasPendientes, restarNotasPendientesDeKacosa, obtenerStockDesdeSupabase } from "./stock-parser.js?v=1";
+import { procesarNotasPendientes, restarNotasPendientesDeKacosa, obtenerStockDesdeSupabase } from "./stock-parser.js?v=2";
 import { cargarAltaRotacion, actualizarAltaRotacion } from "./alta-rotacion.js?v=3";
 import { cargarPaquetes } from "./paquetes.js?v=1";
 import { cargarUbicaciones, obtenerUbicacion, huboErrorUbicaciones } from "./ubicaciones.js?v=1";
