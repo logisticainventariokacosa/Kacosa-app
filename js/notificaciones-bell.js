@@ -1,9 +1,9 @@
 // js/notificaciones-bell.js
-// Campanita de notificaciones en el header del SHELL principal (17-sep-2026).
-// Vive fuera de modules/abastecimiento a propósito: el header propio de
-// app.html está oculto siempre que el módulo corre embebido en el shell (ver
-// css/app.css de Abastecimiento), así que el único header realmente visible
-// es este.
+// Campanita de notificaciones en el header del SHELL principal (17-sep-2026,
+// ampliada a gerentes el 19-sep-2026). Vive fuera de modules/abastecimiento a
+// propósito: el header propio de app.html está oculto siempre que el módulo
+// corre embebido en el shell (ver css/app.css de Abastecimiento), así que el
+// único header realmente visible es este.
 //
 // OJO — por qué este archivo tiene su PROPIO cliente de Supabase en vez de
 // reusar modules/abastecimiento/js/supabase-client.js: ese archivo importa
@@ -14,18 +14,24 @@
 // named '[DEFAULT]' already exists". Por eso este archivo solo importa `auth`
 // (ya inicializado) y duplica el mínimo de lógica REST necesaria.
 //
-// Abierto a producción el 19-sep-2026 — debe quedar igual a
-// ROLES_ACCESO_NOTIFICACIONES en modules/abastecimiento/js/auth.js.
-const ROLES_CON_CAMPANITA = ["abastecimiento", "directiva", "coordinador", "admin"];
+// Dos "modos" según el rol:
+// - Abastecimiento/Directiva/Coordinador/admin: cuenta solicitudes PENDIENTES
+//   por procesar (como antes).
+// - Gerente: cuenta sus PROPIAS solicitudes cuyo resultado todavía no vio
+//   (columna resultado_visto, se pone en false al aceptar/rechazar/procesar
+//   y vuelve a true cuando entra a "Solicitud de Traslado" — ver
+//   marcarResultadosComoVistos en traslados.js).
+const ROLES_CON_CAMPANITA = ["gerente", "abastecimiento", "directiva", "coordinador", "admin"];
 const ROLES_PROCESA_NOTA_TRASLADO = ["abastecimiento", "admin"];
 const ROLES_PROCESA_EXTRA_SAP = ["directiva", "coordinador", "admin"];
 
 const SUPABASE_URL = "https://nlrgneggfqhmwszzbydb.supabase.co";
 const PUBLISHABLE_KEY = "sb_publishable_3w3-FLBmhA3NPqwXVdm3AQ_OxTGvPix";
-const INTERVALO_MS = 5000; // 5s (19-sep-2026, antes 1 min) — igual que notificaciones-abastecimiento.js, para que el contador no se quede atrás
+const INTERVALO_MS = 5000; // 5s — igual que notificaciones-abastecimiento.js
 
 let intervaloId = null;
 let dropdownAbierto = false;
+let totalAnterior = null; // null = todavía no se hizo la primera consulta (no sonar en esa)
 
 function tiposQuePuedeVer(rol) {
   const tipos = [];
@@ -34,30 +40,34 @@ function tiposQuePuedeVer(rol) {
   return tipos;
 }
 
-async function obtenerIdTokenRaiz() {
+async function obtenerSesionRaiz() {
   // Se importa dinámicamente (no en el top del archivo) para no forzar a que
   // TODAS las páginas que carguen este archivo paguen el peso de este SDK
   // si no hace falta — mismo `auth` ya inicializado en el shell.
   const { auth } = await import("./firebase-config.js");
   const { getIdToken } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
   if (!auth.currentUser) throw new Error("Sin sesión");
-  return getIdToken(auth.currentUser, false);
+  const token = await getIdToken(auth.currentUser, false);
+  return { token, email: auth.currentUser.email };
 }
 
-async function obtenerPendientes(rol) {
-  const tipos = tiposQuePuedeVer(rol);
-  if (tipos.length === 0) return { total: 0, filas: [] };
+async function obtenerEstado(rol) {
+  const { token, email } = await obtenerSesionRaiz();
 
-  const token = await obtenerIdTokenRaiz();
-  const listaTipos = tipos.map(t => `"${t}"`).join(",");
-  const query = `solicitudes_traslado?select=id,tipo_solicitud,tienda_solicitante,usuario_nombre,prioridad,creado_en&estado=eq.pendiente&tipo_solicitud=in.(${listaTipos})&order=creado_en.desc&limit=6`;
+  let query;
+  if (rol === "gerente") {
+    query = `solicitudes_traslado?select=id,tipo_solicitud,estado,creado_en` +
+      `&usuario_email=eq.${encodeURIComponent(email)}&resultado_visto=eq.false&order=creado_en.desc&limit=6`;
+  } else {
+    const tipos = tiposQuePuedeVer(rol);
+    if (tipos.length === 0) return { total: 0, filas: [] };
+    const listaTipos = tipos.map(t => `"${t}"`).join(",");
+    query = `solicitudes_traslado?select=id,tipo_solicitud,tienda_solicitante,usuario_nombre,prioridad,creado_en` +
+      `&estado=eq.pendiente&tipo_solicitud=in.(${listaTipos})&order=creado_en.desc&limit=6`;
+  }
 
   const resp = await fetch(SUPABASE_URL + "/rest/v1/" + query, {
-    headers: {
-      apikey: PUBLISHABLE_KEY,
-      Authorization: "Bearer " + token,
-      Prefer: "count=exact"
-    }
+    headers: { apikey: PUBLISHABLE_KEY, Authorization: "Bearer " + token, Prefer: "count=exact" }
   });
   if (!resp.ok) throw new Error("Error Supabase (" + resp.status + ")");
 
@@ -70,8 +80,11 @@ async function obtenerPendientes(rol) {
 function nombreTipo(t) {
   return t === "extra_sap" ? "Extra SAP" : "Nota de traslado";
 }
+function nombreEstado(e) {
+  return { aceptada: "Aceptada", rechazada: "Rechazada", procesada: "Procesada" }[e] || e;
+}
 
-function pintar(estado) {
+function pintar(rol, estado) {
   const badge = document.getElementById("campanita-badge");
   const dropdown = document.getElementById("campanita-dropdown");
   if (!badge || !dropdown) return;
@@ -83,12 +96,18 @@ function pintar(estado) {
     badge.classList.add("hidden");
   }
 
+  const esGerente = rol === "gerente";
   if (estado.total === 0) {
-    dropdown.innerHTML = `<div class="px-4 py-6 text-center text-sm text-slate-400">No hay solicitudes pendientes.</div>`;
+    dropdown.innerHTML = `<div class="px-4 py-6 text-center text-sm text-slate-400">${esGerente ? "No tienes novedades en tus solicitudes." : "No hay solicitudes pendientes."}</div>`;
     return;
   }
 
-  const filasHtml = estado.filas.map(f => `
+  const filasHtml = estado.filas.map(f => esGerente ? `
+    <div class="px-4 py-2.5 border-b border-slate-100 dark:border-slate-700 text-left">
+      <div class="text-[13px] font-semibold text-ink dark:text-white">${nombreTipo(f.tipo_solicitud)} · #${f.id} — ${nombreEstado(f.estado)}</div>
+      <div class="text-[12px] text-slate-500 dark:text-slate-400">Revisa el estado en Solicitud de Traslado</div>
+    </div>
+  ` : `
     <div class="px-4 py-2.5 border-b border-slate-100 dark:border-slate-700 text-left">
       <div class="text-[13px] font-semibold text-ink dark:text-white">${nombreTipo(f.tipo_solicitud)} · #${f.id}</div>
       <div class="text-[12px] text-slate-500 dark:text-slate-400">${f.tienda_solicitante} — ${f.usuario_nombre || ""} (${f.prioridad})</div>
@@ -105,7 +124,8 @@ function pintar(estado) {
   if (btnVerTodas) {
     btnVerTodas.addEventListener("click", () => {
       cerrarDropdown();
-      if (window.KACOSA_abrirNotificaciones) window.KACOSA_abrirNotificaciones();
+      const abrir = esGerente ? window.KACOSA_abrirSolicitudTraslado : window.KACOSA_abrirNotificaciones;
+      if (abrir) abrir();
     });
   }
 }
@@ -123,10 +143,46 @@ function cerrarDropdown() {
   dropdownAbierto = false;
 }
 
+/**
+ * Pitido corto con Web Audio API (dos tonos) — no depende de ningún archivo
+ * de audio. Los navegadores bloquean sonido sin interacción previa del
+ * usuario; como esto se dispara mucho después de que la persona ya entró y
+ * usó la app, normalmente no hay problema, pero por si acaso todo va en
+ * try/catch y si falla simplemente no suena (la campanita visual sigue
+ * funcionando igual).
+ */
+function reproducirSonidoNotificacion() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const ahora = ctx.currentTime;
+    [[880, ahora], [1175, ahora + 0.12]].forEach(([freq, inicio]) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, inicio);
+      gain.gain.exponentialRampToValueAtTime(0.15, inicio + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, inicio + 0.18);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(inicio);
+      osc.stop(inicio + 0.2);
+    });
+    setTimeout(() => ctx.close(), 500);
+  } catch (err) {
+    // silencioso a propósito — el sonido es un extra, no algo crítico
+  }
+}
+
 async function sincronizar(rol) {
   try {
-    const estado = await obtenerPendientes(rol);
-    pintar(estado);
+    const estado = await obtenerEstado(rol);
+    if (totalAnterior !== null && estado.total > totalAnterior) {
+      reproducirSonidoNotificacion();
+    }
+    totalAnterior = estado.total;
+    pintar(rol, estado);
   } catch (err) {
     console.error("No se pudo actualizar la campanita de notificaciones:", err);
   }
@@ -141,6 +197,7 @@ export function iniciarCampanitaNotificaciones(rol) {
     return;
   }
   btn.classList.remove("hidden");
+  totalAnterior = null;
 
   btn.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -159,6 +216,7 @@ export function iniciarCampanitaNotificaciones(rol) {
 export function detenerCampanitaNotificaciones() {
   if (intervaloId) { clearInterval(intervaloId); intervaloId = null; }
   cerrarDropdown();
+  totalAnterior = null;
   const badge = document.getElementById("campanita-badge");
   if (badge) badge.classList.add("hidden");
 }
