@@ -115,6 +115,7 @@ async function cargarSolicitudes() {
     const columnas = [
       { key: "id", label: "#" },
       { key: "creado_en", label: "Fecha", render: r => new Date(r.creado_en).toLocaleString("es-VE") },
+      { key: "fecha_procesado", label: "Fecha de procesado", render: r => r.fecha_procesado ? new Date(r.fecha_procesado).toLocaleString("es-VE") : "—" },
       { key: "tipo_solicitud", label: "Tipo", render: r => r.tipo_solicitud === "extra_sap" ? "Extra SAP" : "Nota de traslado" },
       { key: "tienda_solicitante", label: "Tienda", render: r => nombrePorId(r.tienda_solicitante) },
       { key: "usuario_nombre", label: "Solicitó" },
@@ -232,7 +233,7 @@ function abrirModalSolicitud(s) {
       </p>
       <p style="font-size:13px; margin-top:10px; line-height:1.7">
         <strong>Solicitado por:</strong> ${s.usuario_nombre} (${s.usuario_email || ""}) — ${nombrePorId(s.tienda_solicitante)}<br>
-        <strong>${s.tipo_solicitud === "extra_sap" ? "Centro solicitante" : "Centro solicitado"}:</strong> ${nombrePorId(s.centro_solicitado || s.centro_destino || "")}<br>
+        <strong>${s.tipo_solicitud === "extra_sap" ? "Centro destino" : "Centro solicitado"}:</strong> ${nombrePorId(s.centro_solicitado || s.centro_destino || "")}<br>
         <strong>Motivo:</strong> ${s.motivo}${s.motivo_otro ? " — " + s.motivo_otro : ""}
       </p>
       ${s.numero_nota ? `<p style="font-size:13px"><strong>N° de nota:</strong> ${s.numero_nota} <button type="button" class="btn-secundario btn-copiar-clave" data-copiar="${s.numero_nota}" style="padding:2px 8px; font-size:11px; margin-left:6px; vertical-align:middle"><i class="fa-solid fa-copy"></i></button></p>` : ""}
@@ -393,6 +394,7 @@ async function aceptarSolicitud(s, modal, reactivarBotones) {
       // así que pasa directo a "procesada" (19-sep-2026, antes se quedaba
       // en "aceptada" esperando algo que nunca llegaba).
       cambios.estado = "procesada";
+      cambios.fecha_procesado = new Date().toISOString(); // aquí SÍ es el paso final — ver nota_traslado más abajo, que no lo pone hasta marcarProcesada()
       cambios.clave_descarga = await generarClaveUnica();
       cambios.clave_generada_en = new Date().toISOString();
       cambios.numero_nota = await generarNumeroNota();
@@ -483,6 +485,7 @@ async function rechazarSolicitud(s, modal, reactivarBotones) {
       estado: "rechazada",
       resultado_visto: false,
       motivo_rechazo: motivo,
+      fecha_procesado: new Date().toISOString(),
       procesado_por_email: window.KACOSA.usuario.email,
       procesado_por_nombre: window.KACOSA.usuario.nombre || window.KACOSA.usuario.email,
       procesado_en: new Date().toISOString()
@@ -522,6 +525,7 @@ async function cancelarSolicitudAceptada(s, modal) {
       estado: "rechazada",
       resultado_visto: false,
       motivo_rechazo: motivo,
+      fecha_procesado: new Date().toISOString(),
       procesado_por_email: window.KACOSA.usuario.email,
       procesado_por_nombre: window.KACOSA.usuario.nombre || window.KACOSA.usuario.email,
       procesado_en: new Date().toISOString()
@@ -584,6 +588,7 @@ async function marcarProcesada(s, modal) {
       estado: "procesada",
       resultado_visto: false,
       numero_nota: numero,
+      fecha_procesado: new Date().toISOString(),
       procesado_por_email: window.KACOSA.usuario.email,
       procesado_por_nombre: window.KACOSA.usuario.nombre || window.KACOSA.usuario.email,
       procesado_en: new Date().toISOString()
