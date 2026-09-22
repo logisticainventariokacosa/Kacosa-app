@@ -107,31 +107,35 @@ function render() {
           <p class="vista-sub" style="margin:4px 0 0 0; font-size:11.5px">Los números se buscan como código exacto; el resto se busca dentro de la descripción (sin importar mayúsculas). Se trae todo lo que coincida con cualquiera de los términos.</p>
         </div>
 
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px">
-          <div>
-            <label class="form-label" for="consulta-fecha-desde">Fecha desde</label>
-            <input type="date" id="consulta-fecha-desde" class="input-modern">
-          </div>
-          <div>
-            <label class="form-label" for="consulta-fecha-hasta">Fecha hasta</label>
-            <input type="date" id="consulta-fecha-hasta" class="input-modern">
-          </div>
-        </div>
-
         <div>
-          <label class="form-label">¿Qué quieres consultar?</label>
-          <div style="display:flex; flex-wrap:wrap; gap:16px; margin-top:4px">
-            <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer">
-              <input type="radio" name="modo-consulta" value="general" checked> General (todas las columnas, detalle + resumen)
+          <label class="form-label">¿Qué quieres consultar? <span class="required">*</span></label>
+          <div class="opciones-consulta">
+            <label class="tarjeta-opcion">
+              <input type="radio" name="modo-consulta" value="general" checked>
+              <span class="tarjeta-opcion-icono"><i class="fa-solid fa-table-list"></i></span>
+              <span class="tarjeta-opcion-texto">
+                <strong>General</strong>
+                <small>Todas las columnas &mdash; detalle + resumen</small>
+              </span>
             </label>
-            <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer">
-              <input type="radio" name="modo-consulta" value="a_pedir"> Total "A pedir" por material
+            <label class="tarjeta-opcion">
+              <input type="radio" name="modo-consulta" value="a_pedir">
+              <span class="tarjeta-opcion-icono"><i class="fa-solid fa-cart-plus"></i></span>
+              <span class="tarjeta-opcion-texto">
+                <strong>Total "A pedir"</strong>
+                <small>Un renglón por material, sumado</small>
+              </span>
             </label>
-            <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer">
-              <input type="radio" name="modo-consulta" value="pendiente"> Total "Pendiente" por material
+            <label class="tarjeta-opcion">
+              <input type="radio" name="modo-consulta" value="pendiente">
+              <span class="tarjeta-opcion-icono"><i class="fa-solid fa-hourglass-half"></i></span>
+              <span class="tarjeta-opcion-texto">
+                <strong>Total "Pendiente"</strong>
+                <small>Un renglón por material, sumado</small>
+              </span>
             </label>
           </div>
-          <p class="vista-sub" style="margin:4px 0 0 0; font-size:11.5px">Las dos últimas opciones traen un solo renglón por material (sin repetir código), ya sumado entre todas las tiendas/filtros elegidos.</p>
+          <p class="vista-sub" style="margin:6px 0 0 0; font-size:11.5px">Las dos últimas opciones traen un solo renglón por material (sin repetir código), ya sumado entre todas las tiendas/filtros elegidos.</p>
         </div>
       </div>
 
@@ -167,11 +171,8 @@ async function ejecutarConsulta() {
     .map(m => m.trim())
     .filter(Boolean);
 
-  const fechaDesde = document.getElementById("consulta-fecha-desde").value || null;
-  const fechaHasta = document.getElementById("consulta-fecha-hasta").value || null;
-
-  if (centrosSeleccionados.length === 0 && materiales.length === 0 && !fechaDesde && !fechaHasta) {
-    estadoTexto.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Especifica al menos un filtro: tienda/centro, material, o rango de fecha.';
+  if (centrosSeleccionados.length === 0 && materiales.length === 0) {
+    estadoTexto.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Especifica al menos un filtro: tienda/centro o material.';
     estadoTexto.style.color = 'var(--rojo-alerta)';
     return;
   }
@@ -199,9 +200,6 @@ async function ejecutarConsulta() {
       );
       condiciones.push("or=(" + condicionesOr.join(",") + ")");
     }
-
-    if (fechaDesde) condiciones.push("creado_en=gte." + encodeURIComponent(fechaDesde + "T00:00:00"));
-    if (fechaHasta) condiciones.push("creado_en=lte." + encodeURIComponent(fechaHasta + "T23:59:59"));
 
     condiciones.push("select=*");
     condiciones.push("order=creado_en.desc");
