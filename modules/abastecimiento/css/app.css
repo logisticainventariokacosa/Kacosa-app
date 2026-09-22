@@ -2106,6 +2106,68 @@ tbody tr.fila-excluida:hover {
   color: #fff;
 }
 
+/* Tarjetas seleccionables de "¿Qué quieres consultar?" en Consultas (21-sep-2026, antes radios simples) */
+.opciones-consulta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+.tarjeta-opcion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 220px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--borde);
+  border-radius: var(--radio-peq);
+  background: var(--blanco);
+  cursor: pointer;
+  transition: var(--transicion);
+}
+.tarjeta-opcion input[type="radio"] {
+  position: absolute;
+  width: 1px; height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.tarjeta-opcion-icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px; height: 34px;
+  min-width: 34px;
+  border-radius: 8px;
+  background: var(--fondo);
+  color: var(--azul-base);
+  font-size: 14px;
+  transition: var(--transicion);
+}
+.tarjeta-opcion-texto { display: flex; flex-direction: column; gap: 1px; }
+.tarjeta-opcion-texto strong { font-size: 13px; color: var(--texto-principal); }
+.tarjeta-opcion-texto small { font-size: 11px; color: var(--texto-secundario); }
+.tarjeta-opcion:hover { border-color: var(--azul-base); }
+.tarjeta-opcion:has(input:checked) {
+  border-color: var(--ambar);
+  background: var(--ambar-claro);
+  box-shadow: 0 0 0 1px var(--ambar);
+}
+.tarjeta-opcion:has(input:checked) .tarjeta-opcion-icono {
+  background: var(--ambar);
+  color: var(--azul-base);
+}
+
+html.kacosa-dark .tarjeta-opcion {
+  background: var(--azul-claro);
+  border-color: var(--azul-medio);
+}
+html.kacosa-dark .tarjeta-opcion-texto strong { color: #fff; }
+html.kacosa-dark .tarjeta-opcion-icono { background: var(--azul-medio); color: #fff; }
+html.kacosa-dark .tarjeta-opcion:has(input:checked) {
+  border-color: var(--ambar);
+  background: rgba(232, 160, 61, 0.18);
+}
+
 /* --- Modo oscuro: paginación y chips de tienda (19-sep-2026) ---
    .btn-pagina y el <select> de filas-por-página se pintan con estilo en
    línea en tabla-utils.js (background:var(--blanco), border:var(--borde)),
