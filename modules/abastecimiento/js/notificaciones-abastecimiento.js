@@ -38,13 +38,43 @@ function vistaEstaActiva() {
   return !!document.querySelector("#vista-notificaciones.activa");
 }
 
-/** Tipos de solicitud que este usuario puede PROCESAR (aceptar/rechazar/marcar procesada). */
+/**
+ * Tipos de solicitud que este usuario puede llegar a PROCESAR aquí (nivel
+ * "grueso", para saber si vale la pena mostrarle el submódulo). El permiso
+ * real por solicitud puntual lo decide puedeProcesarSolicitud() más abajo,
+ * porque desde el 21-sep-2026 depende también de a qué centro se le pidió
+ * (una Nota de traslado a otra tienda la procesa el gerente de esa tienda,
+ * no Abastecimiento — solo las que van a Kacosa siguen siendo de
+ * Abastecimiento).
+ */
 function tiposQuePuedeProcesar() {
   const rol = rolActual();
+  if (rol === "admin") return ["nota_traslado", "extra_sap"];
+  if (rol === "gerente") return ["nota_traslado"];
   const tipos = [];
   if (ROLES_PROCESA_NOTA_TRASLADO.includes(rol)) tipos.push("nota_traslado");
   if (ROLES_PROCESA_EXTRA_SAP.includes(rol)) tipos.push("extra_sap");
   return tipos;
+}
+
+/** IDs de tienda asignados al usuario actual (para el caso gerente). */
+function misTiendasIds() {
+  return (window.KACOSA?.tiendas || []).filter(t => t && t !== "TODAS");
+}
+
+/**
+ * ¿Puede ESTE usuario aceptar/rechazar/procesar ESTA solicitud puntual?
+ * (21-sep-2026) Nota de traslado a Kacosa → Abastecimiento; Nota de
+ * traslado a otra tienda (incluye Ferretools) → el/los gerente(s) de esa
+ * tienda; Extra SAP → Directiva/Coordinador, sin cambios.
+ */
+function puedeProcesarSolicitud(s) {
+  const rol = rolActual();
+  if (rol === "admin") return true;
+  if (s.tipo_solicitud === "extra_sap") return ROLES_PROCESA_EXTRA_SAP.includes(rol);
+  if (s.centro_solicitado === "KACOSA") return ROLES_PROCESA_NOTA_TRASLADO.includes(rol);
+  if (rol === "gerente") return misTiendasIds().includes(s.centro_solicitado);
+  return false;
 }
 
 function render() {
@@ -96,8 +126,7 @@ function render() {
 async function cargarSolicitudes() {
   const cont = document.getElementById("nt-tabla");
   if (!cont) return;
-  const tipos = tiposQuePuedeProcesar();
-  const listaTipos = tipos.map(t => `"${t}"`).join(",");
+  const rol = rolActual();
 
   let filtroQuery;
   if (filtroEstado === "historial") {
@@ -106,10 +135,40 @@ async function cargarSolicitudes() {
     filtroQuery = `estado=eq.${filtroEstado}`;
   }
 
+  // (21-sep-2026) El "ámbito" de qué solicitudes trae la consulta ya no es
+  // solo por tipo — Abastecimiento solo ve Nota de traslado CUANDO el
+  // centro solicitado es Kacosa; las que van a otra tienda son del gerente
+  // de esa tienda, no de Abastecimiento. Admin sigue viendo todo.
+  let condicionAmbito;
+  if (rol === "admin") {
+    condicionAmbito = "";
+  } else if (rol === "gerente") {
+    const tiendas = misTiendasIds();
+    if (tiendas.length === 0) {
+      cont.innerHTML = `<p class="vista-sub">No tienes ninguna tienda asignada.</p>`;
+      return;
+    }
+    const listaTiendas = tiendas.map(t => `"${t}"`).join(",");
+    condicionAmbito = `&tipo_solicitud=eq.nota_traslado&centro_solicitado=in.(${listaTiendas})`;
+  } else {
+    const procesaNota = ROLES_PROCESA_NOTA_TRASLADO.includes(rol);
+    const procesaExtraSap = ROLES_PROCESA_EXTRA_SAP.includes(rol);
+    if (procesaNota && procesaExtraSap) {
+      condicionAmbito = `&or=(and(tipo_solicitud.eq.nota_traslado,centro_solicitado.eq.KACOSA),tipo_solicitud.eq.extra_sap)`;
+    } else if (procesaNota) {
+      condicionAmbito = `&tipo_solicitud=eq.nota_traslado&centro_solicitado=eq.KACOSA`;
+    } else if (procesaExtraSap) {
+      condicionAmbito = `&tipo_solicitud=eq.extra_sap`;
+    } else {
+      cont.innerHTML = `<p class="vista-sub">Tu rol no tiene solicitudes que procesar aquí.</p>`;
+      return;
+    }
+  }
+
   try {
     const filas = await supabaseSelectTodo(
       "solicitudes_traslado",
-      `select=*&tipo_solicitud=in.(${listaTipos})&${filtroQuery}&order=creado_en.desc&limit=500`
+      `select=*&${filtroQuery}${condicionAmbito}&order=creado_en.desc&limit=500`
     );
 
     const columnas = [
@@ -179,7 +238,7 @@ function codigoCentroTexto(idCentro) {
 }
 
 function abrirModalSolicitud(s) {
-  const puedeProcesarEsteTipo = tiposQuePuedeProcesar().includes(s.tipo_solicitud);
+  const puedeProcesarEsteTipo = puedeProcesarSolicitud(s);
   // Solo Abastecimiento, revisando una Nota de traslado ya aceptada (para
   // marcarla procesada), puede editar las cantidades línea por línea — ver
   // marcarProcesada() para el pedido de motivo cuando algo cambió.
