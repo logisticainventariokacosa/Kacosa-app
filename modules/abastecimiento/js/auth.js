@@ -38,17 +38,22 @@ export const ROLES_ACCESO_RESUMEN_DIRECTIVA = ["directiva", "coordinador", "admi
 
 // ---------------------------------------------------------------------
 // Solicitud de Traslado / Notificaciones (17-sep-2026, abierto a
-// producción el 19-sep-2026)
+// producción el 19-sep-2026; gerentes entran a Notificaciones también
+// desde el 21-sep-2026, para procesar traslados entre tiendas)
 // ---------------------------------------------------------------------
 export const ROLES_DESTINO_SOLICITUD_TRASLADO = ["gerente", "admin"];
-export const ROLES_DESTINO_NOTIFICACIONES = ["abastecimiento", "directiva", "coordinador", "admin"];
+export const ROLES_DESTINO_NOTIFICACIONES = ["gerente", "abastecimiento", "directiva", "coordinador", "admin"];
 
 // --- Filtros REALES usados por nav.js/traslados.js/notificaciones-abastecimiento.js ---
 export const ROLES_ACCESO_SOLICITUD_TRASLADO = ROLES_DESTINO_SOLICITUD_TRASLADO;
 export const ROLES_ACCESO_NOTIFICACIONES = ROLES_DESTINO_NOTIFICACIONES;
 
-// Dentro de Notificaciones, quién puede procesar cada TIPO de solicitud
-// (esto sí es lógica de negocio real, no cambia con lo anterior).
+// Dentro de Notificaciones, quién puede procesar cada TIPO de solicitud a
+// nivel "grueso" (esto sí es lógica de negocio real, no cambia con lo
+// anterior). Ojo: para Nota de traslado esto ya NO es todo el permiso real
+// — ver puedeProcesarSolicitud() en notificaciones-abastecimiento.js, que
+// además exige que el centro solicitado sea Kacosa (Abastecimiento) o una
+// tienda asignada al gerente (21-sep-2026).
 export const ROLES_PROCESA_NOTA_TRASLADO = ["abastecimiento", "admin"];
 export const ROLES_PROCESA_EXTRA_SAP = ["directiva", "coordinador", "admin"];
 
