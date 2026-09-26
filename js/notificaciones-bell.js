@@ -1,9 +1,12 @@
 // js/notificaciones-bell.js
 // Campanita de notificaciones en el header del SHELL principal (17-sep-2026,
-// ampliada a gerentes el 19-sep-2026). Vive fuera de modules/abastecimiento a
-// propósito: el header propio de app.html está oculto siempre que el módulo
-// corre embebido en el shell (ver css/app.css de Abastecimiento), así que el
-// único header realmente visible es este.
+// ampliada a gerentes el 19-sep-2026, y de nuevo el 21-sep-2026 para que el
+// gerente vea AMBAS cosas: el resultado de sus propias solicitudes Y las
+// solicitudes de otros gerentes que le llegan a su tienda para procesar).
+// Vive fuera de modules/abastecimiento a propósito: el header propio de
+// app.html está oculto siempre que el módulo corre embebido en el shell (ver
+// css/app.css de Abastecimiento), así que el único header realmente visible
+// es este.
 //
 // OJO — por qué este archivo tiene su PROPIO cliente de Supabase en vez de
 // reusar modules/abastecimiento/js/supabase-client.js: ese archivo importa
@@ -14,13 +17,16 @@
 // named '[DEFAULT]' already exists". Por eso este archivo solo importa `auth`
 // (ya inicializado) y duplica el mínimo de lógica REST necesaria.
 //
-// Dos "modos" según el rol:
-// - Abastecimiento/Directiva/Coordinador/admin: cuenta solicitudes PENDIENTES
-//   por procesar (como antes).
-// - Gerente: cuenta sus PROPIAS solicitudes cuyo resultado todavía no vio
-//   (columna resultado_visto, se pone en false al aceptar/rechazar/procesar
-//   y vuelve a true cuando entra a "Solicitud de Traslado" — ver
-//   marcarResultadosComoVistos en traslados.js).
+// Modos según el rol:
+// - Abastecimiento: cuenta Notas de traslado PENDIENTES dirigidas a Kacosa
+//   (las que van a otra tienda ya no son de Abastecimiento).
+// - Directiva/Coordinador: cuenta Extra SAP pendientes (sin cambios).
+// - Gerente: combina dos cosas — (a) sus PROPIAS solicitudes cuyo resultado
+//   todavía no vio (columna resultado_visto — ver marcarResultadosComoVistos
+//   en traslados.js), y (b) Notas de traslado PENDIENTES que otros gerentes
+//   le mandaron a SU tienda (columna centro_solicitado, comparada contra las
+//   tiendas que tiene asignadas).
+// - Admin: ve de todo un poco (no filtra por tienda).
 const ROLES_CON_CAMPANITA = ["gerente", "abastecimiento", "directiva", "coordinador", "admin"];
 const ROLES_PROCESA_NOTA_TRASLADO = ["abastecimiento", "admin"];
 const ROLES_PROCESA_EXTRA_SAP = ["directiva", "coordinador", "admin"];
@@ -32,13 +38,7 @@ const INTERVALO_MS = 5000; // 5s — igual que notificaciones-abastecimiento.js
 let intervaloId = null;
 let dropdownAbierto = false;
 let totalAnterior = null; // null = todavía no se hizo la primera consulta (no sonar en esa)
-
-function tiposQuePuedeVer(rol) {
-  const tipos = [];
-  if (ROLES_PROCESA_NOTA_TRASLADO.includes(rol)) tipos.push("nota_traslado");
-  if (ROLES_PROCESA_EXTRA_SAP.includes(rol)) tipos.push("extra_sap");
-  return tipos;
-}
+let misTiendasCache = [];
 
 async function obtenerSesionRaiz() {
   // Se importa dinámicamente (no en el top del archivo) para no forzar a que
@@ -51,30 +51,55 @@ async function obtenerSesionRaiz() {
   return { token, email: auth.currentUser.email };
 }
 
-async function obtenerEstado(rol) {
-  const { token, email } = await obtenerSesionRaiz();
-
-  let query;
-  if (rol === "gerente") {
-    query = `solicitudes_traslado?select=id,tipo_solicitud,estado,creado_en` +
-      `&usuario_email=eq.${encodeURIComponent(email)}&resultado_visto=eq.false&order=creado_en.desc&limit=6`;
-  } else {
-    const tipos = tiposQuePuedeVer(rol);
-    if (tipos.length === 0) return { total: 0, filas: [] };
-    const listaTipos = tipos.map(t => `"${t}"`).join(",");
-    query = `solicitudes_traslado?select=id,tipo_solicitud,tienda_solicitante,usuario_nombre,prioridad,creado_en` +
-      `&estado=eq.pendiente&tipo_solicitud=in.(${listaTipos})&order=creado_en.desc&limit=6`;
-  }
-
+async function consultarSupabase(token, query) {
   const resp = await fetch(SUPABASE_URL + "/rest/v1/" + query, {
     headers: { apikey: PUBLISHABLE_KEY, Authorization: "Bearer " + token, Prefer: "count=exact" }
   });
   if (!resp.ok) throw new Error("Error Supabase (" + resp.status + ")");
-
   const contentRange = resp.headers.get("content-range") || ""; // ej. "0-5/13"
   const total = Number(contentRange.split("/")[1]) || 0;
   const filas = await resp.json();
   return { total, filas };
+}
+
+async function obtenerEstado(rol, token, email) {
+  if (rol === "gerente") {
+    const propiosQuery = `solicitudes_traslado?select=id,tipo_solicitud,estado,creado_en` +
+      `&usuario_email=eq.${encodeURIComponent(email)}&resultado_visto=eq.false&order=creado_en.desc&limit=6`;
+
+    const tiendas = misTiendasCache;
+    const porProcesarPromesa = tiendas.length === 0
+      ? Promise.resolve({ total: 0, filas: [] })
+      : consultarSupabase(token,
+          `solicitudes_traslado?select=id,tipo_solicitud,tienda_solicitante,usuario_nombre,prioridad,creado_en` +
+          `&estado=eq.pendiente&tipo_solicitud=eq.nota_traslado&centro_solicitado=in.(${tiendas.map(t => `"${t}"`).join(",")})` +
+          `&order=creado_en.desc&limit=6`
+        );
+
+    const [propios, porProcesar] = await Promise.all([consultarSupabase(token, propiosQuery), porProcesarPromesa]);
+    return { total: propios.total + porProcesar.total, propios, porProcesar };
+  }
+
+  const tipos = [];
+  if (ROLES_PROCESA_NOTA_TRASLADO.includes(rol)) tipos.push("nota_traslado");
+  if (ROLES_PROCESA_EXTRA_SAP.includes(rol)) tipos.push("extra_sap");
+  if (tipos.length === 0) return { total: 0, filas: [] };
+
+  // Abastecimiento (rol no-admin que procesa nota_traslado) solo ve las que
+  // van a Kacosa — las que van a otra tienda son de ese gerente, no suyas.
+  let condicion;
+  if (rol === "admin") {
+    condicion = `tipo_solicitud=in.(${tipos.map(t => `"${t}"`).join(",")})`;
+  } else if (tipos.includes("nota_traslado")) {
+    condicion = `tipo_solicitud=eq.nota_traslado&centro_solicitado=eq.KACOSA`;
+  } else {
+    condicion = `tipo_solicitud=eq.extra_sap`;
+  }
+
+  return consultarSupabase(token,
+    `solicitudes_traslado?select=id,tipo_solicitud,tienda_solicitante,usuario_nombre,prioridad,creado_en` +
+    `&estado=eq.pendiente&${condicion}&order=creado_en.desc&limit=6`
+  );
 }
 
 function nombreTipo(t) {
@@ -82,6 +107,31 @@ function nombreTipo(t) {
 }
 function nombreEstado(e) {
   return { aceptada: "Aceptada", rechazada: "Rechazada", procesada: "Procesada" }[e] || e;
+}
+
+function filaPropia(f) {
+  return `
+    <div class="campanita-item px-4 py-2.5 border-b border-slate-100 dark:border-slate-700 text-left cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800" data-destino="traslados">
+      <div class="text-[13px] font-semibold text-ink dark:text-white">${nombreTipo(f.tipo_solicitud)} · #${f.id} — ${nombreEstado(f.estado)}</div>
+      <div class="text-[12px] text-slate-500 dark:text-slate-400">Revisa el estado en Solicitud de Traslado</div>
+    </div>`;
+}
+function filaPorProcesar(f) {
+  return `
+    <div class="campanita-item px-4 py-2.5 border-b border-slate-100 dark:border-slate-700 text-left cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800" data-destino="notificaciones">
+      <div class="text-[13px] font-semibold text-ink dark:text-white">${nombreTipo(f.tipo_solicitud)} · #${f.id}</div>
+      <div class="text-[12px] text-slate-500 dark:text-slate-400">${f.tienda_solicitante} — ${f.usuario_nombre || ""} (${f.prioridad})</div>
+    </div>`;
+}
+
+function activarClicsItems(dropdown) {
+  dropdown.querySelectorAll(".campanita-item").forEach(el => {
+    el.addEventListener("click", () => {
+      cerrarDropdown();
+      const abrir = el.dataset.destino === "traslados" ? window.KACOSA_abrirSolicitudTraslado : window.KACOSA_abrirNotificaciones;
+      if (abrir) abrir();
+    });
+  });
 }
 
 function pintar(rol, estado) {
@@ -96,26 +146,32 @@ function pintar(rol, estado) {
     badge.classList.add("hidden");
   }
 
-  const esGerente = rol === "gerente";
-  if (estado.total === 0) {
-    dropdown.innerHTML = `<div class="px-4 py-6 text-center text-sm text-slate-400">${esGerente ? "No tienes novedades en tus solicitudes." : "No hay solicitudes pendientes."}</div>`;
+  if (rol === "gerente") {
+    if (estado.total === 0) {
+      dropdown.innerHTML = `<div class="px-4 py-6 text-center text-sm text-slate-400">No tienes novedades.</div>`;
+      return;
+    }
+    let html = `<div class="max-h-80 overflow-y-auto">`;
+    if (estado.porProcesar.total > 0) {
+      html += `<div class="px-4 pt-2.5 pb-1 text-[10.5px] font-bold uppercase tracking-wide text-slate-400">Para procesar en tu tienda</div>`;
+      html += estado.porProcesar.filas.map(filaPorProcesar).join("");
+    }
+    if (estado.propios.total > 0) {
+      html += `<div class="px-4 pt-2.5 pb-1 text-[10.5px] font-bold uppercase tracking-wide text-slate-400">Tus solicitudes</div>`;
+      html += estado.propios.filas.map(filaPropia).join("");
+    }
+    html += `</div>`;
+    dropdown.innerHTML = html;
+    activarClicsItems(dropdown);
     return;
   }
 
-  const filasHtml = estado.filas.map(f => esGerente ? `
-    <div class="px-4 py-2.5 border-b border-slate-100 dark:border-slate-700 text-left">
-      <div class="text-[13px] font-semibold text-ink dark:text-white">${nombreTipo(f.tipo_solicitud)} · #${f.id} — ${nombreEstado(f.estado)}</div>
-      <div class="text-[12px] text-slate-500 dark:text-slate-400">Revisa el estado en Solicitud de Traslado</div>
-    </div>
-  ` : `
-    <div class="px-4 py-2.5 border-b border-slate-100 dark:border-slate-700 text-left">
-      <div class="text-[13px] font-semibold text-ink dark:text-white">${nombreTipo(f.tipo_solicitud)} · #${f.id}</div>
-      <div class="text-[12px] text-slate-500 dark:text-slate-400">${f.tienda_solicitante} — ${f.usuario_nombre || ""} (${f.prioridad})</div>
-    </div>
-  `).join("");
-
+  if (estado.total === 0) {
+    dropdown.innerHTML = `<div class="px-4 py-6 text-center text-sm text-slate-400">No hay solicitudes pendientes.</div>`;
+    return;
+  }
   dropdown.innerHTML = `
-    <div class="max-h-72 overflow-y-auto">${filasHtml}</div>
+    <div class="max-h-72 overflow-y-auto">${estado.filas.map(filaPorProcesar).join("")}</div>
     <button id="campanita-ver-todas" class="w-full text-center text-[13px] font-semibold text-kacosa-600 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800">
       Ver todas
     </button>
@@ -124,8 +180,7 @@ function pintar(rol, estado) {
   if (btnVerTodas) {
     btnVerTodas.addEventListener("click", () => {
       cerrarDropdown();
-      const abrir = esGerente ? window.KACOSA_abrirSolicitudTraslado : window.KACOSA_abrirNotificaciones;
-      if (abrir) abrir();
+      if (window.KACOSA_abrirNotificaciones) window.KACOSA_abrirNotificaciones();
     });
   }
 }
@@ -177,7 +232,8 @@ function reproducirSonidoNotificacion() {
 
 async function sincronizar(rol) {
   try {
-    const estado = await obtenerEstado(rol);
+    const { token, email } = await obtenerSesionRaiz();
+    const estado = await obtenerEstado(rol, token, email);
     if (totalAnterior !== null && estado.total > totalAnterior) {
       reproducirSonidoNotificacion();
     }
@@ -188,9 +244,17 @@ async function sincronizar(rol) {
   }
 }
 
-export function iniciarCampanitaNotificaciones(rol) {
+/**
+ * @param {string} rol
+ * @param {string[]} [tiendas] - tiendas asignadas al usuario (perfil.tiendas
+ *   del Portal, ya lo tiene shell.js a mano) — solo se usa para rol gerente,
+ *   para saber qué solicitudes de OTROS gerentes le tocan a su tienda.
+ */
+export function iniciarCampanitaNotificaciones(rol, tiendas) {
   const btn = document.getElementById("btn-campanita");
   if (!btn) return;
+
+  misTiendasCache = (tiendas || []).filter(t => t && t !== "TODAS");
 
   if (!ROLES_CON_CAMPANITA.includes(rol)) {
     btn.classList.add("hidden");
@@ -217,6 +281,7 @@ export function detenerCampanitaNotificaciones() {
   if (intervaloId) { clearInterval(intervaloId); intervaloId = null; }
   cerrarDropdown();
   totalAnterior = null;
+  misTiendasCache = [];
   const badge = document.getElementById("campanita-badge");
   if (badge) badge.classList.add("hidden");
 }
