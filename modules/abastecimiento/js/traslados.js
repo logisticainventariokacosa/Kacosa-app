@@ -759,12 +759,25 @@ async function enviarSolicitud(btnEl) {
  * está vacío, la solicitud YA quedó guardada en Supabase, así que solo se
  * avisa por consola en vez de romper el flujo de "Enviar solicitud".
  */
+/**
+ * A quién avisar por correo de una solicitud nueva (21-sep-2026):
+ * - Extra SAP: Directiva/Coordinador (sin cambios).
+ * - Nota de traslado A KACOSA: equipo de Abastecimiento (sin cambios).
+ * - Nota de traslado a OTRA TIENDA (incluye Ferretools): el/los gerente(s)
+ *   de esa tienda — se buscan en equipo_notificaciones con rol = el ID de
+ *   esa tienda (mismo mecanismo, solo que el "rol" ahora es un ID de
+ *   tienda en vez de abastecimiento/directiva/coordinador).
+ */
+function rolesDestinatariosAviso(solicitud) {
+  if (solicitud.tipo_solicitud === "extra_sap") return ["directiva", "coordinador"];
+  if (solicitud.centro_solicitado === "KACOSA") return ["abastecimiento"];
+  return [solicitud.centro_solicitado];
+}
+
 async function enviarAvisoCorreo(solicitud) {
   if (!solicitud) return;
   try {
-    const destinatarios = await obtenerCorreosEquipo(
-      solicitud.tipo_solicitud === "extra_sap" ? ["directiva", "coordinador"] : ["abastecimiento"]
-    );
+    const destinatarios = await obtenerCorreosEquipo(rolesDestinatariosAviso(solicitud));
     console.log("[Abastecimiento] Aviso de nueva solicitud #" + solicitud.id + " — destinatarios resueltos:", destinatarios);
     const resp = await callBridge("notificarSolicitudTraslado", {
       solicitudId: solicitud.id,
